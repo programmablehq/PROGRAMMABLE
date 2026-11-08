@@ -26,6 +26,18 @@ beforeEach(async () => {
 afterEach(async () => { await db.close(); });
 
 describe("durable project runs", () => {
+  it("reports the active capability without exposing its private input or result",async()=>{
+    const run=await runs.startRun(input()),lease=(await runs.claimRun(scope,run.runId,"worker"))!;
+    await runs.beginStep(scope,run.runId,lease.token,{id:"private-read",capabilityId:"read",input:{credential:"private-value"}});
+    const working=await runs.readProgress(scope,run.runId,"0");
+    expect(working.activeStep).toEqual({capabilityId:"read",state:"dispatching"});
+    expect(JSON.stringify(working)).not.toContain("private-value");
+    await runs.finishStep(scope,run.runId,lease.token,{id:"private-read",result:{secret:"private-result"}});
+    const finished=await runs.readProgress(scope,run.runId,"0");
+    expect(finished.activeStep).toBeUndefined();expect(finished.events).toHaveLength(1);
+    expect(JSON.stringify(finished)).not.toContain("private-result");
+    await expect(runs.readProgress({...scope,ownerId:"bob"},run.runId,"0")).rejects.toMatchObject({status:404});
+  });
   it("limits active worker leases across owners and releases capacity on completion",async()=>{
     const scopes=[scope,{ownerId:"bob",projectId:"22222222-2222-4222-8222-222222222222"},{ownerId:"charlie",projectId:"33333333-3333-4333-8333-333333333333"}];
     const jobs=[];

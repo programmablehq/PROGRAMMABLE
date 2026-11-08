@@ -30,6 +30,34 @@ test("pilot denial keeps an existing coin chat and its unsent message available"
  await page.reload();await expect(box).toHaveValue("Keep my unsent edit");expect(f.calls).toEqual([]);
 });
 
+test("one work history opens projects and saves a legacy draft before switching",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),now=new Date().toISOString(),key="alice:"+account+":"+LEGACY_CONVERSATION;
+ f.chats.set(key,{id:LEGACY_CONVERSATION,account,title:"Earlier coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ f.studios.set(key,{revision:1,state:{settings:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Keep the original coin rules"}],input:"An unsent coin edit"}});
+ const projectId="11111111-1111-4111-8111-111111111111",revisionId="sha256:"+"f".repeat(64);
+ const project={projectId,ownerId:"alice",revisionId,parentRevisionId:null,ordinal:1,createdAt:now,document:{title:"Game counter",files:{},requirements:[],dependencies:{},architecture:null}};
+ let writes=0;
+ await page.route("**/api/custom-ai/platform/**",route=>{
+  const req=route.request(),url=new URL(req.url());if(req.method()!=="GET")writes++;
+  if(url.pathname.endsWith("/projects"))return route.fulfill({json:url.searchParams.has("projectId")?{project}:{projects:req.headers().authorization?.endsWith(":bob")?[]:[{projectId,revisionId,title:"Game counter",updatedAt:now}]}});
+  if(url.pathname.endsWith("/runs"))return route.fulfill({json:{runs:[]}});
+  return route.fulfill({json:{}});
+ });
+ await page.goto(origin+"?platform=1");
+ const work=page.getByRole("navigation",{name:"Work history",exact:true});
+ await expect(work.getByRole("button",{name:/Game counter.*Project/})).toBeVisible();
+ await work.getByRole("button",{name:/Earlier coin.*Coin chat/}).click();
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});await expect(box).toHaveValue("An unsent coin edit");
+ await box.fill("Keep this newer unsent edit");await work.getByRole("button",{name:/Game counter.*Project/}).click();
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeVisible();
+ await expect.poll(()=>f.studios.get(key)?.state.input).toBe("Keep this newer unsent edit");
+ await work.getByRole("button",{name:/Earlier coin.*Coin chat/}).click();await expect(box).toHaveValue("Keep this newer unsent edit");
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toBeVisible();
+ await expect(work.getByText("Game counter",{exact:true})).toHaveCount(0);await expect(work.getByText("Earlier coin",{exact:true})).toHaveCount(0);
+ expect(writes).toBe(0);expect(f.calls).toEqual([]);
+});
+
 test("pilot admission is reconsidered for a different principal using the same wallet",async({page})=>{
  const f=await fixture(page);
  await page.route("**/api/custom-ai/platform/**",route=>route.request().headers().authorization?.endsWith(":bob")
@@ -37,7 +65,7 @@ test("pilot admission is reconsidered for a different principal using the same w
   :route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
  await page.goto(origin+"?platform=1");await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
- await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toBeVisible();
  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toHaveCount(0);
  await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
  await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();expect(f.calls).toEqual([]);
@@ -53,8 +81,8 @@ test("a page reload refreshes pilot admission while preserving the existing coin
  const draft=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});
  await expect(draft).toHaveValue("Keep this draft after admission changes");
  admitted=true;await page.reload();
- await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
- await page.getByRole("button",{name:"Saved coin chats",exact:true}).click();
+  await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:/Existing coin.*Coin chat/}).click();
  await expect(draft).toHaveValue("Keep this draft after admission changes");expect(f.calls).toEqual([]);
 });
 

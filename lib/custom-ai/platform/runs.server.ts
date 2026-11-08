@@ -147,9 +147,11 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
     if (!/^(?:0|[1-9][0-9]?)$/.test(afterCursor) || Number(afterCursor) > 24) throw invalid();
     return projectTransaction(pool, scope, async db => {
       const run = await row(db, scope, runId);
-      const steps = (await db.query("SELECT id,cursor,capability_id,state FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND state='completed' AND cursor>=$4 ORDER BY cursor",
+      const steps = (await db.query("SELECT id,cursor,capability_id,state FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND ((state='completed' AND cursor>=$4) OR state IN ('dispatching','unknown')) ORDER BY cursor",
         [scope.ownerId, scope.projectId, runId, Number(afterCursor)])).rows;
-      return { run: view(run), events: steps.map(step => ({ cursor: String(Number(step.cursor) + 1), stepId: String(step.id), capabilityId: String(step.capability_id), state: "completed" as const })) };
+      const activeStep=steps.findLast(step=>step.state!=="completed");
+      return { run: view(run), events: steps.filter(step=>step.state==="completed").map(step => ({ cursor: String(Number(step.cursor) + 1), stepId: String(step.id), capabilityId: String(step.capability_id), state: "completed" as const })),
+        ...(activeStep?{activeStep:{capabilityId:String(activeStep.capability_id),state:String(activeStep.state)}}:{}) };
     });
   }
   async function resumeRun(scope: ProjectScope, runId: string, expectedCursor: string) {

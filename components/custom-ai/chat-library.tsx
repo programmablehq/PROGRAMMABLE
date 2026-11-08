@@ -12,8 +12,10 @@ export type ChatNavigation={pending:boolean;tools:(locked:boolean)=>ReactNode;ne
 const LibraryContext=createContext<{id:string;cacheScope:string;navigation:ChatNavigation}|undefined>(undefined);
 export const useChatLibrary=()=>useContext(LibraryContext);
 /** Owns only selection and metadata. Each keyed session owns its reply receiver. */
-export function ChatLibrary({account,headers,initialConversationId,children}:{account:string;headers:AISessionHeaders;initialConversationId?:string;children:ReactNode}){
+export function ChatLibrary({account,headers,initialConversationId,existingConversationId,onSelected,registerBeforeLeave,embedded=false,children}:{account:string;headers:AISessionHeaders;initialConversationId?:string;existingConversationId?:string;onSelected?:(id:string)=>void;registerBeforeLeave?:(leave:(()=>Promise<void>)|undefined)=>void;embedded?:boolean;children:ReactNode}){
   const entryConversation=useRef(initialConversationId);
+  const existingConversation=useRef(existingConversationId),lockedRef=useRef(false),selectionCallback=useRef(onSelected);
+  useEffect(()=>{selectionCallback.current=onSelected;},[onSelected]);
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
   const pendingCreate=useRef<string>(undefined);
@@ -24,6 +26,11 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
   const [editing,setEditing]=useState<string>(),[title,setTitle]=useState("");
   const flushRef=useRef<Flush|null>(null);const flush=()=>flushRef.current?.()??Promise.resolve();
   const registerFlush=(save:Flush)=>{flushRef.current=save;return()=>{if(flushRef.current===save)flushRef.current=null;};};
+  useEffect(()=>{
+    registerBeforeLeave?.(async()=>{if(lockedRef.current||transition.current)throw Error("Wait for the current chat action to finish before switching work.");await flushRef.current?.();});
+    return()=>registerBeforeLeave?.(undefined);
+  },[registerBeforeLeave]);
+  useEffect(()=>{if(selected)selectionCallback.current?.(selected);},[selected]);
   const apiHeaders=useRef(headers);useEffect(()=>{apiHeaders.current=headers;},[headers]);
   const key=useRef(""),scope=useRef<string>(undefined),[cacheScope,setCacheScope]=useState<string>(),[bootstrapRevision,setBootstrapRevision]=useState(0);
   const generation=useRef(0),listAbort=useRef<AbortController|null>(null);
@@ -53,6 +60,11 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
         const bootstrap=await aiRequest<ConversationItem&{cacheScope:string}>("/conversations",()=>apiHeaders.current(),{account,action:"bootstrap"},controller.signal);
         if(!active)return;
         key.current=scopedCacheKeys(bootstrap.cacheScope,account).selected;scope.current=bootstrap.cacheScope;setCacheScope(bootstrap.cacheScope);
+        if(existingConversation.current){
+          const saved=await aiRequest<ConversationItem>(`/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(existingConversation.current)}`,scopedHeaders,undefined,controller.signal);
+          if(saved.archived)throw Error("This coin chat is archived. Restore it in chat options before editing.");
+          if(!active)return;await writeDraftCache(key.current,saved.id);if(active)setSelected(saved.id);return;
+        }
         if(entryConversation.current){
           // The UUID belongs only to this explicit sign-in attempt. Repeating
           // bootstrap after a lost response reopens the same private chat.
@@ -123,8 +135,8 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
     }catch(cause){setError(cause instanceof Error?cause.message:"The chat could not be updated.");}finally{transition.current=false;setTransitioning(false);if(!refreshed)setLoading(false);}
   }
   const problem=error||listError;
-  const panel=(locked:boolean)=><div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
-    <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>Chats</button>
+  const panel=(locked:boolean)=>{lockedRef.current=locked;return <div className={styles.chatLibrary} ref={root} data-custom-ai-library="true">
+    <button ref={toggle} type="button" className={styles.libraryToggle} disabled={locked} aria-expanded={open} aria-controls={open?"custom-ai-chats":undefined} onClick={()=>{setOpen(!open);setEditing(undefined);}}><History size={16} aria-hidden="true"/>{embedded?"Coin chat options":"Chats"}</button>
     <section hidden={!open} inert={!open} id="custom-ai-chats" className={styles.libraryPanel} aria-label="Your saved chats">
       <header><strong>Your chats</strong><button type="button" aria-label="Close chat list" onClick={close}><X size={16} aria-hidden="true"/></button></header>
       <button type="button" disabled={locked||transitioning||!cacheScope||loading&&!selected} onClick={()=>void newChat()}><Plus size={16} aria-hidden="true"/>New chat</button>
@@ -143,7 +155,7 @@ export function ChatLibrary({account,headers,initialConversationId,children}:{ac
       {loading&&<p role="status">Loading chats…</p>}
       {problem&&<p role="alert">{problem}</p>}
     </section>
-  </div>;
+  </div>;};
   if(!selected||!cacheScope)return <WorkspacePending status={!problem&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{problem&&<><p role="alert">{problem}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;
 }
