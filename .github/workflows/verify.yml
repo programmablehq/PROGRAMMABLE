@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Pin the bootstrap download as well as the Foundry compiler version.
+  FOUNDRYUP_VERSION: 2.0.0
+
 concurrency:
   group: verify-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.verification_mode || 'change' }}
   cancel-in-progress: true
