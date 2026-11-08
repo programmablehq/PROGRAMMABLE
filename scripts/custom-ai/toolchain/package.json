@@ -7,6 +7,10 @@
     "solc": "0.8.26",
     "viem": "2.55.5"
   },
+  "overrides": {
+    "follow-redirects": "1.16.2",
+    "tmp": "0.2.7"
+  },
   "private": true,
   "description": "Isolated Custom AI compiler and in-memory EVM; install with npm ci --ignore-scripts."
 }
