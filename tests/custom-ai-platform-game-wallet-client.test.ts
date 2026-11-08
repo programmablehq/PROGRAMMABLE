@@ -1,7 +1,7 @@
 import {beforeEach,it,expect,vi} from "vitest";
 import {privateKeyToAccount} from "viem/accounts";
 import {encodeFunctionData,type Abi,type Hex} from "viem";
-import {performGameWalletRequest,type GameWalletRuntime,type GameWalletRequest} from "../lib/custom-ai/platform/game-wallet-client";
+import {performGameWalletRequest,serializeGameWalletTypedData,type GameWalletRuntime,type GameWalletRequest} from "../lib/custom-ai/platform/game-wallet-client";
 import {walletLinkTypedData,gameEventTypedData,type GameBinding,type WalletLinkInvitation} from "../lib/custom-ai/platform/game-events";
 import type {LaunchStep} from "../lib/custom-ai/launch-session";
 import receiverCode from "../lib/custom-ai/platform/game-events-code.json";
@@ -28,6 +28,11 @@ function fixture(){
  const request={kind:"send" as const,ownerId:"owner-one",projectId:"11111111-1111-4111-8111-111111111111",revisionId:binding.revisionId,binding,action:{kind:"wallet-link" as const,requestId:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",player:player.address,playerIdHash:invitation.playerIdHash},step,api,assertCurrent:()=>runtime.assertCurrent()} as GameWalletRequest;
  return {runtime,request,api,send,sign,values,order,changeSession:()=>{current=false}};
 }
+it("sends the complete EIP-712 domain definition to raw wallet RPC",()=>{
+ const payload=JSON.parse(serializeGameWalletTypedData(walletLinkTypedData(binding,invitation)));
+ expect(payload.types.EIP712Domain).toEqual([{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}]);
+ expect(BigInt(payload.domain.chainId)).toBe(4663n);expect(payload.domain.verifyingContract.toLowerCase()).toBe(binding.target.toLowerCase());expect(payload.primaryType).toBe("WalletLink");
+});
 it("verifies the issuer and current receiver before signing the exact player agreement",async()=>{
  const f=fixture();const request={...f.request,kind:"sign-link" as const,invitation} as GameWalletRequest;
  const result=await performGameWalletRequest(request,f.runtime);expect(result.kind).toBe("signed-link");expect(f.sign).toHaveBeenCalledOnce();expect(f.send).not.toHaveBeenCalled();
@@ -76,6 +81,21 @@ it("returns and retains the actual hash when API notification fails",async()=>{
  const f=fixture();f.api.mockImplementation(async body=>{if(body.action==="dispatch-wallet")return {step,dispatchId:body.dispatchId};throw Error("Notification lost")});
  expect(await performGameWalletRequest(f.request,f.runtime)).toMatchObject({kind:"submitted",hash,acknowledged:false});
  expect(JSON.parse([...f.values.values()][0]).hash).toBe(hash);await performGameWalletRequest(f.request,f.runtime);expect(f.send).toHaveBeenCalledOnce();
+});
+it("replaces a superseded preparing journal only after reading the server's unsent current step",async()=>{
+ const f=fixture(),event={eventId:`0x${"ce".repeat(32)}` as Hex,playerIdHash:invitation.playerIdHash,player:player.address,sequence:"1",score:"1",observedAt:now,validUntil:now+120};
+ const signature=await issuer.signTypedData(gameEventTypedData(binding,event));
+ const first={...step,transaction:{...step.transaction,data:encodeFunctionData({abi:receiverABI,functionName:"submitEvent",args:[{bindingId:binding.id,...event,sequence:1n,score:1n,observedAt:BigInt(now),validUntil:BigInt(now+120)},signature]})}};
+ const request={...f.request,step:first,action:{kind:"event",eventId:event.eventId,player:player.address}} as GameWalletRequest;
+ f.api.mockRejectedValueOnce(Error("Request never reached server"));await expect(performGameWalletRequest(request,f.runtime)).rejects.toBeDefined();
+ const next={...first,id:"fresh-step",transaction:{...first.transaction,nonce:"0x2" as Hex}},readState=vi.fn(async()=>({events:[{id:event.eventId,bindingId:binding.id,state:"prepared",transactionHash:null,walletPending:false,step:next}]}));
+ f.api.mockImplementation(async body=>body.action==="dispatch"?{step:next,dispatchId:body.dispatchId}:{});
+ expect(await performGameWalletRequest({...request,step:next,readState} as GameWalletRequest,f.runtime)).toMatchObject({kind:"submitted",hash});
+ expect(readState).toHaveBeenCalledOnce();expect(f.send).toHaveBeenCalledOnce();expect(f.send.mock.calls[0]).toEqual([next.transaction]);
+ const pending=fixture(),pendingRequest={...request,api:pending.api,assertCurrent:()=>pending.runtime.assertCurrent()};
+ pending.api.mockRejectedValueOnce(Error("Lost HTTP response"));await expect(performGameWalletRequest(pendingRequest,pending.runtime)).rejects.toBeDefined();
+ const pendingState=async()=>({events:[{id:event.eventId,bindingId:binding.id,state:"prepared",transactionHash:null,walletPending:true,step:next}]});
+ await expect(performGameWalletRequest({...pendingRequest,step:next,readState:pendingState} as GameWalletRequest,pending.runtime)).rejects.toMatchObject({code:"game-wallet-pending"});expect(pending.send).not.toHaveBeenCalled();
 });
 it("does not start a wallet request if its recovery journal cannot be persisted",async()=>{
  const f=fixture();f.runtime.storage.setItem=()=>{throw Error("Storage is unavailable")};

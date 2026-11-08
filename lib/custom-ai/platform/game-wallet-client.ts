@@ -1,4 +1,4 @@
-import {decodeFunctionData,keccak256,parseAbi,stringToHex,type Address,type Hex} from "viem";
+import {decodeFunctionData,keccak256,parseAbi,serializeTypedData,stringToHex,type Address,type Hex} from "viem";
 import {assertGameBinding,verifyGameEvent,verifyWalletInvitation,verifyWalletLink,walletLinkTypedData,type GameBinding,type WalletLinkInvitation,type SignedWalletLink} from "./game-events";
 import type {LaunchStep} from "../launch-session";
 import {errorIsExplicitWalletRejection,WalletRequestNotSubmittedError} from "@/lib/wallet-request-lock";
@@ -7,8 +7,10 @@ export const GAME_WALLET_ABI=parseAbi([
  "function bindPlayer(address player,bytes32 playerIdHash,bytes32 nonce,uint64 validUntil,bytes signature,bytes issuerSignature)",
  "function submitEvent((bytes32 bindingId,bytes32 eventId,bytes32 playerIdHash,address player,uint64 sequence,uint256 score,uint64 observedAt,uint64 validUntil) eventData,bytes signature)",
 ]);
+const gameDomainType=[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}] as const;
+export const serializeGameWalletTypedData=(data:ReturnType<typeof walletLinkTypedData>)=>serializeTypedData({...data,domain:{...data.domain,chainId:BigInt(data.domain.chainId)},types:{EIP712Domain:gameDomainType,...data.types}});
 type API=(body:Record<string,unknown>)=>Promise<unknown>;
-type Scope={ownerId:string;projectId:string;revisionId:string;binding:GameBinding;api:API;assertCurrent:()=>void};
+type Scope={ownerId:string;projectId:string;revisionId:string;binding:GameBinding;api:API;readState?:()=>Promise<unknown>;assertCurrent:()=>void};
 export type GameWalletAction={kind:"wallet-link";requestId:string;player:Address;playerIdHash:Hex}|{kind:"event";eventId:Hex;player:Address};
 export type GameWalletRequest=Scope&({kind:"sign-link";invitation:WalletLinkInvitation}|{kind:"send";action:GameWalletAction;step:LaunchStep}|{kind:"cancel";action:GameWalletAction;step:LaunchStep});
 export type GameWalletResult={kind:"signed-link";proof:SignedWalletLink}|{kind:"submitted";hash:Hex;acknowledged:boolean;storedLocally:boolean}|{kind:"cancelled"};
@@ -82,7 +84,17 @@ export async function performGameWalletRequest(request:GameWalletRequest,runtime
  const submitted=async(hash:Hex)=>{try{assertCurrent();await request.api({...payload,action:action.kind==="wallet-link"?"wallet-submitted":"submitted",hash});assertCurrent();return true;}catch{return false;}};
  return runtime.run(key,async()=>{
   assertCurrent();let journal=readJournal(runtime,key,scope);
-  if(journal&&journal.state!=="rejected"){try{if(!sameStep(journal.step,step))throw Error();}catch{throw new GameWalletPendingError();}}
+  if(journal&&journal.state!=="rejected"){
+   let same=false;try{same=sameStep(journal.step,step);}catch{/* An invalid journal remains pending. */}
+   if(!same){
+    if(journal.state!=="preparing"||!request.readState)throw new GameWalletPendingError();
+    const state=await request.readState() as {events?:Record<string,unknown>[];walletTransactions?:Record<string,unknown>[]};assertCurrent();
+    const rows=action.kind==="event"?state?.events:state?.walletTransactions;
+    const saved=Array.isArray(rows)?rows.find(row=>row.id===(action.kind==="event"?action.eventId:action.requestId)&&row.bindingId===binding.id):undefined;
+    if(!saved||saved.state!=="prepared"||saved.transactionHash||saved.walletPending||!saved.step||!sameStep(saved.step as LaunchStep,step)||(saved.step as LaunchStep).dispatchedAt!==undefined)throw new GameWalletPendingError();
+    journal=null;
+   }
+  }
   if(request.kind==="cancel"){
    if(journal&&!["preparing","rejected"].includes(journal.state))throw new GameWalletPendingError();
    await request.api({...payload,action:action.kind==="wallet-link"?"wallet-rejected":"rejected",stepId:step.id,...(journal?{dispatchId:journal.dispatchId}:{})});assertCurrent();

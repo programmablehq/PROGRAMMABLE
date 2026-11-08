@@ -89,3 +89,12 @@ test("can reopen an original game result after a lost dispatch acknowledgement",
  await expect(page.getByRole("heading",{name:"Review game transaction",exact:true})).toBeVisible();
  expect(await page.evaluate(()=>window.__gameFixture.calls.some(c=>c.action==="prepare"||c.walletKind==="send"))).toBe(false);
 });
+test("clears the transaction review after an explicit wallet rejection",async({page})=>{
+ await readyWalletTransaction(page);await page.evaluate(()=>{window.__gameFixture.walletRejected=true;});await page.getByRole("button",{name:"Confirm game transaction",exact:true}).click();
+ await expect(page.getByRole("alert")).toContainText("rejected");await expect(page.getByRole("button",{name:"Confirm game transaction",exact:true})).toHaveCount(0);
+});
+test("shows recovery instead of a fresh confirmation when prepare returns a pending request",async({page})=>{
+ await readyWalletTransaction(page);await page.getByRole("button",{name:"Close transaction review",exact:true}).click();await page.evaluate(()=>{window.__gameFixture.prepareState="dispatching";});
+ await page.getByRole("button",{name:"Prepare wallet link",exact:true}).click();await expect(page.getByRole("button",{name:"Confirm game transaction",exact:true})).toHaveCount(0);
+ await expect(page.getByText("Wallet response pending",{exact:true}).first()).toBeVisible();
+});

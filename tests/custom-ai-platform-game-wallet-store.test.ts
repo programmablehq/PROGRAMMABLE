@@ -55,6 +55,13 @@ it("cancels an unsent review but requires the exact dispatch identity after it s
  const next=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);await store.dispatchWalletTransaction(owner,next.id,player.address);
  await expect(store.rejectedWalletTransaction(owner,next.id,player.address)).rejects.toMatchObject({code:"game-state"});
 });
+it("cancels a locally journaled request whose dispatch never reached the server",async()=>{
+ const attempt="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);
+ expect((await store.rejectedWalletTransaction(owner,first.id,player.address,attempt)).state).toBe("rejected");
+ const event={eventId:`0x${"ae".repeat(32)}` as Hex,playerIdHash,player:player.address,sequence:"1",score:"1",observedAt:now,validUntil:now+120};
+ await store.ingest(owner,binding.id,{...event,signature:await issuer.signTypedData(gameEventTypedData(binding,event))});await store.prepared(owner,binding.id,event.eventId,JSON.parse(JSON.stringify(step)));
+ expect((await store.rejectedEvent(owner,binding.id,event.eventId,step.id,player.address,attempt)).step?.walletRejected).toBe(true);
+});
 it("does not cancel a wallet dispatch that wins a concurrent unsent cancellation",async()=>{
  const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);
  const results=await Promise.allSettled([store.rejectedWalletTransaction(owner,first.id,player.address),store.dispatchWalletTransaction(owner,first.id,player.address)]);

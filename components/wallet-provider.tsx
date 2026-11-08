@@ -2895,11 +2895,11 @@ function PrivyWalletBridge({
       const current=await bound.getEthereumProvider();assertCurrent();if(current!==provider)throw Error("Your wallet connection changed. Review the game request again.");
       await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:`0x${chainId.toString(16)}`,networkName:chainId===1?"Ethereum":"Robinhood",request:async method=>{assertCurrent();const result=await provider!.request({method});assertCurrent();return result;}});
     };
-    assertCurrent();const {performGameWalletRequest}=await import("@/lib/custom-ai/platform/game-wallet-client");assertCurrent();
+    assertCurrent();const {performGameWalletRequest,serializeGameWalletTypedData}=await import("@/lib/custom-ai/platform/game-wallet-client");assertCurrent();
     const runtime:GameWalletRuntime={
       ownerId,account,now:()=>Math.floor(Date.now()/1000),randomId:()=>crypto.randomUUID(),storage:window.localStorage,assertCurrent,assertAuthority,
       run:(requestSubject,execute)=>runWithBrowserWalletRequestLock({sessionSubject:ownerId,account,chainId:String(chainId),requestSubject,assertCurrentSession:assertCurrent,execute}),
-      sign:async data=>{await assertAuthority();return provider!.request({method:"eth_signTypedData_v4",params:[account,JSON.stringify(data,(_key,value)=>typeof value==="bigint"?value.toString():value)]});},
+      sign:async data=>{await assertAuthority();return provider!.request({method:"eth_signTypedData_v4",params:[account,serializeGameWalletTypedData(data)]});},
       send:async tx=>{
         await assertAuthority();
         if(bound.walletClientType==="privy"||bound.walletClientType==="privy-v2")return (await sendPrivyTransaction({to:tx.to!,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gas),nonce:Number(BigInt(tx.nonce)),chainId:tx.chainId},{address:account,uiOptions:{description:"Confirm the reviewed game action",buttonText:"Confirm",successHeader:"Game transaction submitted"}})).hash;

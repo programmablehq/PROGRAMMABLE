@@ -6,6 +6,7 @@ import type {WalletLinkInvitation} from "@/lib/custom-ai/platform/game-events";
 import type {GameWalletAdapter,GameWalletAction} from "@/lib/custom-ai/platform/game-wallet-client";
 import type {LaunchStep} from "@/lib/custom-ai/launch-session";
 import type {PlatformAPI} from "./types";
+import {errorIsExplicitWalletRejection} from "@/lib/wallet-request-lock";
 import styles from "./workspace.module.css";
 
 type EventReceipt={id:string;bindingId:string;state:string;player?:string;score?:string;sequence?:string;transactionHash:string|null;walletPending?:boolean;step?:LaunchStep|null};
@@ -84,6 +85,7 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt,wallet,onWallet
   if(!wallet||!binding)throw Error("Choose a current game binding and connect your wallet.");
   const result=await api<{state:string;requestId:string|null;step:LaunchStep|null}>("/events",{body:{action:"prepare-wallet",projectId,bindingId:binding.id,playerIdHash:link.playerIdHash,account:wallet.account}});assertCurrent();
   if(result.state==="linked"){setNotice("Wallet linked onchain.");await load(assertCurrent);return;}
+  if(result.state!=="ready_for_wallet"){setTransaction(undefined);await load(assertCurrent);setNotice(labels[result.state]??"Check the saved wallet request before preparing another.");return;}
   if(!result.requestId||!result.step)throw Error("The wallet link is not ready for review.");
   setTransaction({action:{kind:"wallet-link",requestId:result.requestId,player:link.player,playerIdHash:link.playerIdHash},step:result.step});await load(assertCurrent);
  }
@@ -96,17 +98,17 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt,wallet,onWallet
   if(!wallet||!binding||!transaction)throw Error("Review a prepared game transaction first.");
   const current=transaction,release=takeWalletLock();
   try{
-   const result=await wallet.perform({kind:"send",ownerId:wallet.ownerId,projectId,revisionId,binding,action:current.action,step:current.step,api:body=>api("/events",{body}),assertCurrent});assertCurrent();
+   const result=await wallet.perform({kind:"send",ownerId:wallet.ownerId,projectId,revisionId,binding,action:current.action,step:current.step,api:body=>api("/events",{body}),readState:()=>api(`/events?projectId=${projectId}`),assertCurrent});assertCurrent();
    if(result.kind!=="submitted")throw Error("The wallet did not return a transaction hash.");
    setTransaction(undefined);setNotice(`Transaction submitted: ${result.hash}. Waiting for confirmation.`);
    const observed=await api<{state:string}>("/events",{body:{projectId,bindingId:binding.id,...(current.action.kind==="wallet-link"?{action:"reconcile-wallet",walletRequestId:current.action.requestId}:{action:"reconcile",eventId:current.action.eventId})}}).catch(()=>null);assertCurrent();await load(assertCurrent);
    if(observed?.state==="confirmed")setNotice(current.action.kind==="wallet-link"?"Wallet linked onchain.":"Game result confirmed onchain.");
-  }catch(cause){if(cause&&typeof cause==="object"&&"code" in cause&&cause.code==="game-wallet-pending")setTransaction(undefined);await load(assertCurrent).catch(()=>{});throw cause;}
+  }catch(cause){if(cause&&typeof cause==="object"&&"code" in cause&&cause.code==="game-wallet-pending"||errorIsExplicitWalletRejection(cause))setTransaction(undefined);await load(assertCurrent).catch(()=>{});throw cause;}
   finally{release();}
  }
  async function discard(assertCurrent:()=>void){
   if(!wallet||!binding||!transaction)throw Error("Choose the prepared game request first.");
-  const result=await wallet.perform({kind:"cancel",ownerId:wallet.ownerId,projectId,revisionId,binding,action:transaction.action,step:transaction.step,api:body=>api("/events",{body}),assertCurrent});assertCurrent();
+  const result=await wallet.perform({kind:"cancel",ownerId:wallet.ownerId,projectId,revisionId,binding,action:transaction.action,step:transaction.step,api:body=>api("/events",{body}),readState:()=>api(`/events?projectId=${projectId}`),assertCurrent});assertCurrent();
   if(result.kind!=="cancelled")throw Error("The request was not discarded.");setTransaction(undefined);await load(assertCurrent);setNotice("Unsent request discarded. You can prepare a new review.");
  }
  return <details className={styles.game}><summary>Game integration</summary><div className={styles.stack}>

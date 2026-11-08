@@ -108,7 +108,7 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
  }
  async function rejectedWalletTransaction(scope:ProjectScope,id:string,account:string,dispatchId?:string){
   const saved=await readWalletTransaction(scope,id);if(saved.step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This wallet request belongs to another account.",403);
-  if((saved.step.dispatchedAt!==undefined&&dispatchId===undefined)||(dispatchId!==undefined&&saved.receipt.dispatchId!==dispatchId))throw new ProjectError("game-state","The wallet dispatch identity changed.",409);
+  if(saved.step.dispatchedAt!==undefined&&(dispatchId===undefined||saved.receipt.dispatchId!==dispatchId))throw new ProjectError("game-state","The wallet dispatch identity changed.",409);
   if(saved.receipt.state==="rejected")return saved.receipt;
   return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='rejected' WHERE owner=$1 AND project_id=$2 AND id=$3 AND state IN ('prepared','dispatching') AND transaction_hash IS NULL AND prepared_transaction=$4::jsonb AND state=$5 RETURNING *",[scope.ownerId,scope.projectId,id,JSON.stringify(saved.step),saved.receipt.state])).rows[0];if(!row)throw new ProjectError("game-state","The wallet request changed or was submitted. Check its saved state.",409);return walletView(row);});
  }
@@ -155,7 +155,7 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
  async function rejectedEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:string,dispatchId?:string){
   const saved=await readEvent(scope,id,eventId,true),step=saved.transaction as unknown as DispatchedStep;
   if(!step?.transaction||step.id!==stepId||step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This event was prepared for another wallet request.",403);
-  if((step.dispatchedAt!==undefined&&dispatchId===undefined)||(dispatchId!==undefined&&step.dispatchId!==dispatchId))throw new ProjectError("game-state","The event dispatch identity changed.",409);
+  if(step.dispatchedAt!==undefined&&(dispatchId===undefined||step.dispatchId!==dispatchId))throw new ProjectError("game-state","The event dispatch identity changed.",409);
   return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=(prepared_transaction-'dispatchedAt')||jsonb_build_object('state','rejected','walletRejected',true) WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 AND state='prepared' AND transaction_hash IS NULL AND prepared_transaction->>'id'=$5 AND prepared_transaction=$6::jsonb RETURNING *",[scope.ownerId,scope.projectId,id,eventId,stepId,JSON.stringify(step)])).rows[0];if(!row)throw new ProjectError("game-state","The event request changed or was submitted. Check its saved state.",409);return view(row);});
  }
  async function submitted(scope:ProjectScope,id:string,eventId:string,hash:Hex){
