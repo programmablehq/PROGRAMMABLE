@@ -42,3 +42,50 @@ test("does not attach a late file read to another selected binding",async({page}
  await page.getByLabel("Selected game",{exact:true}).selectOption(`0x${"aa".repeat(32)}`);await page.waitForTimeout(500);
  await expect(page.getByRole("button",{name:"Record signed result",exact:true})).toHaveCount(0);
 });
+test("signs a game invitation and keeps transaction review separate from sending",async({page})=>{
+ await open(page);await page.getByRole("button",{name:"Refresh game state",exact:true}).click();
+ await page.getByLabel("Signed game file",{exact:true}).setInputFiles({name:"invitation.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({player:`0x${"22".repeat(20)}`,playerIdHash:`0x${"77".repeat(32)}`,nonce:`0x${"88".repeat(32)}`,validUntil:Math.floor(Date.now()/1000)+120,issuerSignature:`0x${"bb".repeat(65)}`}))});
+ await page.getByRole("button",{name:"Sign game account link",exact:true}).click();
+ await expect(page.getByText("Signed wallet agreement saved. Onchain confirmation is still required.",{exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Prepare wallet link",exact:true}).click();await expect(page.getByRole("button",{name:"Confirm game transaction",exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletKind==="send").length)).toBe(0);
+ await page.getByRole("button",{name:"Confirm game transaction",exact:true}).click();
+ await expect(page.getByText("Wallet linked onchain.",{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletKind==="send").length)).toBe(1);
+});
+async function readyWalletTransaction(page:import("@playwright/test").Page){
+ await open(page);await page.getByRole("button",{name:"Refresh game state",exact:true}).click();
+ await page.getByLabel("Signed game file",{exact:true}).setInputFiles({name:"signed.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({player:`0x${"22".repeat(20)}`,playerIdHash:`0x${"77".repeat(32)}`,nonce:`0x${"88".repeat(32)}`,validUntil:Math.floor(Date.now()/1000)+120,signature:`0x${"cc".repeat(65)}`,issuerSignature:`0x${"bb".repeat(65)}`}))});
+ await page.getByRole("button",{name:"Record signed result",exact:true}).click();await page.getByRole("button",{name:"Prepare wallet link",exact:true}).click();
+}
+test("moves an uncertain wallet result into recovery without another confirmation button",async({page})=>{
+ await readyWalletTransaction(page);await page.evaluate(()=>{window.__gameFixture.walletError=true;});await page.getByRole("button",{name:"Confirm game transaction",exact:true}).click();
+ await expect(page.getByRole("alert")).toContainText("uncertain");await expect(page.getByRole("button",{name:"Confirm game transaction",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Check wallet link",exact:true}).click();await expect(page.getByText("Wallet response pending",{exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletKind==="send").length)).toBe(1);
+});
+test("prevents double-click sends and releases a changing project wallet lock once",async({page})=>{
+ await readyWalletTransaction(page);await page.evaluate(()=>{window.__gameFixture.walletDelay=400;});
+ await page.getByRole("button",{name:"Confirm game transaction",exact:true}).evaluate((button:HTMLButtonElement)=>{button.click();button.click();});
+ await page.getByRole("button",{name:"Change project revision",exact:true}).click();await expect(page.getByLabel("Game name",{exact:true})).toHaveValue("my-game");
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletBusy!==undefined).map(c=>c.walletBusy))).toEqual([true,false]);await page.waitForTimeout(600);
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletKind==="send").length)).toBe(1);
+ expect(await page.evaluate(()=>window.__gameFixture.calls.filter(c=>c.walletBusy!==undefined).map(c=>c.walletBusy))).toEqual([true,false]);
+ expect(await page.evaluate(()=>window.__gameFixture.calls.some(c=>c.action==="reconcile-wallet"))).toBe(false);
+});
+test("rejects private fields in a game file before any network request",async({page})=>{
+ await open(page);await page.getByRole("button",{name:"Refresh game state",exact:true}).click();await page.getByLabel("Signed game file",{exact:true}).setInputFiles({name:"unsafe.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({eventId:`0x${"88".repeat(32)}`,signature:`0x${"bb".repeat(65)}`,privateKey:"never send"}))});
+ await expect(page.getByRole("alert")).toBeVisible();await expect(page.getByRole("button",{name:"Record signed result",exact:true})).toHaveCount(0);
+ expect(await page.evaluate(()=>window.__gameFixture.calls.some(c=>c.action==="record"))).toBe(false);
+});
+test("discards an unsent review without submitting a wallet transaction",async({page})=>{
+ await readyWalletTransaction(page);await page.getByRole("button",{name:"Discard unsent request",exact:true}).click();
+ await expect(page.getByText("Unsent request discarded. You can prepare a new review.",{exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Confirm game transaction",exact:true})).toHaveCount(0);expect(await page.evaluate(()=>window.__gameFixture.calls.some(c=>c.walletKind==="send"))).toBe(false);
+});
+test("can reopen an original game result after a lost dispatch acknowledgement",async({page})=>{
+ await open(page);await page.evaluate(()=>{window.__gameFixture.events=[{id:`0x${"ab".repeat(32)}`,bindingId:`0x${"33".repeat(32)}`,state:"prepared",walletPending:true,player:`0x${"22".repeat(20)}`,transactionHash:null,step:{id:"original-event-step",kind:"program-action",state:"dispatching",preparedBlock:"100",expiresAt:Math.floor(Date.now()/1000)+120,transaction:{from:`0x${"22".repeat(20)}`,to:`0x${"55".repeat(20)}`,chainId:4663,value:"0x0",nonce:"0x1",gas:"0x100000",data:"0x1234"}}}]});
+ await page.getByRole("button",{name:"Refresh game state",exact:true}).click();await page.getByRole("button",{name:"Review saved game request",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"Review game transaction",exact:true})).toBeVisible();
+ expect(await page.evaluate(()=>window.__gameFixture.calls.some(c=>c.action==="prepare"||c.walletKind==="send"))).toBe(false);
+});

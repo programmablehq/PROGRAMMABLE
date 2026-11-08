@@ -7,6 +7,7 @@ import { readHyperEvmWalletFees } from "@/lib/hyperevm-wallet-gas";
 import type { LaunchPlanTradeWalletInputV1, LaunchPlanTradeWalletReviewV1 } from "@/lib/custom-launch/routed-trade-wallet-v1";
 import type { LaunchClaimWalletInputV1, LaunchClaimWalletReviewV1 } from "@/lib/custom-launch/claim-handoff-v1";
 import type { LaunchStep } from "@/lib/custom-ai/launch-session";
+import type {GameWalletRequest,GameWalletResult,GameWalletRuntime} from "@/lib/custom-ai/platform/game-wallet-client";
 import { executeGeneralGraphWalletSend, recoverGeneralGraphWalletSend, withGeneralWalletJournalLock, type GeneralGraphWalletBoundary, type GeneralGraphWalletRecovery } from "@/lib/custom-ai/general-wallet-execution";
 import type { UniversalLaunchWalletInputV1, UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
 import Image from "next/image";
@@ -246,6 +247,7 @@ type WalletContextValue = {
   ) => Promise<Hex>;
   sendModuleModeTransaction: (transaction: PreparedModuleModeTransaction) => Promise<Hex>;
   sendCustomAIWalletStep: (launchId: string, step: LaunchStep, action?: "launch" | "trade") => Promise<Hex>;
+  performProjectGameWalletRequest: (input:GameWalletRequest)=>Promise<GameWalletResult>;
   readNativeBalance: (chainId?: 1 | 4663) => Promise<WalletNativeBalance>;
   readConnectedAccountCode: () => Promise<Hex>;
   readTradeBalances: (token: `0x${string}`, chainId?: 1 | 4663) => Promise<WalletTradeBalances>;
@@ -1140,6 +1142,7 @@ function DeferredWalletProvider({
         throw new Error("Wallet sign-in is still loading");
       },
       sendCustomAIWalletStep: async () => { throw new Error("Wallet sign-in is still loading"); },
+      performProjectGameWalletRequest: async () => { throw new Error("Wallet sign-in is still loading"); },
       readNativeBalance: async () => {
         throw new Error("Wallet sign-in is still loading");
       },
@@ -2874,6 +2877,38 @@ function PrivyWalletBridge({
       } });
   }, [connectedWallet, wallet, user, getSessionAccessToken, getCurrentIdentityToken, sendPrivyTransaction]);
 
+  const performProjectGameWalletRequest=useCallback(async(input:GameWalletRequest):Promise<GameWalletResult>=>{
+    if(!connectedWallet||!wallet||!user?.id||!walletLinked)throw Error("Choose a wallet linked to your current account.");
+    const bound=connectedWallet,account=wallet.account,ownerId=user.id,generation=walletIdentityGenerationRef.current,chainId=input.binding.chainId;
+    if(input.ownerId!==ownerId)throw Error("This game request belongs to another account.");
+    let provider:Awaited<ReturnType<typeof bound.getEthereumProvider>>|undefined,networkGeneration:number|undefined;
+    const assertCurrent=()=>{
+      const current=walletRequestSessionRef.current;
+      if(generation!==walletIdentityGenerationRef.current||!current.authenticated||current.privyUserId!==ownerId||current.account?.toLowerCase()!==account.toLowerCase()
+        ||current.walletCapability?.walletClientType!==bound.walletClientType||current.walletCapability?.connectorType!==bound.connectorType
+        ||networkGeneration!==undefined&&networkGeneration!==walletNetworkGenerationRef.current)throw Error("Your wallet or network changed. Review the game request again.");
+      input.assertCurrent();
+    };
+    const assertAuthority=async()=>{
+      assertCurrent();
+      if(!provider){provider=await getWalletProviderOnChain({wallet:bound,chainId,networkName:chainId===1?"Ethereum":"Robinhood",assertCurrentSession:assertCurrent});networkGeneration=walletNetworkGenerationRef.current;}
+      const current=await bound.getEthereumProvider();assertCurrent();if(current!==provider)throw Error("Your wallet connection changed. Review the game request again.");
+      await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:`0x${chainId.toString(16)}`,networkName:chainId===1?"Ethereum":"Robinhood",request:async method=>{assertCurrent();const result=await provider!.request({method});assertCurrent();return result;}});
+    };
+    assertCurrent();const {performGameWalletRequest}=await import("@/lib/custom-ai/platform/game-wallet-client");assertCurrent();
+    const runtime:GameWalletRuntime={
+      ownerId,account,now:()=>Math.floor(Date.now()/1000),randomId:()=>crypto.randomUUID(),storage:window.localStorage,assertCurrent,assertAuthority,
+      run:(requestSubject,execute)=>runWithBrowserWalletRequestLock({sessionSubject:ownerId,account,chainId:String(chainId),requestSubject,assertCurrentSession:assertCurrent,execute}),
+      sign:async data=>{await assertAuthority();return provider!.request({method:"eth_signTypedData_v4",params:[account,JSON.stringify(data,(_key,value)=>typeof value==="bigint"?value.toString():value)]});},
+      send:async tx=>{
+        await assertAuthority();
+        if(bound.walletClientType==="privy"||bound.walletClientType==="privy-v2")return (await sendPrivyTransaction({to:tx.to!,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gas),nonce:Number(BigInt(tx.nonce)),chainId:tx.chainId},{address:account,uiOptions:{description:"Confirm the reviewed game action",buttonText:"Confirm",successHeader:"Game transaction submitted"}})).hash;
+        return provider!.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:tx.value,gas:tx.gas,nonce:tx.nonce,chainId:`0x${tx.chainId.toString(16)}`}]});
+      },
+    };
+    return performGameWalletRequest(input,runtime);
+  },[connectedWallet,wallet,user?.id,walletLinked,sendPrivyTransaction]);
+
   const signPredictionPermit = useCallback(async (input: Readonly<{
     deadline: bigint;
     factoryAddress: Address;
@@ -3809,6 +3844,7 @@ function PrivyWalletBridge({
       sendPredictionV2Transaction,
       sendModuleModeTransaction,
       sendCustomAIWalletStep,
+      performProjectGameWalletRequest,
       readNativeBalance,
       readConnectedAccountCode,
       readTradeBalances,
@@ -3851,6 +3887,7 @@ function PrivyWalletBridge({
       sendPredictionV2Transaction,
       sendModuleModeTransaction,
       sendCustomAIWalletStep,
+      performProjectGameWalletRequest,
       sendTransaction,
       signLaunchMessage,
       reviewPrivyPolicyOwnerRequest,
@@ -3991,6 +4028,7 @@ function UnconfiguredWalletProvider({ children }: { children: ReactNode }) {
         throw new Error("Wallet sign-in is unavailable");
       },
       sendCustomAIWalletStep: async () => { throw new Error("Wallet sign-in is unavailable"); },
+      performProjectGameWalletRequest: async () => { throw new Error("Wallet sign-in is unavailable"); },
       readNativeBalance: async () => {
         throw new Error("Wallet sign-in is unavailable");
       },

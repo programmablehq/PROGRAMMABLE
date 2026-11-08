@@ -58,16 +58,16 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(saved.binding.id!==id)throw new ProjectError("game-wallet-transaction","This wallet request belongs to another game binding.",409);
   return saved;
  }
- async function dispatchWallet(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[]){
+ async function dispatchWallet(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[],dispatchId?:string){
   const sender=wallet(account,linked),saved=await walletRequest(scope,id,requestId),chain=await chainFor(saved.binding.chainId);
   await inspect(saved.binding,chain);await verifyWalletLink(saved.binding,saved.proof,Number(chain.block.timestamp));await chain.finish();
-  return store.dispatchWalletTransaction(scope,requestId,sender);
+  return store.dispatchWalletTransaction(scope,requestId,sender,dispatchId);
  }
  async function walletSubmitted(scope:ProjectScope,id:string,requestId:string,hash:Hex,account:Address,linked:readonly string[]){
   const sender=wallet(account,linked);await walletRequest(scope,id,requestId);return store.submittedWalletTransaction(scope,requestId,sender,hash);
  }
- async function walletRejected(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[]){
-  const sender=wallet(account,linked);await walletRequest(scope,id,requestId);return store.rejectedWalletTransaction(scope,requestId,sender);
+ async function walletRejected(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[],dispatchId?:string){
+  const sender=wallet(account,linked);await walletRequest(scope,id,requestId);return store.rejectedWalletTransaction(scope,requestId,sender,dispatchId);
  }
  async function reconcileWallet(scope:ProjectScope,id:string,requestId:string){
   const saved=await walletRequest(scope,id,requestId),chain=await chainFor(saved.binding.chainId);await inspect(saved.binding,chain);
@@ -104,13 +104,13 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(!step?.transaction||step.transaction.from.toLowerCase()!==sender.toLowerCase())throw new ProjectError("game-wallet","This transaction was prepared for another wallet.",403);
   return store.submitted(scope,id,eventId,hash);
  }
- async function dispatchEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[]){
+ async function dispatchEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[],dispatchId?:string){
   const sender=wallet(account,linked),saved=await store.readEvent(scope,id,eventId),chain=await chainFor(saved.binding.chainId);
   await inspect(saved.binding,chain);await verifyGameEvent(saved.binding,saved.event,Number(chain.block.timestamp));await chain.finish();
-  return store.dispatchEvent(scope,id,eventId,stepId,sender);
+  return store.dispatchEvent(scope,id,eventId,stepId,sender,dispatchId);
  }
- async function eventRejected(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[]){
-  return store.rejectedEvent(scope,id,eventId,stepId,wallet(account,linked));
+ async function eventRejected(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[],dispatchId?:string){
+  return store.rejectedEvent(scope,id,eventId,stepId,wallet(account,linked),dispatchId);
  }
  async function reconcile(scope:ProjectScope,id:string,eventId:string){
   const saved=await store.readEvent(scope,id,eventId,true);

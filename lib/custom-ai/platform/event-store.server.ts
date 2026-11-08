@@ -14,11 +14,12 @@ export function gameBindingId(scope:ProjectScope,input:GameConfiguration):Hex{
 }
 const currentError=()=>new ProjectError("game-revision","Review the game binding against the current project revision.",409);
 type Row=Record<string,unknown>;
+type DispatchedStep=LaunchStep&{dispatchId?:string};
 const view=(row:Row)=>{
  const event=row.payload as SignedGameEvent;
- return {id:String(row.event_id),bindingId:String(row.binding_id),state:String(row.state),transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at),player:event?.player,playerIdHash:event?.playerIdHash,sequence:event?.sequence,score:event?.score,validUntil:event?.validUntil};
+ return {id:String(row.event_id),bindingId:String(row.binding_id),state:String(row.state),transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at),player:event?.player,playerIdHash:event?.playerIdHash,sequence:event?.sequence,score:event?.score,validUntil:event?.validUntil,walletPending:Boolean((row.prepared_transaction as LaunchStep|null)?.dispatchedAt),step:row.prepared_transaction as LaunchStep|null};
 };
-const walletView=(row:Row)=>({id:String(row.id),bindingId:String(row.binding_id),bindingVersion:String(row.binding_version),playerIdHash:String(row.player_id_hash),player:String(row.player),state:String(row.state),step:row.prepared_transaction as LaunchStep,transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at)});
+const walletView=(row:Row)=>({id:String(row.id),bindingId:String(row.binding_id),bindingVersion:String(row.binding_version),playerIdHash:String(row.player_id_hash),player:String(row.player),state:String(row.state),step:row.prepared_transaction as LaunchStep,dispatchId:(row.prepared_transaction as DispatchedStep)?.dispatchId??null,transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at)});
 function walletRequestId(id:string){if(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))throw new ProjectError("game-input","Choose a saved wallet request.");}
 
 export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof createPlatformStore>,now=()=>Math.floor(Date.now()/1000)){
@@ -80,18 +81,18 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
  async function readWalletTransaction(scope:ProjectScope,id:string){
   walletRequestId(id);return projectTransaction(pool,scope,async db=>{const row=(await db.query("SELECT * FROM programmable_projects_v1.game_wallet_transactions WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id])).rows[0];if(!row)throw new ProjectError("game-wallet-transaction","This wallet request is not available.",404);return {binding:row.binding_definition as GameBinding,proof:row.proof as SignedWalletLink,step:row.prepared_transaction as LaunchStep,receipt:walletView(row)};});
  }
- async function dispatchWalletTransaction(scope:ProjectScope,id:string,account:string){
-  walletRequestId(id);return projectTransaction(pool,scope,async db=>{
+ async function dispatchWalletTransaction(scope:ProjectScope,id:string,account:string,dispatchId?:string){
+  walletRequestId(id);if(dispatchId!==undefined)walletRequestId(dispatchId);const attemptId=dispatchId??randomUUID();return projectTransaction(pool,scope,async db=>{
    const project=(await db.query("SELECT current_revision FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR SHARE",[scope.ownerId,scope.projectId])).rows[0];
    const row=(await db.query("SELECT * FROM programmable_projects_v1.game_wallet_transactions WHERE owner=$1 AND project_id=$2 AND id=$3 FOR UPDATE",[scope.ownerId,scope.projectId,id])).rows[0];if(!row)throw new ProjectError("game-wallet-transaction","This wallet request is not available.",404);
-   const binding=row.binding_definition as GameBinding,step=row.prepared_transaction as LaunchStep;
+   const binding=row.binding_definition as GameBinding,step=row.prepared_transaction as DispatchedStep;
    if(project?.current_revision!==binding.revisionId)throw currentError();
    const active=(await db.query("SELECT version FROM programmable_projects_v1.game_bindings WHERE owner=$1 AND project_id=$2 AND id=$3 AND active FOR SHARE",[scope.ownerId,scope.projectId,row.binding_id])).rows[0];if(active?.version!==row.binding_version)throw currentError();
    if(step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This wallet request belongs to another account.",403);
    if(!['prepared','dispatching'].includes(String(row.state))||row.transaction_hash)throw new ProjectError("game-state","Reconcile the previous wallet request first.",409);
    if(step.expiresAt<=now())throw new ProjectError("game-expired","This wallet request expired. Keep it for recovery.",409);
-   if(row.state==='dispatching')throw new ProjectError("game-state","This wallet request has already started. Reconcile it before another send.",409);
-   const prepared={...step,state:"dispatching",dispatchedAt:now()};const updated=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='dispatching',prepared_transaction=$4::jsonb WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *",[scope.ownerId,scope.projectId,id,JSON.stringify(prepared)])).rows[0];return walletView(updated);
+   if(row.state==='dispatching'){if(dispatchId!==undefined&&step.dispatchId===dispatchId)return walletView(row);throw new ProjectError("game-state","This wallet request has already started. Reconcile it before another send.",409);}
+   const prepared={...step,state:"dispatching",dispatchedAt:now(),dispatchId:attemptId};const updated=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='dispatching',prepared_transaction=$4::jsonb WHERE owner=$1 AND project_id=$2 AND id=$3 RETURNING *",[scope.ownerId,scope.projectId,id,JSON.stringify(prepared)])).rows[0];return walletView(updated);
   });
  }
  async function submittedWalletTransaction(scope:ProjectScope,id:string,account:string,hash:Hex){
@@ -105,9 +106,11 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
  async function pendingWalletTransaction(scope:ProjectScope,id:string,hash:Hex){
   await readWalletTransaction(scope,id);return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='submitted',observation=jsonb_build_object('state','pending','previous',observation) WHERE owner=$1 AND project_id=$2 AND id=$3 AND transaction_hash=$4 AND state IN ('submitted','confirmed','failed') RETURNING *",[scope.ownerId,scope.projectId,id,hash])).rows[0];if(!row)throw new ProjectError("game-state","The saved wallet transaction does not match.",409);return walletView(row);});
  }
- async function rejectedWalletTransaction(scope:ProjectScope,id:string,account:string){
+ async function rejectedWalletTransaction(scope:ProjectScope,id:string,account:string,dispatchId?:string){
   const saved=await readWalletTransaction(scope,id);if(saved.step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This wallet request belongs to another account.",403);
-  return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='rejected' WHERE owner=$1 AND project_id=$2 AND id=$3 AND state IN ('prepared','dispatching') AND transaction_hash IS NULL RETURNING *",[scope.ownerId,scope.projectId,id])).rows[0];if(!row)throw new ProjectError("game-state","A submitted wallet request cannot be rejected.",409);return walletView(row);});
+  if((saved.step.dispatchedAt!==undefined&&dispatchId===undefined)||(dispatchId!==undefined&&saved.receipt.dispatchId!==dispatchId))throw new ProjectError("game-state","The wallet dispatch identity changed.",409);
+  if(saved.receipt.state==="rejected")return saved.receipt;
+  return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_wallet_transactions SET state='rejected' WHERE owner=$1 AND project_id=$2 AND id=$3 AND state IN ('prepared','dispatching') AND transaction_hash IS NULL AND prepared_transaction=$4::jsonb AND state=$5 RETURNING *",[scope.ownerId,scope.projectId,id,JSON.stringify(saved.step),saved.receipt.state])).rows[0];if(!row)throw new ProjectError("game-state","The wallet request changed or was submitted. Check its saved state.",409);return walletView(row);});
  }
  async function ingest(scope:ProjectScope,id:string,input:SignedGameEvent){
   const saved=await currentBinding(scope,id),event=await verifyGameEvent(saved.binding,input,now()),hash=projectHash(event);
@@ -135,22 +138,25 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
    const row=(await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=$5::jsonb,state='prepared' WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 AND state IN ('received','prepared') AND binding_version=$6 AND COALESCE(prepared_transaction->>'dispatchedAt','')='' RETURNING *",[scope.ownerId,scope.projectId,id,eventId,JSON.stringify(transaction),saved.version])).rows[0];if(!row)throw new ProjectError("game-state","Reconcile this event's previous wallet request first.",409);return view(row);
   });
  }
- async function dispatchEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:string){
+ async function dispatchEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:string,dispatchId?:string){
+  if(dispatchId!==undefined)walletRequestId(dispatchId);const attemptId=dispatchId??randomUUID();
   const saved=await readEvent(scope,id,eventId);return projectTransaction(pool,scope,async db=>{
    const current=(await db.query("SELECT current_revision FROM programmable_projects_v1.projects WHERE owner=$1 AND id=$2 FOR SHARE",[scope.ownerId,scope.projectId])).rows[0];if(current?.current_revision!==saved.binding.revisionId)throw currentError();
    const active=(await db.query("SELECT version FROM programmable_projects_v1.game_bindings WHERE owner=$1 AND project_id=$2 AND id=$3 AND active FOR SHARE",[scope.ownerId,scope.projectId,id])).rows[0];if(active?.version!==saved.version)throw currentError();
-   const row=(await db.query("SELECT * FROM programmable_projects_v1.game_events WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 FOR UPDATE",[scope.ownerId,scope.projectId,id,eventId])).rows[0],step=row?.prepared_transaction as LaunchStep|undefined;
+   const row=(await db.query("SELECT * FROM programmable_projects_v1.game_events WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 FOR UPDATE",[scope.ownerId,scope.projectId,id,eventId])).rows[0],step=row?.prepared_transaction as DispatchedStep|undefined;
    if(row?.state!=="prepared"||!step||step.id!==stepId)throw new ProjectError("game-state","Review the current event transaction before signing.",409);
-   if(step.dispatchedAt!==undefined)throw new ProjectError("game-state","This event request has already started. Reconcile it first.",409);
    if(step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This event was prepared for another wallet.",403);
    if(step.expiresAt<=now())throw new ProjectError("game-expired","This event request expired. Keep it for recovery.",409);
-   const prepared={...step,state:"dispatching" as const,dispatchedAt:step.dispatchedAt??now()};await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=$5::jsonb WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4",[scope.ownerId,scope.projectId,id,eventId,JSON.stringify(prepared)]);return {...view(row),step:prepared};
+   if(step.walletRejected)throw new ProjectError("game-state","Prepare a new review after a wallet rejection.",409);
+   if(step.dispatchedAt!==undefined){if(dispatchId!==undefined&&step.dispatchId===dispatchId)return {...view(row),step,dispatchId};throw new ProjectError("game-state","This event request has already started. Reconcile it first.",409);}
+   const prepared={...step,state:"dispatching" as const,dispatchedAt:now(),dispatchId:attemptId};await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=$5::jsonb WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4",[scope.ownerId,scope.projectId,id,eventId,JSON.stringify(prepared)]);return {...view(row),step:prepared,dispatchId:attemptId};
   });
  }
- async function rejectedEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:string){
-  const saved=await readEvent(scope,id,eventId,true),step=saved.transaction as unknown as LaunchStep;
+ async function rejectedEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:string,dispatchId?:string){
+  const saved=await readEvent(scope,id,eventId,true),step=saved.transaction as unknown as DispatchedStep;
   if(!step?.transaction||step.id!==stepId||step.transaction.from.toLowerCase()!==account.toLowerCase())throw new ProjectError("game-wallet","This event was prepared for another wallet request.",403);
-  return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=(prepared_transaction-'dispatchedAt')||jsonb_build_object('state','rejected','walletRejected',true) WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 AND state='prepared' AND transaction_hash IS NULL AND prepared_transaction->>'id'=$5 RETURNING *",[scope.ownerId,scope.projectId,id,eventId,stepId])).rows[0];if(!row)throw new ProjectError("game-state","A submitted event request cannot be rejected.",409);return view(row);});
+  if((step.dispatchedAt!==undefined&&dispatchId===undefined)||(dispatchId!==undefined&&step.dispatchId!==dispatchId))throw new ProjectError("game-state","The event dispatch identity changed.",409);
+  return projectTransaction(pool,scope,async db=>{const row=(await db.query("UPDATE programmable_projects_v1.game_events SET prepared_transaction=(prepared_transaction-'dispatchedAt')||jsonb_build_object('state','rejected','walletRejected',true) WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 AND state='prepared' AND transaction_hash IS NULL AND prepared_transaction->>'id'=$5 AND prepared_transaction=$6::jsonb RETURNING *",[scope.ownerId,scope.projectId,id,eventId,stepId,JSON.stringify(step)])).rows[0];if(!row)throw new ProjectError("game-state","The event request changed or was submitted. Check its saved state.",409);return view(row);});
  }
  async function submitted(scope:ProjectScope,id:string,eventId:string,hash:Hex){
   if(!/^0x[a-f0-9]{64}$/i.test(hash))throw new ProjectError("game-transaction","Use a transaction hash.");

@@ -23,7 +23,7 @@ export function createGameEventRoutes(deps:Dependencies){
   try{
    if(!deps.enabled())return new Response(null,{status:404});const auth=await deps.authorize(request,true);await deps.consume(auth.ownerId,"write");
    const body=await readPreviewBody(request,20000) as Record<string,unknown>;
-   if(!body||typeof body.projectId!=="string"||Object.keys(body).some(key=>!["action","projectId","binding","bindingId","proof","event","eventId","playerIdHash","account","hash","walletRequestId","stepId"].includes(key)))throw new ProjectError("game-input","Choose a project game action.");
+   if(!body||typeof body.projectId!=="string"||Object.keys(body).some(key=>!["action","projectId","binding","bindingId","proof","event","eventId","playerIdHash","account","hash","walletRequestId","stepId","dispatchId"].includes(key)))throw new ProjectError("game-input","Choose a project game action.");
    const scope={ownerId:auth.ownerId,projectId:body.projectId},store=deps.events();let result:unknown;
    if(body.action==="plan"||body.action==="inspect"){
     const source=bindingInput(body.binding),revision=await deps.projects().readProject(scope),binding={...source,...(body.action==="inspect"?{runtimeHash:`0x${"01".repeat(32)}` as Hex}:{}),revisionId:revision.revisionId,id:`0x${"01".repeat(32)}` as Hex};assertGameBinding(binding);binding.id=gameBindingId(scope,binding);result=body.action==="inspect"?await deps.service().previewBinding(binding):{binding,verified:false,registered:false};
@@ -45,16 +45,17 @@ export function createGameEventRoutes(deps:Dependencies){
      if(body.action==="reconcile-wallet")result=await deps.service().reconcileWallet(scope,id,body.walletRequestId);
      else{
       if(typeof body.account!=="string")throw new ProjectError("game-input","Choose a connected wallet for this game request.");
-      if(body.action==="dispatch-wallet")result=await deps.service().dispatchWallet(scope,id,body.walletRequestId,body.account as Address,auth.wallets);
-      else if(body.action==="wallet-rejected")result=await deps.service().walletRejected(scope,id,body.walletRequestId,body.account as Address,auth.wallets);
+      if(body.action==="dispatch-wallet"&&typeof body.dispatchId!=="string")throw new ProjectError("game-input","Use the original wallet dispatch identity.");
+      if(body.action==="dispatch-wallet")result=await deps.service().dispatchWallet(scope,id,body.walletRequestId,body.account as Address,auth.wallets,body.dispatchId as string);
+      else if(body.action==="wallet-rejected")result=await deps.service().walletRejected(scope,id,body.walletRequestId,body.account as Address,auth.wallets,typeof body.dispatchId==="string"?body.dispatchId:undefined);
       else if(typeof body.hash==="string")result=await deps.service().walletSubmitted(scope,id,body.walletRequestId,body.hash as Hex,body.account as Address,auth.wallets);
       else throw new ProjectError("game-input","Supply the original wallet transaction hash.");
      }
     }else{
      if(typeof body.eventId!=="string")throw new ProjectError("game-input","Choose a recorded event.");
      if(body.action==="prepare"&&typeof body.account==="string")result=await deps.service().prepare(scope,id,body.eventId,body.account as Address,auth.wallets);
-     else if(body.action==="dispatch"&&typeof body.account==="string"&&typeof body.stepId==="string")result=await deps.service().dispatchEvent(scope,id,body.eventId,body.stepId,body.account as Address,auth.wallets);
-     else if(body.action==="rejected"&&typeof body.account==="string"&&typeof body.stepId==="string")result=await deps.service().eventRejected(scope,id,body.eventId,body.stepId,body.account as Address,auth.wallets);
+     else if(body.action==="dispatch"&&typeof body.account==="string"&&typeof body.stepId==="string"&&typeof body.dispatchId==="string")result=await deps.service().dispatchEvent(scope,id,body.eventId,body.stepId,body.account as Address,auth.wallets,body.dispatchId);
+     else if(body.action==="rejected"&&typeof body.account==="string"&&typeof body.stepId==="string")result=await deps.service().eventRejected(scope,id,body.eventId,body.stepId,body.account as Address,auth.wallets,typeof body.dispatchId==="string"?body.dispatchId:undefined);
      else if(body.action==="submitted"&&typeof body.account==="string"&&typeof body.hash==="string")result=await deps.service().recordSubmitted(scope,id,body.eventId,body.hash as Hex,body.account as Address,auth.wallets);
      else if(body.action==="reconcile")result=await deps.service().reconcile(scope,id,body.eventId);
      else throw new ProjectError("game-input","Choose a supported game action.");

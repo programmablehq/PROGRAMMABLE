@@ -15,8 +15,9 @@ import type {CustomAIChain} from "../lib/custom-ai/chain.server";
 const owner={ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111"},issuer=privateKeyToAccount(`0x${"11".repeat(32)}`),player=privateKeyToAccount(`0x${"22".repeat(32)}`);
 const playerIdHash=`0x${"77".repeat(32)}` as Hex,hash=`0x${"88".repeat(32)}` as Hex,now=1800000000;
 let db:PGlite,store:ReturnType<typeof createGameEventStore>,projects:ReturnType<typeof createPlatformStore>,binding:GameBinding,step:LaunchStep;
+let beforeConnection:(()=>Promise<void>)|undefined;
 beforeEach(async()=>{
- db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let tail=Promise.resolve();const pool:AIPool={connect:async()=>{const prior=tail;let release!:()=>void;tail=new Promise<void>(done=>{release=done});await prior;return {query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release};}};
+ beforeConnection=undefined;db=new PGlite();await db.exec(PROJECT_PLATFORM_SCHEMA);let tail=Promise.resolve();const pool:AIPool={connect:async()=>{const interleave=beforeConnection;beforeConnection=undefined;await interleave?.();const prior=tail;let release!:()=>void;tail=new Promise<void>(done=>{release=done});await prior;return {query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release};}};
  projects=createPlatformStore(pool);const current=await projects.createProject(owner);const config={revisionId:current.revisionId,gameId:"maze",chainId:4663 as const,issuer:issuer.address,target:`0x${"55".repeat(20)}` as Hex,runtimeHash:keccak256(code.artifacts.ProjectPlayerGameEventsV1.runtimeTemplate as Hex),maxAge:300,maximumScore:"1"};
  binding={...config,id:gameBindingId(owner,config)};store=createGameEventStore(pool,projects,()=>now);await store.saveBinding(owner,binding);
  const proof={player:player.address,playerIdHash,nonce:`0x${"99".repeat(32)}` as Hex,validUntil:now+120};await store.link(owner,binding.id,{...proof,signature:await player.signTypedData(walletLinkTypedData(binding,proof)),issuerSignature:await issuer.signTypedData(walletLinkTypedData(binding,proof))});
@@ -34,12 +35,43 @@ it("retains a dispatched unknown request instead of replacing its nonce",async()
  const repeat=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,{...step,id:"replacement",transaction:{...step.transaction,nonce:"0x2"}});
  expect(repeat.id).toBe(first.id);expect(repeat.step.transaction.nonce).toBe("0x1");expect(repeat.state).toBe("dispatching");
 });
+it("can recover a lost dispatch acknowledgement only with the same stored client attempt",async()=>{
+ const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step),attempt="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+ const sent=await store.dispatchWalletTransaction(owner,first.id,player.address,attempt);
+ expect(sent.dispatchId).toBe(attempt);
+ expect((await store.dispatchWalletTransaction(owner,first.id,player.address,attempt)).step).toEqual(sent.step);
+ await expect(store.dispatchWalletTransaction(owner,first.id,player.address,"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")).rejects.toMatchObject({code:"game-state"});
+});
 it("allows a new reviewed request only after an explicit rejection",async()=>{
- const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);await store.dispatchWalletTransaction(owner,first.id,player.address);
- expect((await store.rejectedWalletTransaction(owner,first.id,player.address)).state).toBe("rejected");
+ const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);const dispatch=await store.dispatchWalletTransaction(owner,first.id,player.address);
+ expect((await store.rejectedWalletTransaction(owner,first.id,player.address,dispatch.dispatchId!)).state).toBe("rejected");
  const next=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,{...step,id:"new-review"});expect(next.id).not.toBe(first.id);
  await store.submittedWalletTransaction(owner,next.id,player.address,hash);
  await expect(store.rejectedWalletTransaction(owner,next.id,player.address)).rejects.toMatchObject({code:"game-state"});
+});
+it("cancels an unsent review but requires the exact dispatch identity after it starts",async()=>{
+ const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);
+ expect((await store.rejectedWalletTransaction(owner,first.id,player.address)).state).toBe("rejected");
+ const next=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);await store.dispatchWalletTransaction(owner,next.id,player.address);
+ await expect(store.rejectedWalletTransaction(owner,next.id,player.address)).rejects.toMatchObject({code:"game-state"});
+});
+it("does not cancel a wallet dispatch that wins a concurrent unsent cancellation",async()=>{
+ const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);
+ const results=await Promise.allSettled([store.rejectedWalletTransaction(owner,first.id,player.address),store.dispatchWalletTransaction(owner,first.id,player.address)]);
+ expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+});
+it("does not cancel an event dispatch that wins a concurrent unsent cancellation",async()=>{
+ const event={eventId:`0x${"ac".repeat(32)}` as Hex,playerIdHash,player:player.address,sequence:"1",score:"1",observedAt:now,validUntil:now+120};
+ await store.ingest(owner,binding.id,{...event,signature:await issuer.signTypedData(gameEventTypedData(binding,event))});await store.prepared(owner,binding.id,event.eventId,JSON.parse(JSON.stringify(step)));
+ const results=await Promise.allSettled([store.rejectedEvent(owner,binding.id,event.eventId,step.id,player.address),store.dispatchEvent(owner,binding.id,event.eventId,step.id,player.address)]);
+ expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+});
+it("rechecks an event dispatch committed after the cancellation's initial read",async()=>{
+ const event={eventId:`0x${"ad".repeat(32)}` as Hex,playerIdHash,player:player.address,sequence:"1",score:"1",observedAt:now,validUntil:now+120};
+ await store.ingest(owner,binding.id,{...event,signature:await issuer.signTypedData(gameEventTypedData(binding,event))});await store.prepared(owner,binding.id,event.eventId,JSON.parse(JSON.stringify(step)));
+ beforeConnection=async()=>{beforeConnection=async()=>{await store.dispatchEvent(owner,binding.id,event.eventId,step.id,player.address)}};
+ await expect(store.rejectedEvent(owner,binding.id,event.eventId,step.id,player.address)).rejects.toMatchObject({code:"game-state"});
+ expect((await store.readEvent(owner,binding.id,event.eventId,true)).receipt.walletPending).toBe(true);
 });
 it("stores observed results only for the original transaction hash and can reopen after a reorg",async()=>{
  const first=await store.prepareWalletTransaction(owner,binding.id,playerIdHash,step);await store.submittedWalletTransaction(owner,first.id,player.address,hash);
