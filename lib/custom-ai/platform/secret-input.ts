@@ -13,6 +13,17 @@ export function redactInlineCredentials(text:string):string{
 export function redactCredentialData(value:JsonValue):JsonValue{
   if(typeof value==="string")return redactInlineCredentials(value);
   if(Array.isArray(value))return value.map(redactCredentialData);
-  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,/^(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password|secret|private[-_]?key)$/i.test(key)&&typeof item==="string"&&item?"[redacted]":redactCredentialData(item)]));
+  if(value&&typeof value==="object"){
+    const entries=Object.entries(value),names=new Set(entries.map(([key])=>key));
+    return Object.fromEntries(entries.map(([key,item],index)=>{
+      let name=key;
+      if(redactInlineCredentials(key)!==key){
+        name=`[redacted-key-${index}]`;
+        while(names.has(name))name+="_";
+        names.add(name);
+      }
+      return [name,/^(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password|secret|private[-_]?key)$/i.test(key)&&typeof item==="string"&&item?"[redacted]":redactCredentialData(item)];
+    }));
+  }
   return value;
 }

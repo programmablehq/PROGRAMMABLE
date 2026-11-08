@@ -12,16 +12,30 @@ export const validateConnectorURL = (value: string) => {
 export type ConnectorRequest = { url: string; method: string; headers: Record<string,string>; body?: string; signal?: AbortSignal; responseId?: string; maxRequestBytes?:number; maxResponseBytes?:number };
 export type ConnectorResponse = { status: number; headers: Record<string,string>; text: string };
 export type ConnectorTransport = (request: ConnectorRequest) => Promise<ConnectorResponse>;
+function redactConnectorText(value:string,secrets:string[]){
+  let text=value;
+  for(const secret of secrets.filter(secret=>secret.length>=3))text=text.split(secret).join("[redacted]");
+  return redactInlineCredentials(text);
+}
 export function redactConnectorData(value: unknown, secrets: string[], depth=0): JsonValue {
   if(depth>24)return "[truncated]";
   if(typeof value==="string") {
-    let text=value;
-    for(const secret of secrets.filter(secret=>secret.length>=3))text=text.split(secret).join("[redacted]");
-    return redactInlineCredentials(text).slice(0,128000);
+    return redactConnectorText(value,secrets).slice(0,128000);
   }
   if(value===null||typeof value==="boolean"||typeof value==="number"&&Number.isFinite(value))return value;
   if(Array.isArray(value))return value.slice(0,1000).map(item=>redactConnectorData(item,secrets,depth+1));
-  if(value&&typeof value==="object")return Object.fromEntries(Object.entries(value).slice(0,1000).map(([key,item])=>[key,/^(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password|secret|private[-_]?key)$/i.test(key)?"[redacted]":redactConnectorData(item,secrets,depth+1)]));
+  if(value&&typeof value==="object"){
+    const entries=Object.entries(value).slice(0,1000),names=new Set(entries.map(([key])=>key));
+    return Object.fromEntries(entries.map(([key,item],index)=>{
+      let name=key;
+      if(redactConnectorText(key,secrets)!==key){
+        name=`[redacted-key-${index}]`;
+        while(names.has(name))name+="_";
+        names.add(name);
+      }
+      return [name,/^(?:authorization|api[-_]?key|access[-_]?token|refresh[-_]?token|client[-_]?secret|password|secret|private[-_]?key)$/i.test(key)?"[redacted]":redactConnectorData(item,secrets,depth+1)];
+    }));
+  }
   return null;
 }
 export const privateConnectorHTTP: ConnectorTransport = async input => {

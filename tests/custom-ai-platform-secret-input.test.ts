@@ -1,10 +1,17 @@
 import {expect,it,vi} from "vitest";
 vi.mock("server-only",()=>({}));
-import {containsInlineCredential,redactInlineCredentials} from "../lib/custom-ai/platform/secret-input";
+import {containsInlineCredential,redactInlineCredentials,redactCredentialData} from "../lib/custom-ai/platform/secret-input";
 import {createRunStore} from "../lib/custom-ai/platform/runs.server";
 import type {AIPool} from "../lib/custom-ai/store.server";
 
 const fakeKey=`sk-proj-${"fixture".repeat(10)}`;
+it("redacts recognizable credentials in keys and preserves colliding ordinary fields",()=>{
+ const result=redactCredentialData({[fakeKey]:1,"[redacted-key-0]":2,nested:[{[fakeKey]:3,ok:false,score:0}]}) as Record<string,unknown>;
+ expect(JSON.stringify(result)).not.toContain(fakeKey);
+ expect(result["[redacted-key-0]"]).toBe(2);expect(Object.values(result)).toContain(1);
+ const nested=(result.nested as Record<string,unknown>[])[0];
+ expect(Object.values(nested)).toContain(3);expect(nested.ok).toBe(false);expect(nested.score).toBe(0);
+});
 it("recognizes pasted provider keys and explicit credential assignments without blocking instructions",()=>{
  for(const value of [fakeKey,`github_pat_${"fixture".repeat(8)}`,`API_KEY = '${"examplecredential".repeat(3)}'`,`Authorization: Bearer ${"fixture".repeat(8)}`])expect(containsInlineCredential(value)).toBe(true);
  for(const value of ["Use a private API key in Connections.","API_KEY=${API_KEY}","apiKey: process.env.API_KEY","0x"+"a".repeat(40),"Score is 12345."])expect(containsInlineCredential(value)).toBe(false);

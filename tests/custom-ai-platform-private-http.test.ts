@@ -12,4 +12,13 @@ describe("connector endpoint boundaries",()=>{
   const result=redactConnectorData({score:3,nested:{authorization:"Bearer abc",note:"secret123 echoed"}},["secret123"]);
   expect(result).toEqual({score:3,nested:{authorization:"[redacted]",note:"[redacted] echoed"}});
  });
+ it("redacts literal credentials in object keys without overwriting ordinary keys",()=>{
+  const secret="synthetic-connector-credential";
+  const result=redactConnectorData({[secret]:1,"[redacted-key-0]":2,nested:[{["field:"+secret]:3,score:0,ok:false}]},[secret]) as Record<string,unknown>;
+  expect(JSON.stringify(result)).not.toContain(secret);
+  expect(result["[redacted-key-0]"]).toBe(2);
+  expect(Object.values(result)).toContain(1);
+  const nested=(result.nested as Record<string,unknown>[])[0];
+  expect(Object.values(nested)).toContain(3);expect(nested.score).toBe(0);expect(nested.ok).toBe(false);
+ });
 });
