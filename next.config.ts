@@ -90,6 +90,7 @@ const customAIWorkerFiles = [
   "./scripts/custom-ai/protected-world-fixture-pin.mjs",
   "./scripts/custom-ai/declared-events.mjs",
   "./scripts/custom-ai/execution-trace.mjs",
+  "./scripts/custom-ai/fixture-signatures.mjs",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
 const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.json", "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];

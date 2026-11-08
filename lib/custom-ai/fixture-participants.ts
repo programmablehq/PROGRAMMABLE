@@ -1,4 +1,4 @@
-const accounts=["creator","trader-a","trader-b"] as const;
+import {CHECK_ACCOUNTS as accounts} from "./check-accounts";
 type ObjectValue=Record<string,unknown>;
 const object=(value:unknown):value is ObjectValue=>Boolean(value)&&typeof value==="object"&&!Array.isArray(value);
 

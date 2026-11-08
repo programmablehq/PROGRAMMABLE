@@ -45,6 +45,8 @@ Before building a game receiver, the chat uses `event.identity` to derive its bi
 
 Generated code runs in an isolated development sandbox with bounded resources and network access denied by default. Reviewed connections supply external API access. The sandbox lasts for development work; published applications use a separate hosting runtime.
 
+Contract checks can create genuine game-event and wallet-link signatures with fixed local test actors. These checks use public test identities inside the networkless EVM; they never need your wallet key or the game service's signing key. Production receiver configuration keeps the actual service issuer. Local signature results do not authorize a wallet action or establish a deployed game effect.
+
 The hosting profile supports static sites, Node API handlers and Vite frontends. It does not run a Next.js application server. Applications can use project data, private connections and scheduled tasks. A multiuser application must implement its own visitor authentication and ownership checks.
 
 Use **Preview & run** to inspect checks and create a preview from a verified version. Preview data is separate from live data. Publication promotes that exact release and attaches it to the project's live data. Changes to source need fresh checks. A missing hosting credential or failed provider operation remains visible; the presence of hosting configuration is not proof that a service is working.
