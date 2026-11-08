@@ -31,4 +31,17 @@ describe("independently declared call types",()=>{
   p.allowedCalls=[{contract:"fee-vault"}];
   expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();
  });
+ it("allows normalized local signatures only in bytes step arguments",()=>{
+  const p=plan();const signature={signature:{kind:"wallet-link" as const,signer:"signer-player-a" as const,contract:"main",values:[]}};
+  p.contracts[0].functions=["function check(bytes value) returns(bytes)","function other(bytes32 value)","function initialize(bytes value)"];
+  p.steps=[{...p.steps[0],signature:"check(bytes)",arguments:[signature]}];
+  expect(()=>validateDeclaredInterfaceCalls(p)).not.toThrow();
+  p.steps[0].signature="other(bytes32)";
+  expect(()=>validateDeclaredInterfaceCalls(p)).toThrow("expects bytes32");
+  p.steps[0].signature="check(bytes)";p.steps[0].expect.returns=[signature];
+  expect(()=>validateDeclaredInterfaceCalls(p)).toThrow("return 0 expects bytes");
+  delete p.steps[0].expect.returns;
+  const deployment={targets:[{id:"main",source:"Main.sol",contract:"Main",initializer:{function:"initialize",arguments:[signature]}}]} as unknown as GeneralDeploymentBlueprint;
+  expect(()=>validateDeclaredInterfaceCalls(p,deployment)).toThrow("initializer argument 0 expects bytes");
+ });
 });

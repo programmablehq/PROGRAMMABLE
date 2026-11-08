@@ -3,6 +3,7 @@ import {formatAbi} from "abitype";
 import {createContractProject,GENERAL_PROJECT_COMPILER} from "../lib/custom-ai/contract-project";
 import {compileContractProject} from "../lib/custom-ai/contract-project.server";
 import {createGeneralCheckPlan} from "../lib/custom-ai/behavior-checks";
+import {createGeneralCheckBlueprint,bindGeneralCheckBlueprint} from "../lib/custom-ai/check-blueprint";
 import {checkGeneralScenarios} from "../lib/custom-ai/behavior-checks.server";
 import library from "../lib/custom-ai/platform/game-events-code.json";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
@@ -67,7 +68,10 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("isolated game signature fi
     step("score","playerScore(address)",[player],"success",["1"]),
     step("replay","submitEvent((bytes32,bytes32,bytes32,address,uint64,uint256,uint64,uint64),bytes)",[eventValues,signature("game-event","signer-issuer",eventValues)],"revert"),
    ]};
-  const plan=createGeneralCheckPlan(declaration,project);
+  const blueprint=createGeneralCheckBlueprint({...declaration,compilerProfile:"viair-200-v1",
+    contracts:declaration.contracts.map(item=>({...item,role:"auxiliary"})),
+    ...(version===2?{constructorChildren:declaration.constructorChildren!.map(item=>({...item,role:"auxiliary"}))}:{})},intent,4663,"cancun");
+  const plan=bindGeneralCheckBlueprint(blueprint,project);
   const report=await checkGeneralScenarios(project,compiled,plan);
   expect(report).toMatchObject({passed:true,launchReady:false});expect(report.failures).toEqual([]);
   expect(report.execution?.steps).toHaveLength(8);
