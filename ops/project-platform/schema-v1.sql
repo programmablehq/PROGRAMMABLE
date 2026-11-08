@@ -320,6 +320,33 @@ CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_event_routes (
   FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
 );
 
+CREATE TABLE IF NOT EXISTS programmable_projects_v1.game_wallet_transactions (
+  owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL,
+  binding_id text NOT NULL, binding_version text NOT NULL, binding_definition jsonb NOT NULL,
+  player_id_hash text NOT NULL, player text NOT NULL, proof jsonb NOT NULL, proof_hash text NOT NULL,
+  prepared_transaction jsonb NOT NULL,
+  state text NOT NULL CHECK(state IN ('prepared','dispatching','submitted','confirmed','failed','rejected')),
+  transaction_hash text, observation jsonb, created_at timestamptz NOT NULL,
+  PRIMARY KEY(owner,project_id,id),
+  FOREIGN KEY(owner,project_id,binding_id) REFERENCES programmable_projects_v1.game_bindings(owner,project_id,id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS game_wallet_pending_player_v1
+  ON programmable_projects_v1.game_wallet_transactions(owner,project_id,binding_id,player_id_hash)
+  WHERE state IN ('prepared','dispatching','submitted');
+CREATE UNIQUE INDEX IF NOT EXISTS game_wallet_pending_address_v1
+  ON programmable_projects_v1.game_wallet_transactions(owner,project_id,binding_id,player)
+  WHERE state IN ('prepared','dispatching','submitted');
+ALTER TABLE programmable_projects_v1.game_wallet_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE programmable_projects_v1.game_wallet_transactions FORCE ROW LEVEL SECURITY;
+DO $game_wallet_transactions$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname='programmable_projects_v1' AND tablename='game_wallet_transactions' AND policyname='game_wallet_transaction_owner_v1') THEN
+    CREATE POLICY game_wallet_transaction_owner_v1 ON programmable_projects_v1.game_wallet_transactions
+      USING(owner=current_setting('programmable.project_owner',true)) WITH CHECK(owner=current_setting('programmable.project_owner',true));
+  END IF;
+END
+$game_wallet_transactions$;
+
 CREATE TABLE IF NOT EXISTS programmable_projects_v1.repository_deliveries (
   owner text NOT NULL, project_id uuid NOT NULL, id uuid NOT NULL, request_key text NOT NULL, request_hash text NOT NULL,
   revision_id text NOT NULL, repository text NOT NULL, branch text NOT NULL,

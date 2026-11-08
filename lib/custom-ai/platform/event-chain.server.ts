@@ -3,6 +3,7 @@ import {randomUUID} from "node:crypto";
 import {encodeFunctionData,getAddress,keccak256,type Abi,type Address,type Hex} from "viem";
 import {customAIChain,type CustomAIChain} from "../chain.server";
 import {makeStep,verifiedStepReceipt} from "../transaction.server";
+import {recoverStepHash} from "../step-recovery.server";
 import {matchesRuntime} from "../runtime";
 import type {LaunchStep} from "../launch-session";
 import type {createGameEventStore} from "./event-store.server";
@@ -18,7 +19,7 @@ function wallet(account:Address,linked:readonly string[]){
  return getAddress(account);
 }
 export function createGameEventService(store:ReturnType<typeof createGameEventStore>,chainFor:(id:1|4663)=>Promise<CustomAIChain>=customAIChain,
- execution:{makeStep:typeof makeStep;verifiedStepReceipt:typeof verifiedStepReceipt}={makeStep,verifiedStepReceipt}){
+ execution:{makeStep:typeof makeStep;verifiedStepReceipt:typeof verifiedStepReceipt;recoverStepHash?:typeof recoverStepHash}={makeStep,verifiedStepReceipt,recoverStepHash}){
  async function inspect(binding:GameBinding,chain:CustomAIChain){
   const runtime=await chain.code(binding.target);
   if(keccak256(runtime)!==binding.runtimeHash||!receiverArtifacts.some(candidate=>matchesRuntime(runtime,{runtimeTemplate:candidate.runtimeTemplate as Hex,immutableReferences:candidate.immutableReferences})))throw new ProjectError("game-code","The deployed game receiver does not match its reviewed code.",409);
@@ -45,11 +46,39 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   const sender=wallet(account,linked),saved=await store.currentBinding(scope,id),chain=await chainFor(saved.binding.chainId);
   await inspect(saved.binding,chain);
   const proof=await store.readWallet(scope,id,playerIdHash),present=await chain.call(saved.binding.target,"function walletForPlayer(bytes32) view returns(address)",[playerIdHash]);
-  if(String(present).toLowerCase()===proof.player.toLowerCase()){await chain.finish();return {state:"linked",step:null};}
+  if(String(present).toLowerCase()===proof.player.toLowerCase()){await chain.finish();return {state:"linked",step:null,requestId:null};}
   await verifyWalletLink(saved.binding,proof,Number(chain.block.timestamp));
   const data=encodeFunctionData({abi:artifact.abi as Abi,functionName:"bindPlayer",args:[proof.player,proof.playerIdHash,proof.nonce,BigInt(proof.validUntil),proof.signature,proof.issuerSignature]});
   const step=await execution.makeStep(chain,{id:randomUUID(),account:sender,chainId:saved.binding.chainId,state:"preparing",steps:[]},"program-action",saved.binding.target,data,0n,proof.validUntil);
-  return {state:"ready_for_wallet",step};
+  const request=await store.prepareWalletTransaction(scope,id,playerIdHash,step);
+  return {...request,requestId:request.id,state:request.state==="prepared"?"ready_for_wallet":request.state,step:request.step};
+ }
+ async function walletRequest(scope:ProjectScope,id:string,requestId:string){
+  const saved=await store.readWalletTransaction(scope,requestId);
+  if(saved.binding.id!==id)throw new ProjectError("game-wallet-transaction","This wallet request belongs to another game binding.",409);
+  return saved;
+ }
+ async function dispatchWallet(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[]){
+  const sender=wallet(account,linked),saved=await walletRequest(scope,id,requestId),chain=await chainFor(saved.binding.chainId);
+  await inspect(saved.binding,chain);await verifyWalletLink(saved.binding,saved.proof,Number(chain.block.timestamp));await chain.finish();
+  return store.dispatchWalletTransaction(scope,requestId,sender);
+ }
+ async function walletSubmitted(scope:ProjectScope,id:string,requestId:string,hash:Hex,account:Address,linked:readonly string[]){
+  const sender=wallet(account,linked);await walletRequest(scope,id,requestId);return store.submittedWalletTransaction(scope,requestId,sender,hash);
+ }
+ async function walletRejected(scope:ProjectScope,id:string,requestId:string,account:Address,linked:readonly string[]){
+  const sender=wallet(account,linked);await walletRequest(scope,id,requestId);return store.rejectedWalletTransaction(scope,requestId,sender);
+ }
+ async function reconcileWallet(scope:ProjectScope,id:string,requestId:string){
+  const saved=await walletRequest(scope,id,requestId),chain=await chainFor(saved.binding.chainId);await inspect(saved.binding,chain);
+  let hash=saved.receipt.transactionHash as Hex|null,recovered=false;
+  if(!hash&&saved.step.dispatchedAt!==undefined){hash=await (execution.recoverStepHash??recoverStepHash)(chain,saved.step)??null;recovered=Boolean(hash);}
+  if(!hash){await chain.finish();return saved.receipt;}
+  const result=await execution.verifiedStepReceipt(chain,{...saved.step,hash});
+  const receipt=recovered?await store.submittedWalletTransaction(scope,requestId,saved.step.transaction.from,hash):saved.receipt;
+  if(result.state==="pending"){await chain.finish();return receipt.state==="confirmed"||receipt.state==="failed"?store.pendingWalletTransaction(scope,requestId,hash):receipt;}
+  if(result.state==="confirmed"&&String(await chain.call(saved.binding.target,"function walletForPlayer(bytes32) view returns(address)",[saved.proof.playerIdHash])).toLowerCase()!==saved.proof.player.toLowerCase())throw new ProjectError("game-observation","The transaction does not show the expected player wallet binding.",409);
+  await chain.finish();return store.observedWalletTransaction(scope,requestId,hash,result.state==="confirmed",json({state:result.state,receipt:result.receipt,bindingVersion:saved.receipt.bindingVersion}));
  }
  async function prepare(scope:ProjectScope,id:string,eventId:string,account:Address,linked:readonly string[]){
   const sender=wallet(account,linked),saved=await store.readEvent(scope,id,eventId);
@@ -75,16 +104,27 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(!step?.transaction||step.transaction.from.toLowerCase()!==sender.toLowerCase())throw new ProjectError("game-wallet","This transaction was prepared for another wallet.",403);
   return store.submitted(scope,id,eventId,hash);
  }
+ async function dispatchEvent(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[]){
+  const sender=wallet(account,linked),saved=await store.readEvent(scope,id,eventId),chain=await chainFor(saved.binding.chainId);
+  await inspect(saved.binding,chain);await verifyGameEvent(saved.binding,saved.event,Number(chain.block.timestamp));await chain.finish();
+  return store.dispatchEvent(scope,id,eventId,stepId,sender);
+ }
+ async function eventRejected(scope:ProjectScope,id:string,eventId:string,stepId:string,account:Address,linked:readonly string[]){
+  return store.rejectedEvent(scope,id,eventId,stepId,wallet(account,linked));
+ }
  async function reconcile(scope:ProjectScope,id:string,eventId:string){
-  const saved=await store.readEvent(scope,id,eventId,true),hash=saved.receipt.transactionHash;
-  if(!hash)return saved.receipt;
+  const saved=await store.readEvent(scope,id,eventId,true);
   const step=saved.transaction as unknown as LaunchStep;
-  if(!step?.transaction)throw new ProjectError("game-state","The original wallet request is missing.",409);
+  if(!step?.transaction){if(!saved.receipt.transactionHash)return saved.receipt;throw new ProjectError("game-state","The original wallet request is missing.",409);}
   const chain=await chainFor(saved.binding.chainId);await inspect(saved.binding,chain);
+  let hash=saved.receipt.transactionHash as Hex|null,recovered=false;
+  if(!hash&&step.dispatchedAt!==undefined){hash=await (execution.recoverStepHash??recoverStepHash)(chain,step)??null;recovered=Boolean(hash);}
+  if(!hash){await chain.finish();return saved.receipt;}
   const result=await execution.verifiedStepReceipt(chain,{...step,hash:hash as Hex});
-  if(result.state==="pending"){await chain.finish();return saved.receipt.state==="confirmed"||saved.receipt.state==="failed"?store.pendingAgain(scope,id,eventId,hash as Hex):saved.receipt;}
+  const receipt=recovered?await store.submitted(scope,id,eventId,hash):saved.receipt;
+  if(result.state==="pending"){await chain.finish();return receipt.state==="confirmed"||receipt.state==="failed"?store.pendingAgain(scope,id,eventId,hash as Hex):receipt;}
   if(result.state==="confirmed"&&!await chain.call(saved.binding.target,"function consumed(bytes32) view returns(bool)",[saved.event.eventId]))throw new ProjectError("game-observation","The transaction does not show the expected game event effect.",409);
   await chain.finish();return store.observed(scope,id,eventId,hash as Hex,result.state==="confirmed",json({state:result.state,receipt:result.receipt,bindingVersion:saved.version}));
  }
- return {register,previewBinding,reviewWalletLink,prepareWallet,prepare,recordSubmitted,reconcile};
+ return {register,previewBinding,reviewWalletLink,prepareWallet,dispatchWallet,walletSubmitted,walletRejected,reconcileWallet,prepare,recordSubmitted,dispatchEvent,eventRejected,reconcile};
 }
