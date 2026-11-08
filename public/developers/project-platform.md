@@ -4,11 +4,11 @@ Open [AI Chat](/launch/custom-ai) and connect your existing wallet session. Chec
 
 During a limited rollout, `projectPlatform.rollout` is `pilot` and access depends on your signed-in account. Other accounts keep their existing coin chats and saved work. A `general` rollout makes the workspace available to normal eligible accounts.
 
-If access changes while a page is open, save your current work and reload the page to refresh the available workspace. **Saved coin chats** remains available when a project action reports that your account no longer has access.
+If access changes while a page is open, save your current work and reload the page to refresh the available workspace. Existing coin chats remain available when your account no longer has project access.
 
 ## Describe the result
 
-Create or select a project and use **Message your project** to describe what it should do. Include the rules that must stay in place when you ask for a change. You can use ordinary German or English. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.
+Start in **Describe your idea**. Your first message creates and names a project. In an existing project, use **Message your project** to describe a change and include the rules that must stay in place. You can use ordinary German or English. Enter sends; Shift + Enter adds a line. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.
 
 Choose a work mode before sending:
 
@@ -19,7 +19,9 @@ Choose a work mode before sending:
 | **Run checks** | Tests the saved source and records results for that version. |
 | **Publish & run** | Uses the publication and scheduled-task permissions already granted to the project. |
 
-Work is saved as it runs. Reloading reads the same saved run. If a run is interrupted, read its current status before sending another request. **Stop** requests cancellation; wait for its saved result. A finished run and a verified project are separate states. Read the recorded checks and any remaining requirements in **Preview & run**.
+Work is saved as it runs. The chat shows the current action and completed steps; **Run details** expands usage and technical steps. Reloading reads the same saved run. **Retry saved message** recovers an interrupted first submission with the same project and request. **Stop** requests cancellation; wait for its saved result. A finished run and a verified project are separate states. Read the recorded checks and any remaining requirements in **Preview & run**.
+
+After successful work, the workspace opens the relevant requirements, files, app preview or contract review. On mobile, use **Chat** and **Result** to switch views. **Your work** opens the history.
 
 ## Edit files and keep earlier work
 
@@ -27,7 +29,7 @@ Open **Files** to inspect complete files or save a direct edit. Save or discard 
 
 Use **Import & export** for an exported project bundle or a repository at a fixed commit. Repository import requires an empty project. An authorized repository export creates a separate branch and draft pull request. It does not update the original branch automatically. Binary files and imported executable-file permissions are preserved.
 
-**Saved coin chats** opens earlier coin conversations. A saved general contract can be imported into a new project while its original chat remains available. See the [coin-chat guide](/developers/custom-ai-browser.md) for its controls.
+**Your work** lists projects and earlier coin conversations together. Search their titles and open either kind of work. Switching away from a coin chat saves its draft first. **Coin chat options** opens its rename and archive controls. A saved general contract can be imported into a new project while its original chat remains available. See the [coin-chat guide](/developers/custom-ai-browser.md) for its controls.
 
 ## Connect an API or tool
 
@@ -49,7 +51,7 @@ Contract checks can create genuine game-event and wallet-link signatures with fi
 
 The hosting profile supports static sites, Node API handlers and Vite frontends. It does not run a Next.js application server. Applications can use project data, private connections and scheduled tasks. A multiuser application must implement its own visitor authentication and ownership checks.
 
-Use **Preview & run** to inspect checks and create a preview from a verified version. Preview data is separate from live data. Publication promotes that exact release and attaches it to the project's live data. Changes to source need fresh checks. A missing hosting credential or failed provider operation remains visible; the presence of hosting configuration is not proof that a service is working.
+**Preview apps after successful checks** is enabled by default. A successful build request creates and opens a preview only when the current app version has passing checks. Turn the option off before sending to create previews manually in **Preview & run**. Preview data is separate from live data. **Publish this version** remains a separate action: it promotes that exact release and attaches it to the project's live data. Changes to source need fresh checks. A missing hosting credential or failed provider operation remains visible; the presence of hosting configuration is not proof that a service is working.
 
 After publication, verify the actual URL and expected behavior. Pause and resume apply to the saved application, and scheduled tasks have their own controls. An uncertain external operation stays pending for reconciliation instead of being repeated blindly. Pausing does not mean the provider has deleted every billable resource.
 

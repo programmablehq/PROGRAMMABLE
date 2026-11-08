@@ -4,7 +4,7 @@ Open https://programmable.market/launch/custom-ai. This guide covers the website
 
 Read https://programmable.market/api/custom-ai/capabilities for the current chains, buildable behavior and launch-preparation availability. Source generation, compilation, checked examples and a completed wallet launch are separate states. A checked draft is not a launched coin.
 
-If discovery returns `projectPlatform.state: "enabled"`, use the [project workspace guide](/developers/project-platform.md) for persistent projects, files, connections and application previews. Availability is specific to the environment you are using. The coin-chat instructions below remain applicable to **Saved coin chats**.
+If discovery returns `projectPlatform.state: "enabled"`, use the [project workspace guide](/developers/project-platform.md) for persistent projects, files, connections and application previews. Availability is specific to the environment you are using. **Your work** lists existing coin chats alongside projects. The coin-chat instructions below still apply; its library controls are under **Coin chat options**.
 
 ## Build or edit a coin
 
