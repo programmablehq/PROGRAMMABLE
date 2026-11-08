@@ -28,10 +28,12 @@ export async function chooseProjectAction(context: AgentContext, signal: AbortSi
   const requestFacts={evmAddresses:[...new Set(context.prompt.match(/\b0x[0-9a-fA-F]+\b/g)??[])].map(value=>({value,valid:isAddress(value)}))};
   const previous=context.steps.at(-1)?.result;
   const outputLimitRetry=previous&&typeof previous==="object"&&!Array.isArray(previous)&&previous.kind==="model-retry"&&previous.failure==="output-limit";
+  const architecture=project.document.architecture as Record<string,unknown>|null;
+  const regeneratedFields=[...(architecture?.useCanonicalProduction===true?["architecture.production"]:[]),...(Array.isArray(architecture?.canonicalInterfaces)&&architecture.canonicalInterfaces.length>0?["inherited canonical functions"]:[])];
   const responseRecovery=outputLimitRetry?{
     reason:"output-limit",maximumOutputTokens:16000,preserveAllRequirements:true,preserveAllExpectedResults:true,
-    omitOnlyRegeneratedFields:["architecture.production","inherited canonical functions"],
-    instruction:"The previous JSON was cut off before completion and no tool ran. Return compact JSON without prose duplication. Retain every business requirement, stable ID, custom function, scenario and expected result. For a canonical coin/hook plan use useCanonicalProduction:true: the server regenerates architecture.production. With canonicalInterfaces the server regenerates inherited public functions; declare every additional custom function explicitly. Do not shorten the plan by removing behavior, altering amounts, dropping cases or weakening checks.",
+    omitOnlyRegeneratedFields:regeneratedFields,
+    instruction:"The previous JSON was cut off before completion and no tool ran. Return compact JSON without prose duplication. Retain every business requirement, stable ID, custom function, scenario and expected result. Omit only the listed server-regenerated fields. Keep useCanonicalProduction and the saved canonicalInterfaces mapping when relying on their regenerated fields; declare every additional custom function explicitly. Do not shorten the plan by removing behavior, altering amounts, dropping cases or weakening checks.",
   }:undefined;
   const payload = { operation: context.operation, request: context.prompt, requestFacts, history: context.history,
     revision: { id: project.revisionId, title: project.document.title, requirements: project.document.requirements, architecture: project.document.architecture,

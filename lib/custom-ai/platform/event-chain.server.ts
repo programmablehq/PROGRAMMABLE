@@ -31,7 +31,7 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
  async function register(scope:ProjectScope,binding:GameBinding){assertGameBinding(binding);const chain=await chainFor(binding.chainId);await inspect(binding,chain);await chain.finish();return store.saveBinding(scope,binding);}
  async function previewBinding(input:GameBinding){
   assertGameBinding(input);const chain=await chainFor(input.chainId);
-  const binding={...input,runtimeHash:keccak256(await chain.code(input.target))};
+  const binding:GameBinding={id:input.id,revisionId:input.revisionId,gameId:input.gameId,chainId:input.chainId,target:input.target,issuer:input.issuer,maxAge:input.maxAge,maximumScore:input.maximumScore,runtimeHash:keccak256(await chain.code(input.target))};
   await inspect(binding,chain);await chain.finish();return {binding,verified:true as const,registered:false as const};
  }
  async function reviewWalletLink(scope:ProjectScope,id:string,input:WalletLinkInvitation,account:Address,linked:readonly string[]){

@@ -13,7 +13,7 @@ function Fixture(){
   const body=options?.body as Record<string,unknown>|undefined;window.__gameFixture.calls.push(body??{read:path});
   if(window.__gameFixture.delay)await new Promise(r=>setTimeout(r,window.__gameFixture.delay));
   if(window.__gameFixture.fail)throw Error("The deployed receiver does not match its reviewed code.");
-  if(!body)return {bindings:[{definition:initial,version:"version-one",active:true}],wallets:[],events:[]} as T;
+  if(!body)return {bindings:[{definition:initial,version:"version-one",active:true},{definition:{...initial,id:`0x${"aa".repeat(32)}`,gameId:"other-game"},version:"version-two",active:true}],wallets:[],events:[]} as T;
   if(body.action==="inspect")return {binding:{...initial,...body.binding as object,revisionId:current},verified:true,registered:false} as T;
   if(body.action==="bind")return {binding:body.binding,version:"saved"} as T;
   if(body.action==="record")return {id:(body.event as Record<string,unknown>).eventId,state:"received"} as T;

@@ -7,6 +7,7 @@ import {createGameEventService} from "../lib/custom-ai/platform/event-chain.serv
 import type {createGameEventStore} from "../lib/custom-ai/platform/event-store.server";
 import type {CustomAIChain} from "../lib/custom-ai/chain.server";
 import code from "../lib/custom-ai/platform/game-events-code.json";
+import {createGameEventRoutes} from "../lib/custom-ai/platform/event-http.server";
 const issuer=privateKeyToAccount(`0x${"11".repeat(32)}`),player=privateKeyToAccount(`0x${"22".repeat(32)}`),now=1800000000;
 const runtime=code.artifacts.ProjectPlayerGameEventsV1.runtimeTemplate as Hex;
 const binding:GameBinding={id:`0x${"33".repeat(32)}`,revisionId:`sha256:${"44".repeat(32)}`,gameId:"reference-game",chainId:4663,target:`0x${"55".repeat(20)}`,runtimeHash:keccak256(runtime),issuer:issuer.address,maxAge:300,maximumScore:"1000"};
@@ -42,5 +43,20 @@ describe("game invitation review before requesting a player signature",()=>{
   const f=service();expect(await f.service.previewBinding(binding)).toEqual({binding,verified:true,registered:false});
   await expect(service({runtime:"0x1234"}).service.previewBinding(binding)).rejects.toMatchObject({code:"game-code"});
   await expect(service({onchainId:`0x${"99".repeat(32)}`}).service.previewBinding(binding)).rejects.toMatchObject({code:"game-binding"});
+ });
+});
+describe("guided game route input boundaries",()=>{
+ function routes(){
+  const preview=vi.fn(async(value:GameBinding)=>({binding:value,verified:true})),register=vi.fn(async()=>({}));
+  return {preview,register,route:createGameEventRoutes({enabled:()=>true,authorize:async()=>({ownerId:scope.ownerId,wallets:[player.address]}),consume:async()=>{},events:()=>({} as never),projects:()=>({readProject:async()=>({revisionId:binding.revisionId})} as never),service:()=>({previewBinding:preview,register} as never)})};
+ }
+ const request=(body:unknown)=>new Request("https://programmable.market/api/custom-ai/platform/events",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});
+ it.each(["inspect","plan","bind"])("rejects undeclared nested binding fields before %s",async action=>{
+  const f=routes();const result=await f.route.POST(request({action,projectId:scope.projectId,binding:{...binding,privateKey:"unexpected field"}}));
+  expect(result.status).toBe(400);expect(f.preview).not.toHaveBeenCalled();expect(f.register).not.toHaveBeenCalled();
+ });
+ it("reports a missing connected wallet directly for invitation review",async()=>{
+  const result=await routes().route.POST(request({action:"review-link",projectId:scope.projectId,bindingId:binding.id,proof:await invitation()}));
+  expect(result.status).toBe(400);expect(JSON.stringify(await result.json())).toMatch(/connected wallet/i);
  });
 });

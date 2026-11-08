@@ -1,5 +1,5 @@
 "use client";
-import {useEffect,useRef,useState} from "react";
+import {useEffect,useId,useRef,useState} from "react";
 import {assertGameBinding,type GameBinding} from "@/lib/custom-ai/platform/game-events";
 import type {PlatformAPI} from "./types";
 import styles from "./workspace.module.css";
@@ -14,8 +14,9 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt}:{projectId:str
  const [fields,setFields]=useState(initialFields),[preview,setPreview]=useState<GameBinding>(),[saved,setSaved]=useState<GameState>({bindings:[],events:[]});
  const [selected,setSelected]=useState(""),[payload,setPayload]=useState<Record<string,unknown>>(),[fileName,setFileName]=useState("");
  const [error,setError]=useState(""),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false),[raw,setRaw]=useState(""),[rawAction,setRawAction]=useState("plan");
- const generation=useRef(0),inFlight=useRef(false);
- useEffect(()=>{generation.current++;return()=>{generation.current++;};},[projectId,revisionId]);
+ const generation=useRef(0),inFlight=useRef(false),fileGeneration=useRef(0);
+ const selectionId=useId();
+ useEffect(()=>{const current=++generation.current;return()=>{generation.current=current+1;};},[projectId,revisionId]);
  const binding=saved.bindings.find(row=>row.definition.id===selected&&row.active&&row.definition.revisionId===revisionId)?.definition;
  async function task(work:(assertCurrent:()=>void)=>Promise<void>){
   if(inFlight.current)return;inFlight.current=true;setBusy(true);setError("");setNotice("");const token=generation.current;
@@ -36,16 +37,16 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt}:{projectId:str
   setPreview(result.binding);setNotice("Receiver verified. Review and save this binding.");
  }
  async function importFile(file:File|undefined){
-  if(!file)return;setError("");setPayload(undefined);setFileName("");const token=generation.current;
+  if(!file)return;setError("");setPayload(undefined);setFileName("");const token=generation.current,fileToken=++fileGeneration.current;
   try{
    if(file.size>20000)throw Error("Choose a signed game file smaller than 20 KB.");
-   const value:unknown=JSON.parse(await file.text());if(token!==generation.current)return;
+   const value:unknown=JSON.parse(await file.text());if(token!==generation.current||fileToken!==fileGeneration.current)return;
    if(!value||typeof value!=="object"||Array.isArray(value))throw Error("Choose a signed game invitation or result file.");
    const data=value as Record<string,unknown>,content=data.event??data.proof??data;
    if(!content||typeof content!=="object"||Array.isArray(content))throw Error("The signed game file is incomplete.");
    if(data.bindingId&&data.bindingId!==selected)throw Error("This file belongs to another game binding.");
    setPayload(content as Record<string,unknown>);setFileName(file.name);
-  }catch(cause){if(token===generation.current)setError(cause instanceof Error?cause.message:"The signed file could not be read.");}
+  }catch(cause){if(token===generation.current&&fileToken===fileGeneration.current)setError(cause instanceof Error?cause.message:"The signed file could not be read.");}
  }
  async function record(assertCurrent:()=>void){
   if(!binding||!payload)throw Error("Choose a current saved binding and a signed game file.");
@@ -58,7 +59,7 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt}:{projectId:str
   <p className={styles.muted}>Connect a deployed game receiver, import signed results and follow their confirmation.</p>
   <p role="status" className={styles.notice}>{notice}</p>{error&&<p role="alert" className={styles.error}>{error}</p>}
   <section className={styles.card}><div className={styles.row}><h3>Saved game bindings</h3><button type="button" disabled={busy} onClick={()=>void task(load)}>Refresh game state</button></div>
-   {saved.bindings.length?<><label>Selected game<select value={selected} disabled={busy} onChange={event=>{setSelected(event.target.value);setPayload(undefined);setFileName("");}}><option value="">Choose a game</option>{saved.bindings.map(row=><option key={row.definition.id} value={row.definition.id}>{row.definition.gameId}{!row.active?" · revoked":row.definition.revisionId!==revisionId?" · earlier version":""}</option>)}</select></label>
+   {saved.bindings.length?<><label htmlFor={selectionId}>Selected game</label><select id={selectionId} value={selected} disabled={busy} onChange={event=>{fileGeneration.current++;setSelected(event.target.value);setPayload(undefined);setFileName("");}}><option value="">Choose a game</option>{saved.bindings.map(row=><option key={row.definition.id} value={row.definition.id}>{row.definition.gameId}{!row.active?" · revoked":row.definition.revisionId!==revisionId?" · earlier version":""}</option>)}</select>
     {binding?<><p>{binding.gameId} · {binding.chainId===1?"Ethereum":"Robinhood Chain"}</p><p>Receiver: <code>{binding.target}</code></p><p>Issuer: <code>{binding.issuer}</code></p><p>Results may be up to {binding.maxAge} seconds old; maximum score {binding.maximumScore}.</p></>:<p>Choose a binding verified for this project version. Earlier versions require a new receiver review.</p>}</>:<p>Refresh to load saved games, or connect a receiver below.</p>}
   </section>
   <details open><summary>Connect a game receiver</summary><form onSubmit={event=>{event.preventDefault();void task(inspect);}}><fieldset disabled={busy} className={styles.stack}>
@@ -75,9 +76,9 @@ export function ProjectEvents({projectId,revisionId,api,onPrompt}:{projectId:str
   <section className={styles.card}><h3>Signed game results</h3><p>Import the invitation or result file supplied by your game. Its signatures are checked before it is saved.</p>
    <label>Signed game file<input type="file" accept="application/json,.json" disabled={busy||!binding} onChange={event=>void importFile(event.target.files?.[0])}/></label>
    {payload&&<><p>{fileName} · {typeof payload.issuerSignature==="string"?"Wallet agreement":"Game result"}</p>{payload.score!==undefined&&<p>Score: {String(payload.score)} · sequence {String(payload.sequence)}</p>}<button type="button" disabled={busy||!binding} onClick={()=>void task(record)}>Record signed result</button></>}
-   {saved.events.filter(event=>!selected||event.bindingId===selected).map(event=><article className={styles.card} key={event.id}><p>{labels[event.state]??event.state}{event.score!==undefined?` · score ${event.score}`:""}</p><p>Event: <code>{event.id}</code></p>{event.player&&<p>Player: <code>{event.player}</code></p>}{event.transactionHash&&<p>Transaction: <code>{event.transactionHash}</code></p>}{event.transactionHash&&<button type="button" disabled={busy} onClick={()=>void task(async current=>{await api("/events",{body:{action:"reconcile",projectId,bindingId:event.bindingId,eventId:event.id}});current();await load(current);setNotice("Transaction state refreshed from the network.");})}>Check transaction</button>}</article>)}
+   {saved.events.filter(event=>!selected||event.bindingId===selected).map(event=><article className={styles.card} key={event.id}><p>{labels[event.state]??event.state}{event.score!==undefined?` · score ${event.score}`:""}</p><p>Event: <code>{event.id}</code></p>{event.player&&<p>Player: <code>{event.player}</code></p>}{event.transactionHash&&<p>Transaction: <code>{event.transactionHash}</code></p>}{event.transactionHash&&<button type="button" disabled={busy} onClick={()=>void task(async current=>{const result=await api<{state:string}>("/events",{body:{action:"reconcile",projectId,bindingId:event.bindingId,eventId:event.id}});current();await load(current);setNotice(labels[result.state]??"The transaction state could not be confirmed yet.");})}>Check transaction</button>}</article>)}
   </section>
-  <details><summary>Advanced game requests</summary><form className={styles.stack} onSubmit={event=>{event.preventDefault();void task(async current=>{await api("/events",{body:{...JSON.parse(raw),action:rawAction,projectId}});current();await load(current);setNotice("Game request saved. Check its current state above.");});}}>
+  <details><summary>Advanced game requests</summary><form className={styles.stack} onSubmit={event=>{event.preventDefault();void task(async current=>{await api("/events",{body:{...JSON.parse(raw),action:rawAction,projectId}});current();await load(current);setNotice("Game request completed. Review the current state above.");});}}>
    <label>Game action<select value={rawAction} onChange={event=>setRawAction(event.target.value)}>{["plan","bind","link-wallet","record","prepare-wallet","prepare","submitted","reconcile","revoke"].map(action=><option key={action}>{action}</option>)}</select></label>
    <label>Request payload (JSON)<textarea rows={6} value={raw} onChange={event=>setRaw(event.target.value)} spellCheck={false} required/></label><button type="submit" disabled={busy}>Review advanced request</button>
   </form></details>

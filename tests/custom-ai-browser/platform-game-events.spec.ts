@@ -35,3 +35,10 @@ test("imports a signed result with its selected saved binding and fits a narrow 
  expect(await page.evaluate(()=>window.__gameFixture.calls.find(c=>c.action==="record"))).toMatchObject({bindingId:`0x${"33".repeat(32)}`,projectId:"11111111-1111-4111-8111-111111111111"});
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
 });
+test("does not attach a late file read to another selected binding",async({page})=>{
+ await open(page);await page.getByRole("button",{name:"Refresh game state",exact:true}).click();
+ await page.evaluate(()=>{const original=File.prototype.text;File.prototype.text=async function(){await new Promise(r=>setTimeout(r,300));return original.call(this);};});
+ await page.getByLabel("Signed game file",{exact:true}).setInputFiles({name:"slow.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify({eventId:`0x${"88".repeat(32)}`,signature:`0x${"bb".repeat(65)}`}))});
+ await page.getByLabel("Selected game",{exact:true}).selectOption(`0x${"aa".repeat(32)}`);await page.waitForTimeout(500);
+ await expect(page.getByRole("button",{name:"Record signed result",exact:true})).toHaveCount(0);
+});
