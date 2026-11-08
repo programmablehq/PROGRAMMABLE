@@ -32,9 +32,9 @@ describe("durable project runs", () => {
     const working=await runs.readProgress(scope,run.runId,"0");
     expect(working.activeStep).toEqual({capabilityId:"read",state:"dispatching"});
     expect(JSON.stringify(working)).not.toContain("private-value");
-    await runs.finishStep(scope,run.runId,lease.token,{id:"private-read",result:{secret:"private-result"}});
+    await runs.finishStep(scope,run.runId,lease.token,{id:"private-read",result:{ok:false,secret:"private-result"}});
     const finished=await runs.readProgress(scope,run.runId,"0");
-    expect(finished.activeStep).toBeUndefined();expect(finished.events).toHaveLength(1);
+    expect(finished.activeStep).toBeUndefined();expect(finished.events).toHaveLength(1);expect(finished.events[0].ok).toBe(false);
     expect(JSON.stringify(finished)).not.toContain("private-result");
     await expect(runs.readProgress({...scope,ownerId:"bob"},run.runId,"0")).rejects.toMatchObject({status:404});
   });

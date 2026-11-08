@@ -39,9 +39,9 @@ test("shows real work phases and keeps input credentials out of a new project",a
  const box=page.getByRole("textbox",{name:"Describe your idea",exact:true});await box.fill("Use sk-ant-api03-"+"a".repeat(120));await page.getByRole("button",{name:"Send",exact:true}).click();
  await expect(page.getByRole("alert")).toContainText("private credential");expect(created).toBe(0);
  await request.post(origin+"/fixture/pause",{data:{paused:true}});
- await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"),async route=>{if(route.request().method()!=="GET")return route.continue();const r=await route.fetch(),body=await r.json();await route.fulfill({json:{...body,run:{...body.run,status:body.run.status==="stopped"?"stopped":"running"},activeStep:{capabilityId:"project.check",state:"dispatching"},events:[{cursor:"1",capabilityId:"project.patch"}]}});});
+ await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"),async route=>{if(route.request().method()!=="GET")return route.continue();const r=await route.fetch(),body=await r.json();await route.fulfill({json:{...body,run:{...body.run,status:body.run.status==="stopped"?"stopped":"running"},activeStep:{capabilityId:"project.check",state:"dispatching"},events:[{cursor:"1",capabilityId:"project.patch",ok:true},{cursor:"2",capabilityId:"repository.import",ok:false}]}});});
  await box.fill("Check the saved game files");await page.getByRole("button",{name:"Send",exact:true}).click();
- await expect(page.getByRole("status").filter({hasText:"Checking your app"})).toBeVisible();await expect(page.getByText("Files saved",{exact:true})).toBeVisible();
+ await expect(page.getByRole("status").filter({hasText:"Checking your app"})).toBeVisible();await expect(page.getByText("Files saved",{exact:true})).toBeVisible();await expect(page.getByText("Files imported",{exact:true})).toBeHidden();
  await expect(page.getByText(/work units ·/)).toBeHidden();await page.getByText("Run details",{exact:true}).click();await expect(page.getByText(/work units ·/)).toBeVisible();
  await page.getByRole("button",{name:"Stop",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeHidden();
 });

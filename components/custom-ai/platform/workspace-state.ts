@@ -2,7 +2,7 @@ import type {AIUsage} from "@/lib/custom-ai/types";
 import type {PlatformAPI,ProjectRevision,ProjectRun,ProjectRunState} from "./types";
 import {containsInlineCredential} from "@/lib/custom-ai/platform/secret-input";
 
-export type WorkStep={cursor:string;capabilityId:string};
+export type WorkStep={cursor:string;capabilityId:string;ok?:boolean};
 export type WorkProgress={events:WorkStep[];activeStep?:{capabilityId:string;state:string}};
 export type MessageIntent={
   version:1;id:string;projectId:string;prompt:string;operation:ProjectRun["operation"];preview:boolean;
@@ -83,7 +83,7 @@ export function workStatus(run:ProjectRun,progress?:WorkProgress){
   if(run.status==="failed")return run.summary==="run-budget"?"Work limit reached · progress saved":"Needs attention · progress saved";
   return run.operation==="plan"?"Plan saved":run.operation==="test"?"Checks finished":"Work completed";
 }
-export function completedWork(progress?:WorkProgress){return [...new Set((progress?.events??[]).map(step=>finishedLabels[step.capabilityId]).filter(Boolean))].slice(-4);}
+export function completedWork(progress?:WorkProgress){return [...new Set((progress?.events??[]).filter(step=>step.ok!==false).map(step=>finishedLabels[step.capabilityId]).filter(Boolean))].slice(-4);}
 export function resultTab(project:ProjectRevision,operation:ProjectRun["operation"]):"project"|"runtime"|"files"{
   if(operation==="plan")return "project";
   const kind=project.document.architecture&&typeof project.document.architecture==="object"&&!Array.isArray(project.document.architecture)?project.document.architecture.kind:undefined;
