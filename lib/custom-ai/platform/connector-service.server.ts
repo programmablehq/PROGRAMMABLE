@@ -1,5 +1,5 @@
 import "server-only";
-import Ajv from "ajv";
+import {matchesConnectionSchema} from "./connection-schema.server";
 import type { createConnectionStore } from "./connections.server";
 import { projectHash,canonicalProjectJSON } from "./document";
 import { privateConnectorHTTP,redactConnectorData,validateConnectorURL,type ConnectorTransport } from "./private-http.server";
@@ -10,8 +10,7 @@ export function createConnectionService(store:ReturnType<typeof createConnection
   async function invoke(scope:ProjectScope,input:{connectionId:string;version:string;actionId:string;input:JsonValue;idempotencyKey:string},signal?:AbortSignal){
     await refresh?.(scope,input.connectionId,input.version,signal);
     const connection=await store.authorize(scope,input.connectionId,input.version,input.actionId),{action,manifest,secret}=connection;
-    const valid=new Ajv({strict:false}).compile(action.inputSchema);
-    if(canonicalProjectJSON(input.input).length>128000||!valid(input.input))throw new ProjectError("connection-arguments","The API arguments do not match the reviewed action.",422);
+    if(canonicalProjectJSON(input.input).length>128000||!matchesConnectionSchema(action.inputSchema,input.input))throw new ProjectError("connection-arguments","The API arguments do not match the reviewed action.",422);
     const call=await store.beginCall(scope,{connectionId:input.connectionId,requestKey:input.idempotencyKey,hash:projectHash({version:input.version,action:input.actionId,input:input.input}),effect:action.effect,version:input.version,actionId:input.actionId});
     if(!call.execute)return call.result;
     try{
@@ -25,7 +24,7 @@ export function createConnectionService(store:ReturnType<typeof createConnection
       if(action.idempotencyHeader)headers[action.idempotencyHeader]=input.idempotencyKey;
       if(manifest.kind==="mcp"){
         const raw=await callMCP(manifest,action,input.input,headers,transport,signal);
-        if(!new Ajv({strict:false}).compile(action.outputSchema)(raw))throw new ProjectError("connection-response","The plugin result does not match the reviewed schema.",502);
+        if(!matchesConnectionSchema(action.outputSchema,raw))throw new ProjectError("connection-response","The plugin result does not match the reviewed schema.",502);
         const result=redactConnectorData(raw,Object.values(secret));await store.finishCall(scope,input.connectionId,input.idempotencyKey,result);return result;
       }
       const query=action.bindings?(argumentsObject.query&&typeof argumentsObject.query==="object"&&!Array.isArray(argumentsObject.query)?argumentsObject.query:{}):action.method==="GET"?argumentsObject:{};
@@ -41,7 +40,7 @@ export function createConnectionService(store:ReturnType<typeof createConnection
       const response=await transport({url:url.href,method:action.method,headers,...(action.method==="GET"||body===undefined?{}:{body:JSON.stringify(body)}),...(signal?{signal}:{})});
       if(response.status<200||response.status>=300||!/^application\/(?:[a-z0-9.-]+\+)?json(?:\s*;|$)/i.test(response.headers["content-type"]??""))throw new ProjectError("connection-response","The API did not return a successful JSON response.",502);
       let raw:unknown;try{raw=JSON.parse(response.text);}catch{throw new ProjectError("connection-response","The API returned invalid JSON.",502);}
-      if(!new Ajv({strict:false}).compile(action.outputSchema)(raw))throw new ProjectError("connection-response","The API response does not match the reviewed schema.",502);
+      if(!matchesConnectionSchema(action.outputSchema,raw))throw new ProjectError("connection-response","The API response does not match the reviewed schema.",502);
       const result=redactConnectorData(raw,Object.values(secret));
       await store.finishCall(scope,input.connectionId,input.idempotencyKey,result);return result;
     }catch(error){await store.finishCall(scope,input.connectionId,input.idempotencyKey,null,true);

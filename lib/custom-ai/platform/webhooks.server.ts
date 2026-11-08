@@ -26,14 +26,16 @@ export function createProjectWebhooks(pool:AIPool,connections:ReturnType<typeof 
     const expected=createHmac("sha256",connection.secret.webhookKey).update(signed).digest();
     if(!timingSafeEqual(expected,Buffer.from(input.signature,"hex")))throw new ProjectError("webhook-signature","The event signature is invalid.",403);
     let raw:unknown;try{raw=JSON.parse(input.body);}catch{throw new ProjectError("webhook-json","Use a JSON event body.");}
-    const payload=redactConnectorData(raw,Object.values(connection.secret)),bodyHash=createHash("sha256").update(input.body).digest("hex");
+    const payload=redactConnectorData(raw,Object.values(connection.secret)),bodyHash=createHash("sha256").update(input.body).digest("hex"),payloadText=JSON.stringify(payload);
     return projectTransaction(pool,scope,async db=>{
-      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`project-webhook:${input.routeId}`]);
+      await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`project-webhook:${scope.ownerId}`]);
       const duplicate=(await db.query("SELECT body_hash FROM programmable_projects_v1.webhook_inbox WHERE owner=$1 AND project_id=$2 AND connection_id=$3 AND event_id=$4",[scope.ownerId,scope.projectId,connectionId,input.eventId])).rows[0];
       if(duplicate){if(duplicate.body_hash!==bodyHash)throw new ProjectError("webhook-conflict","This event identifier has different contents.",409);return {accepted:true,duplicate:true};}
+      const retained=(await db.query("SELECT count(*) AS count, COALESCE(sum(octet_length(payload::text)),0)+octet_length($2::jsonb::text) AS bytes FROM programmable_projects_v1.webhook_inbox WHERE owner=$1",[scope.ownerId,payloadText])).rows[0];
+      if(Number(retained.count)>=5000||Number(retained.bytes)>32000000)throw new ProjectError("webhook-quota","This account's webhook receipt storage is full.",429);
       const count=(await db.query("SELECT count(*) AS count FROM programmable_projects_v1.webhook_inbox WHERE owner=$1 AND project_id=$2 AND connection_id=$3 AND received_at>$4",[scope.ownerId,scope.projectId,connectionId,new Date(now()-60000).toISOString()])).rows[0];
       if(Number(count.count)>=120)throw new ProjectError("webhook-rate","This event connection is receiving too many events.",429);
-      await db.query("INSERT INTO programmable_projects_v1.webhook_inbox(owner,project_id,connection_id,event_id,body_hash,payload,received_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)",[scope.ownerId,scope.projectId,connectionId,input.eventId,bodyHash,JSON.stringify(payload),new Date(now()).toISOString()]);
+      await db.query("INSERT INTO programmable_projects_v1.webhook_inbox(owner,project_id,connection_id,event_id,body_hash,payload,received_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)",[scope.ownerId,scope.projectId,connectionId,input.eventId,bodyHash,payloadText,new Date(now()).toISOString()]);
       return {accepted:true,duplicate:false};
     });
   }

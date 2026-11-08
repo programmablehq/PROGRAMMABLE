@@ -37,6 +37,8 @@ Connections are bound to their owner and project. Changing an MCP tool list requ
 
 Signed webhooks can deliver deduplicated external events. An event that should affect a contract also needs its own reviewed mapping and authorized onchain action. An API response or game score alone does not prove a contract update occurred.
 
+Webhook receipt storage is limited to 5,000 events and 32 MB per account across its connections. Exact retries reuse the saved receipt. Game intake allows 120 newly accepted signed events per account per UTC hour; invalid requests and exact retries do not consume that allowance.
+
 Before building a game receiver, the chat uses `event.identity` to derive its binding ID from the authenticated project and the public game configuration. Use that exact ID in the receiver constructor. This read-only step does not register or deploy a receiver: the deployed code, issuer configuration, player signatures and wallet actions still require their own verification. Ordinary source revisions retain the same ID; a different project, owner or game policy receives a different ID.
 
 ## Check, preview and publish

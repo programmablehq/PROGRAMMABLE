@@ -21,6 +21,15 @@ afterEach(async()=>{await db.close()});
 async function link(){const proof={player:player.address,playerIdHash,nonce:keccak256(randomBytes(32)),validUntil:now+120};await events.link(owner,binding.id,{...proof,signature:await player.signTypedData(walletLinkTypedData(binding,proof)),issuerSignature:await issuer.signTypedData(walletLinkTypedData(binding,proof))});}
 async function signed(){const event={player:player.address,playerIdHash,eventId:keccak256(stringToHex("match-1")),score:"10",sequence:"1",observedAt:now,validUntil:now+120};return {...event,signature:await issuer.signTypedData(gameEventTypedData(binding,event))};}
 it("deduplicates an authenticated event and requires the exact wallet agreement",async()=>{const input=await signed();await expect(events.ingest(owner,binding.id,input)).rejects.toMatchObject({code:"game-wallet"});await link();const first=await events.ingest(owner,binding.id,input),again=await events.ingest(owner,binding.id,input);expect(again.id).toBe(first.id);expect((await events.list(owner)).events).toHaveLength(1);});
+it("charges the hourly intake limit only for newly accepted events",async()=>{
+ await link();const first=await signed();await events.ingest(owner,binding.id,first);
+ await db.query("INSERT INTO programmable_projects_v1.game_events(owner,project_id,binding_id,event_id,binding_version,payload_hash,payload,state,created_at,binding_definition) SELECT owner,project_id,binding_id,'saved-'||n,binding_version,payload_hash,payload,state,created_at,binding_definition FROM programmable_projects_v1.game_events CROSS JOIN generate_series(1,119) n WHERE event_id=$1",[first.eventId]);
+ await expect(events.ingest(owner,binding.id,first)).resolves.toBeDefined();
+ const next={...first,eventId:keccak256(stringToHex("match-next"))};next.signature=await issuer.signTypedData(gameEventTypedData(binding,next));
+ await expect(events.ingest(owner,binding.id,next)).rejects.toMatchObject({code:"game-rate",status:429});
+ now+=3600;const later={...next,observedAt:now,validUntil:now+120};later.signature=await issuer.signTypedData(gameEventTypedData(binding,later));
+ await expect(events.ingest(owner,binding.id,later)).resolves.toBeDefined();
+});
 it("lists readable player receipts without exposing wallet proof signatures",async()=>{
  await link();const input=await signed();await events.ingest(owner,binding.id,input);const listed=await events.list(owner);
  expect(listed.wallets).toEqual([expect.objectContaining({bindingId:binding.id,player:player.address,playerIdHash})]);

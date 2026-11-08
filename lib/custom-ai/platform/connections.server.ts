@@ -1,6 +1,6 @@
 import "server-only";
 import { createCipheriv,createDecipheriv,randomBytes } from "node:crypto";
-import Ajv from "ajv";
+import {assertConnectionSchema} from "./connection-schema.server";
 import type { AIConnection,AIPool } from "../store.server";
 import { projectTransaction } from "./transaction.server";
 import { projectHash,canonicalProjectJSON } from "./document";
@@ -34,7 +34,7 @@ export function validateConnectionManifest(input:ConnectionManifest):ConnectionM
     if(action.bindings&&(!Array.isArray(action.bindings.path)||!Array.isArray(action.bindings.query)||typeof action.bindings.body!=="boolean"||[...action.bindings.path,...action.bindings.query].some(key=>!/^[-A-Za-z0-9_]{1,100}$/.test(key))))throw invalid();
     for(const schema of [action.inputSchema,action.outputSchema]){
       if(!schema||typeof schema!=="object"||Array.isArray(schema)||/"\$(?:async|ref)"\s*:\s*(?:true|"(?:https?:|file:))/.test(JSON.stringify(schema)))throw invalid();
-      try{new Ajv({strict:false}).compile(schema);}catch{throw invalid();}
+      try{assertConnectionSchema(schema);}catch{throw invalid();}
     }
     ids.add(action.id);
   }
