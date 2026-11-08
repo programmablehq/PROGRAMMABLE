@@ -64,7 +64,7 @@ export function changedPaths(env = process.env) {
   } catch { return null; }
 }
 
-export const CUSTOM_AI_BROWSER_SUITES = ["flow.spec.ts", "history.spec.ts", "build-recovery.spec.ts", "fee-launch.spec.ts", "general-launch.spec.ts", "general-wallet.spec.ts", "product-runtime.spec.ts"];
+export const CUSTOM_AI_BROWSER_SUITES = ["flow.spec.ts", "history.spec.ts", "build-recovery.spec.ts", "fee-launch.spec.ts", "general-launch.spec.ts", "general-wallet.spec.ts", "product-runtime.spec.ts", "platform-workflow.spec.ts", "platform-experience.spec.ts"];
 const chatSurface = /^(?:components\/custom-ai\/(?:chat-library|authenticated-chats|session-loading|workspace-pending|workspace-tools|message-content|copy-button|streaming-reply|chat-progress|image-attachments)\.tsx|app\/launch\/custom-ai\/(?:page|layout|loading)\.tsx)$/u;
 function customAIBrowserSuites(paths, full) {
   if (full) return CUSTOM_AI_BROWSER_SUITES;
