@@ -13,6 +13,8 @@ import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.genera
 import type { ToolContext } from "../lib/custom-ai/platform/agent.server";
 import {createLaunchProductionContext} from "../lib/custom-ai/launch-production";
 import {platformContractDocument} from "./fixtures/custom-ai-platform-contract";
+import Ajv from "ajv";
+import {parseIntentRequirements} from "../lib/custom-ai/launch-intent.server";
 
 let db:PGlite, projects:ReturnType<typeof createPlatformStore>,tools:ReturnType<typeof createProjectTools>,context:ToolContext;
 const scope={ownerId:"alice",projectId:"11111111-1111-4111-8111-111111111111"};
@@ -30,6 +32,16 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it("advertises the persisted requirement length boundary and explains a rejected overlong rule",()=>{
+   const validate=new Ajv({strict:false}).compile(tools.find(tool=>tool.id==="project.plan")!.schema);
+   const boundary={...planned,requirements:[{...planned.requirements[0],text:"x".repeat(600)},planned.requirements[1]]};
+   expect(validate(boundary)).toBe(true);
+   expect(()=>parseIntentRequirements(boundary.requirements)).not.toThrow();
+   const over={...boundary,requirements:[{...boundary.requirements[0],text:"x".repeat(601)},boundary.requirements[1]]};
+   expect(validate(over)).toBe(false);
+   expect(validate.errors).toContainEqual(expect.objectContaining({instancePath:"/requirements/0/text",keyword:"maxLength",params:{limit:600}}));
+   expect(()=>parseIntentRequirements(over.requirements)).toThrow(/600/);
+ });
  it("grounds a first saved plan in earlier user messages without trusting an assistant summary",async()=>{
    context={...context,prompt:"Call it Daily Counter and build it now",priorUserMessages:["create counter and keep private"]};
    await tools.find(tool=>tool.id==="project.plan")!.execute(context,planned);

@@ -29,7 +29,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
   const plan: ProjectTool = {
     id: "project.plan", version: "1", description: "Save the complete requirements and architecture. Keep every existing rule. For the first saved plan, requirements may quote earlier user requests in this project's history. Changes to saved rules require exact quotes from the latest user request. Define behavior checks in architecture.checks as {id,requirementIds,command,kind:'behavior'|'build'} before implementation.",
     schema: objectSchema({ title: { type: "string", maxLength: 120 }, requirements: { type: "array", maxItems: 64, items: objectSchema({
-      id: { type: "string" }, text: { type: "string" }, kind: { enum: ["behavior", "constraint", "decision"] }, instruction: { type: "string" }, open: { type: ["string", "null"] },
+      id: { type: "string", pattern: "^[a-z][a-z0-9-]{0,63}$" }, text: { type: "string", minLength: 1, maxLength: 600 }, kind: { enum: ["behavior", "constraint", "decision"] }, instruction: { type: "string", maxLength: 8000 }, open: { type: ["string", "null"], minLength: 1, maxLength: 600 },
     }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object" } }),
     execute: async (context, input) => {
       const data = value(input), previous: LaunchIntent | undefined = context.revision.document.requirements.length ? {
