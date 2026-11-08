@@ -27,6 +27,15 @@ The data endpoint accepts POST JSON with `Authorization: Bearer <app token>`:
 
 Supported operations are get, list, put, delete and increment. Writes require a stable idempotency key. An identical retry returns its saved result; changing the body for a used key fails. `expectedVersion` provides optimistic concurrency. Deleting a record preserves a version tombstone, so a replacement cannot reuse an old version. Tombstones count toward the item allowance. Lists return at most 100 items with a cursor. Storage is isolated by project and preview namespace. Promoting a preview attaches it to the existing live data and retires the preceding live credential; it does not copy test data into production. Applications must implement their own visitor authentication and resource ownership.
 
+`get`, `put` and `increment` return `{value, version}` directly. A missing
+`get` returns `{value: null, version: 0}`; a deleted record keeps its nonzero
+version. Check `value === null` for absence rather than the truthiness of the
+response, and preserve valid stored values such as `0` and `false`. `list`
+returns `{items: [{key, value, version}], cursor: string | null}`. `delete`
+returns `{deleted: boolean, version: number}`. There is no `item` envelope.
+Local test doubles must preserve these response shapes and version semantics;
+test an initial write/read when the record does not yet exist.
+
 Each project has a 10,000-request daily allowance, at most 4,096 data items, 32 MB of item storage, and a bounded mutation receipt history. Reaching a limit fails before the next mutation. Two hosted projects per account, 16 platform-wide, and 20 release attempts per account per day are the initial hosting limits.
 
 Private connection calls use the same bearer token and the exact reviewed connection/action/version. Connection secrets remain in the connector service. Revocation takes effect there; generated source does not receive the third-party credential.

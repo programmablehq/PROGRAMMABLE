@@ -59,7 +59,11 @@ compilation, behavior checks and source review still have to pass separately.
   their normal-account allowances must not be bypassed for acceptance.
 - A4 operation passed through the deployed product for the second user,
   including real visitor data, scheduling, pause/resume and redeployment. The
-  first user's app still needs its final verification and operational checks.
+  first user's locally verified app failed its first hosted score write: its
+  test double used an `item` envelope, while the real data API returns
+  `{value, version}` and uses `value: null` for an absent record. The builder
+  and application guide now state the actual contract. Repair and repeat the
+  normal-user hosted acceptance before treating that app as operational.
   Correct and verify the generated form labels before accepting the final UI.
 - The deployed worker accepts an owner/project/run-bound grant and rejects
   duplicate admission. Two authenticated staging accounts pass ownership,
