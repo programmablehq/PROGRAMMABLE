@@ -6,7 +6,7 @@ import {makeStep,verifiedStepReceipt} from "../transaction.server";
 import {matchesRuntime} from "../runtime";
 import type {LaunchStep} from "../launch-session";
 import type {createGameEventStore} from "./event-store.server";
-import {assertGameBinding,verifyGameEvent,verifyWalletLink,type GameBinding} from "./game-events";
+import {assertGameBinding,verifyGameEvent,verifyWalletInvitation,verifyWalletLink,type GameBinding,type WalletLinkInvitation} from "./game-events";
 import {ProjectError,type ProjectScope,type JsonValue} from "./types";
 import code from "./game-events-code.json";
 
@@ -29,6 +29,18 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(id!==binding.id||String(issuer).toLowerCase()!==binding.issuer.toLowerCase()||Number(maxAge)!==binding.maxAge||String(maximum)!==binding.maximumScore)throw new ProjectError("game-binding","The deployed game configuration differs from the project binding.",409);
  }
  async function register(scope:ProjectScope,binding:GameBinding){assertGameBinding(binding);const chain=await chainFor(binding.chainId);await inspect(binding,chain);await chain.finish();return store.saveBinding(scope,binding);}
+ async function previewBinding(input:GameBinding){
+  assertGameBinding(input);const chain=await chainFor(input.chainId);
+  const binding={...input,runtimeHash:keccak256(await chain.code(input.target))};
+  await inspect(binding,chain);await chain.finish();return {binding,verified:true as const,registered:false as const};
+ }
+ async function reviewWalletLink(scope:ProjectScope,id:string,input:WalletLinkInvitation,account:Address,linked:readonly string[]){
+  const sender=wallet(account,linked);
+  if(!input||typeof input.player!=="string"||input.player.toLowerCase()!==sender.toLowerCase())throw new ProjectError("game-wallet","This game invitation belongs to another wallet.",403);
+  const {binding}=await store.currentBinding(scope,id),chain=await chainFor(binding.chainId);
+  await inspect(binding,chain);const invitation=await verifyWalletInvitation(binding,input,Number(chain.block.timestamp));
+  await chain.finish();return {binding,invitation};
+ }
  async function prepareWallet(scope:ProjectScope,id:string,playerIdHash:string,account:Address,linked:readonly string[]){
   const sender=wallet(account,linked),saved=await store.currentBinding(scope,id),chain=await chainFor(saved.binding.chainId);
   await inspect(saved.binding,chain);
@@ -74,5 +86,5 @@ export function createGameEventService(store:ReturnType<typeof createGameEventSt
   if(result.state==="confirmed"&&!await chain.call(saved.binding.target,"function consumed(bytes32) view returns(bool)",[saved.event.eventId]))throw new ProjectError("game-observation","The transaction does not show the expected game event effect.",409);
   await chain.finish();return store.observed(scope,id,eventId,hash as Hex,result.state==="confirmed",json({state:result.state,receipt:result.receipt,bindingVersion:saved.version}));
  }
- return {register,prepareWallet,prepare,recordSubmitted,reconcile};
+ return {register,previewBinding,reviewWalletLink,prepareWallet,prepare,recordSubmitted,reconcile};
 }

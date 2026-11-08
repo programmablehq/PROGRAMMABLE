@@ -48,6 +48,10 @@
 .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
 .card { border:1px solid var(--line); border-radius:10px; padding:16px; display:grid; gap:12px; min-width:0; }
 .card p { line-height:1.5; color:var(--muted); }
+.game { min-width:0; }
+.game code { overflow-wrap:anywhere; }
+.game :is(input,select,textarea) { min-width:0; max-width:100%; }
+.game fieldset { border:0; padding:0; margin:12px 0; min-width:0; }
 .card pre { max-height:320px; overflow:auto; font-size:12px; white-space:pre-wrap; overflow-wrap:anywhere; }
 .error { color:#ffd0b8; background:#37251d; padding:12px 16px; border:1px solid #816052; border-radius:8px; line-height:1.5; overflow-wrap:anywhere; }
 .notice { font-size:14px; color:#ded6c3; min-height:20px; }

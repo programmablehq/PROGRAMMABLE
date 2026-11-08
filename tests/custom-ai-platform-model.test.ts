@@ -15,4 +15,10 @@ it("uses the project action contract and preserves complete library observations
  expect(JSON.parse(input.messages[0].content).requestFacts.evmAddresses).toEqual([{value:`0x${"a".repeat(40)}`,valid:true},{value:"0x123",valid:false}]);
  context.steps[0].capability_id="model.plan";context.steps[0].result={kind:"model-retry"} as never;
  await chooseProjectAction(context,AbortSignal.timeout(1000));expect(call.mock.calls.at(-1)?.[0].model).toBe("audit");
+ context.steps[0].result={kind:"model-retry",failure:"output-limit"} as never;
+ await chooseProjectAction(context,AbortSignal.timeout(1000));
+ const recovery=JSON.parse(call.mock.calls.at(-1)?.[0].messages[0].content).responseRecovery;
+ expect(recovery).toMatchObject({reason:"output-limit",preserveAllRequirements:true,preserveAllExpectedResults:true,maximumOutputTokens:16000});
+ expect(recovery.omitOnlyRegeneratedFields).toEqual(["architecture.production","inherited canonical functions"]);
+ expect(call.mock.calls.at(-1)?.[0].maxTokens).toBe(16000);
 });

@@ -21,6 +21,13 @@ afterEach(async()=>{await db.close()});
 async function link(){const proof={player:player.address,playerIdHash,nonce:keccak256(randomBytes(32)),validUntil:now+120};await events.link(owner,binding.id,{...proof,signature:await player.signTypedData(walletLinkTypedData(binding,proof)),issuerSignature:await issuer.signTypedData(walletLinkTypedData(binding,proof))});}
 async function signed(){const event={player:player.address,playerIdHash,eventId:keccak256(stringToHex("match-1")),score:"10",sequence:"1",observedAt:now,validUntil:now+120};return {...event,signature:await issuer.signTypedData(gameEventTypedData(binding,event))};}
 it("deduplicates an authenticated event and requires the exact wallet agreement",async()=>{const input=await signed();await expect(events.ingest(owner,binding.id,input)).rejects.toMatchObject({code:"game-wallet"});await link();const first=await events.ingest(owner,binding.id,input),again=await events.ingest(owner,binding.id,input);expect(again.id).toBe(first.id);expect((await events.list(owner)).events).toHaveLength(1);});
+it("lists readable player receipts without exposing wallet proof signatures",async()=>{
+ await link();const input=await signed();await events.ingest(owner,binding.id,input);const listed=await events.list(owner);
+ expect(listed.wallets).toEqual([expect.objectContaining({bindingId:binding.id,player:player.address,playerIdHash})]);
+ expect(listed.events[0]).toMatchObject({player:player.address,playerIdHash,sequence:"1",score:"10",validUntil:now+120});
+ expect(JSON.stringify(listed)).not.toContain(input.signature);
+ expect(listed.wallets[0]).not.toHaveProperty("proof");expect(listed.wallets[0]).not.toHaveProperty("issuerSignature");
+});
 it("takes event ownership from authenticated HTTP authority and rejects an injected owner",async()=>{
  await link();const authorize=vi.fn<Parameters<typeof createGameEventRoutes>[0]["authorize"]>(async()=>({ownerId:owner.ownerId,wallets:[player.address]}));const routes=createGameEventRoutes({enabled:()=>true,authorize,consume:async()=>{},events:()=>events,projects:()=>projects,service:()=>({} as never)});
  const body={action:"record",projectId:owner.projectId,bindingId:binding.id,event:await signed()};

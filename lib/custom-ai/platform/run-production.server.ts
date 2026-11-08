@@ -30,6 +30,7 @@ export function productionRunStore() {
     "project.promote": { units: 1, effect: "write", operations: ["deploy"] },
     "app.jobs": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "app.schedule": { units: 1, effect: "write", operations: ["deploy"] },
+    "event.identity": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "event.library": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "event.status": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "event.record": { units: 1, effect: "write", operations: ["build", "deploy"] },

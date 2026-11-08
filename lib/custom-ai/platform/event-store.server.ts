@@ -4,15 +4,18 @@ import type {AIPool} from "../store.server";
 import type {createPlatformStore} from "./project-store.server";
 import {projectTransaction} from "./transaction.server";
 import {canonicalProjectJSON,projectHash} from "./document";
-import {assertGameBinding,verifyGameEvent,verifyWalletLink,type GameBinding,type SignedGameEvent,type SignedWalletLink} from "./game-events";
+import {assertGameBinding,verifyGameEvent,verifyWalletLink,type GameBinding,type GameConfiguration,type SignedGameEvent,type SignedWalletLink} from "./game-events";
 import {ProjectError,type ProjectScope,type JsonValue} from "./types";
 
-export function gameBindingId(scope:ProjectScope,input:Omit<GameBinding,"id">):Hex{
+export function gameBindingId(scope:ProjectScope,input:GameConfiguration):Hex{
  return keccak256(stringToHex(canonicalProjectJSON({version:1,ownerId:scope.ownerId,projectId:scope.projectId,gameId:input.gameId,chainId:input.chainId,issuer:input.issuer.toLowerCase(),maxAge:input.maxAge,maximumScore:input.maximumScore})));
 }
 const currentError=()=>new ProjectError("game-revision","Review the game binding against the current project revision.",409);
 type Row=Record<string,unknown>;
-const view=(row:Row)=>({id:String(row.event_id),bindingId:String(row.binding_id),state:String(row.state),transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at)});
+const view=(row:Row)=>{
+ const event=row.payload as SignedGameEvent;
+ return {id:String(row.event_id),bindingId:String(row.binding_id),state:String(row.state),transactionHash:row.transaction_hash?String(row.transaction_hash):null,observed:row.observation as JsonValue??null,createdAt:String(row.created_at),player:event?.player,playerIdHash:event?.playerIdHash,sequence:event?.sequence,score:event?.score,validUntil:event?.validUntil};
+};
 
 export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof createPlatformStore>,now=()=>Math.floor(Date.now()/1000)){
  async function readBinding(scope:ProjectScope,id:string){
@@ -97,7 +100,11 @@ export function createGameEventStore(pool:AIPool,projects:ReturnType<typeof crea
  const pendingAgain=(scope:ProjectScope,id:string,eventId:string,hash:Hex)=>projectTransaction(pool,scope,async db=>{
   const row=(await db.query("UPDATE programmable_projects_v1.game_events SET state='submitted',observation=jsonb_build_object('state','pending','previous',observation) WHERE owner=$1 AND project_id=$2 AND binding_id=$3 AND event_id=$4 AND transaction_hash=$5 RETURNING *",[scope.ownerId,scope.projectId,id,eventId,hash])).rows[0];if(!row)throw new ProjectError("game-state","This event transaction was not found.",409);return view(row);
  });
- const list=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>({bindings:(await db.query("SELECT definition,version,active FROM programmable_projects_v1.game_bindings WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows,events:(await db.query("SELECT * FROM programmable_projects_v1.game_events WHERE owner=$1 AND project_id=$2 ORDER BY created_at DESC LIMIT 100",[scope.ownerId,scope.projectId])).rows.map(view)}));
+ const list=(scope:ProjectScope)=>projectTransaction(pool,scope,async db=>({
+  bindings:(await db.query("SELECT definition,version,active FROM programmable_projects_v1.game_bindings WHERE owner=$1 AND project_id=$2",[scope.ownerId,scope.projectId])).rows,
+  events:(await db.query("SELECT * FROM programmable_projects_v1.game_events WHERE owner=$1 AND project_id=$2 ORDER BY created_at DESC LIMIT 100",[scope.ownerId,scope.projectId])).rows.map(view),
+  wallets:(await db.query("SELECT binding_id,version,player_id_hash,player FROM programmable_projects_v1.game_wallets WHERE owner=$1 AND project_id=$2 LIMIT 5000",[scope.ownerId,scope.projectId])).rows.map(row=>({bindingId:String(row.binding_id),version:String(row.version),playerIdHash:String(row.player_id_hash),player:String(row.player)})),
+ }));
  const revoke=(scope:ProjectScope,id:string)=>projectTransaction(pool,scope,db=>db.query("UPDATE programmable_projects_v1.game_bindings SET active=false WHERE owner=$1 AND project_id=$2 AND id=$3",[scope.ownerId,scope.projectId,id]));
  return {saveBinding,readBinding,currentBinding,link,readWallet,ingest,route,readEvent,prepared,submitted,observed,pendingAgain,list,revoke};
 }

@@ -37,6 +37,8 @@ Connections are bound to their owner and project. Changing an MCP tool list requ
 
 Signed webhooks can deliver deduplicated external events. An event that should affect a contract also needs its own reviewed mapping and authorized onchain action. An API response or game score alone does not prove a contract update occurred.
 
+Before building a game receiver, the chat uses `event.identity` to derive its binding ID from the authenticated project and the public game configuration. Use that exact ID in the receiver constructor. This read-only step does not register or deploy a receiver: the deployed code, issuer configuration, player signatures and wallet actions still require their own verification. Ordinary source revisions retain the same ID; a different project, owner or game policy receives a different ID.
+
 ## Check, preview and publish
 
 Generated code runs in an isolated development sandbox with bounded resources and network access denied by default. Reviewed connections supply external API access. The sandbox lasts for development work; published applications use a separate hosting runtime.
