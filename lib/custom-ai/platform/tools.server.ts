@@ -12,6 +12,7 @@ import type { LaunchIntent } from "../launch-intent";
 import {platformContractBlueprint,completeCanonicalContractInterfaces,assertCanonicalReferenceChanges} from "./contract-plan.server";
 import {projectHash} from "./document";
 import {readLaunchBuildContext} from "../launch-production.server";
+import {applyPlanArchitectureUpdates} from "./plan-edits";
 
 const objectSchema = (properties: object, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const value = (input: JsonValue) => input as Record<string, JsonValue>;
@@ -27,10 +28,15 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
     return receipt ? { revisionId: receipt.revisionId } : execute(context, input);
   };
   const plan: ProjectTool = {
-    id: "project.plan", version: "1", description: "Save the complete requirements and architecture. Keep every existing rule. For the first saved plan, requirements may quote earlier user requests in this project's history. Changes to saved rules require exact quotes from the latest user request. Define behavior checks in architecture.checks as {id,requirementIds,command,kind:'behavior'|'build'} before implementation.",
-    schema: objectSchema({ title: { type: "string", maxLength: 120 }, requirements: { type: "array", maxItems: 64, items: objectSchema({
+    id: "project.plan", version: "1", description: "Save the complete requirements and either a full architecture or bounded architectureUpdates against the current saved architecture. Updates use exact string path segments, operation set/remove and a value for set; array positions are zero-based strings. Unmentioned fields are preserved. Keep every existing rule and expected check. First plans require architecture. Changes to saved rules require exact quotes from the latest user request. Define behavior checks before implementation.",
+    schema: {...objectSchema({ title: { type: "string", maxLength: 120 }, requirements: { type: "array", maxItems: 64, items: objectSchema({
       id: { type: "string", pattern: "^[a-z][a-z0-9-]{0,63}$" }, text: { type: "string", minLength: 1, maxLength: 600 }, kind: { enum: ["behavior", "constraint", "decision"] }, instruction: { type: "string", maxLength: 8000 }, open: { type: ["string", "null"], minLength: 1, maxLength: 600 },
-    }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object", properties: { checks: { type: "array", maxItems: 6 } } } }),
+    }) }, edits: { type: "array", items: objectSchema({ requirementId: { type: "string" }, operation: { enum: ["replace", "remove"] }, instruction: { type: "string" } }) }, architecture: { type: "object", properties: { checks: { type: "array", maxItems: 6 } } },
+      architectureUpdates:{type:"array",minItems:1,maxItems:64,items:{oneOf:[
+        objectSchema({operation:{const:"set"},path:{type:"array",minItems:1,maxItems:12,items:{type:"string",minLength:1,maxLength:120}},value:{}}),
+        objectSchema({operation:{const:"remove"},path:{type:"array",minItems:1,maxItems:12,items:{type:"string",minLength:1,maxLength:120}}}),
+      ]}},
+    },["title","requirements","edits"]),oneOf:[{required:["architecture"]},{required:["architectureUpdates"]}]},
     execute: async (context, input) => {
       const data = value(input), previous: LaunchIntent | undefined = context.revision.document.requirements.length ? {
         version: 1, id: context.projectId, revision: context.revision.requirementsHash.slice(7), requirements: context.revision.document.requirements,
@@ -44,7 +50,9 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
         ] } });
       if (interpreted.problems.length) throw new ProjectError("project-requirements", "The plan omitted or changed a saved rule without support from the latest request.", 409);
       const priorArchitecture = context.revision.document.architecture;
-      const architecture = { ...(priorArchitecture && typeof priorArchitecture === "object" && !Array.isArray(priorArchitecture) ? priorArchitecture : {}), ...value(data.architecture) };
+      const updates=Object.prototype.hasOwnProperty.call(data,"architectureUpdates"),full=Object.prototype.hasOwnProperty.call(data,"architecture");
+      if(updates===full)throw new ProjectError("project-plan-edit","Provide either a full architecture or updates to its saved fields.",409);
+      const architecture = updates?applyPlanArchitectureUpdates(priorArchitecture,data.architectureUpdates):{ ...(priorArchitecture && typeof priorArchitecture === "object" && !Array.isArray(priorArchitecture) ? priorArchitecture : {}), ...value(data.architecture) };
       if(architecture.checks!==undefined)declaredProjectChecks(architecture,interpreted.intent.requirements.map(rule=>rule.id));
       assertCanonicalReferenceChanges(context.revision,interpreted.intent.requirements,architecture);
       if(architecture.useCanonicalProduction===true){

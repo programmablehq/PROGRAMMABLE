@@ -21,8 +21,11 @@ it("uses the project action contract and preserves complete library observations
  const recovery=JSON.parse(call.mock.calls.at(-1)?.[0].messages[0].content).responseRecovery;
  expect(recovery).toMatchObject({reason:"output-limit",preserveAllRequirements:true,preserveAllExpectedResults:true,maximumOutputTokens:16000});
  expect(recovery.omitOnlyRegeneratedFields).toEqual(["architecture.production","inherited canonical functions"]);
+ expect(recovery.preferArchitectureUpdates).toBe(true);
+ expect(call.mock.calls.at(-1)?.[0].system).toContain("architectureUpdates");
  expect(call.mock.calls.at(-1)?.[0].maxTokens).toBe(16000);
  context.project.document.architecture=null;
  await chooseProjectAction(context,AbortSignal.timeout(1000));
  expect(JSON.parse(call.mock.calls.at(-1)?.[0].messages[0].content).responseRecovery.omitOnlyRegeneratedFields).toEqual([]);
+ expect(JSON.parse(call.mock.calls.at(-1)?.[0].messages[0].content).responseRecovery.preferArchitectureUpdates).toBe(false);
 });

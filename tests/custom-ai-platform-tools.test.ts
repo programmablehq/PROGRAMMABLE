@@ -32,6 +32,25 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it("applies compact architecture updates through the full plan validator",async()=>{
+   const plan=tools.find(tool=>tool.id==="project.plan")!;await plan.execute(context,planned);
+   context={...context,revision:await projects.readProject(scope),stepId:"compact-plan"};
+   const update={title:planned.title,requirements:planned.requirements,edits:[],architectureUpdates:[{operation:"set",path:["application"],value:{framework:"static",dataVersion:1}}]};
+   expect(new Ajv({strict:false}).compile(plan.schema)(update)).toBe(true);
+   await plan.execute(context,update);
+   const saved=await projects.readProject(scope);expect(saved.document.requirements).toEqual(context.revision.document.requirements);
+   expect(saved.document.architecture).toEqual({...planned.architecture,application:{framework:"static",dataVersion:1}});
+   context={...context,revision:saved,stepId:"invalid-compact-plan"};
+   await expect(plan.execute(context,{...update,architectureUpdates:[{operation:"set",path:["checks","0","requirementIds"],value:["unknown"]}]})).rejects.toMatchObject({code:"project-checks"});
+   expect((await projects.readProject(scope)).revisionId).toBe(saved.revisionId);
+ });
+ it("rejects compact first plans, ambiguous full-plus-partial inputs and silent requirement omissions",async()=>{
+   const plan=tools.find(tool=>tool.id==="project.plan")!,updates=[{operation:"set",path:["kind"],value:"application"}];
+   await expect(plan.execute(context,{title:planned.title,requirements:planned.requirements,edits:[],architectureUpdates:updates})).rejects.toMatchObject({code:"project-plan-edit"});
+   await plan.execute(context,planned);context={...context,revision:await projects.readProject(scope),stepId:"ambiguous-plan"};
+   await expect(plan.execute(context,{...planned,architectureUpdates:updates})).rejects.toMatchObject({code:"project-plan-edit"});
+   await expect(plan.execute({...context,stepId:"missing-rule"},{title:planned.title,requirements:[planned.requirements[0]],edits:[],architectureUpdates:updates})).rejects.toMatchObject({code:"project-requirements"});
+ });
  it.each(["too-many","unknown-requirement"])("rejects an invalid application check plan atomically: %s",async reason=>{
    const plan=tools.find(tool=>tool.id==="project.plan")!;
    await plan.execute(context,planned);
