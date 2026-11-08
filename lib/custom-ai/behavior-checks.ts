@@ -3,10 +3,11 @@ import type { ContractProject } from "./contract-project";
 import type { LaunchIntent } from "./launch-intent";
 import { parseAbi, type Abi } from "viem";
 import { parseV4CheckWorld,v4WorldFixtures,V4_WORLD_FIXTURES,V4_WORLD_STEP_SIGNATURES,type V4CheckWorld,type V4WorldFixture } from "./behavior-world";
+import {CHECK_ACCOUNTS,CHECK_SIGNERS,type CheckAccount,type CheckSigner} from "./check-accounts";
 
-export const CHECK_ACCOUNTS = ["creator", "trader-a", "trader-b"] as const;
-export type CheckAccount = typeof CHECK_ACCOUNTS[number];
-export type CheckValue = string | boolean | CheckValue[] | { account: CheckAccount } | { contract: string } | {fixture:V4WorldFixture} | {fixtureHash:V4WorldFixture} | {pool:true};
+export {CHECK_ACCOUNTS,type CheckAccount} from "./check-accounts";
+export type CheckSignature={kind:"wallet-link"|"game-event";signer:CheckSigner;contract:string;values:CheckValue[];chainId?:number};
+export type CheckValue = string | boolean | CheckValue[] | { account: CheckAccount } | { contract: string } | {fixture:V4WorldFixture} | {fixtureHash:V4WorldFixture} | {pool:true} | {signature:CheckSignature};
 export type ContractCheckFixture = {
   id: string; source: string; contract: string; arguments: CheckValue[];
   functions: string[]; allowReceive: boolean; allowFallback: boolean; surfaceRequirements: string[];
@@ -35,18 +36,35 @@ const object=(value:unknown,keys:string[],optional:string[]=[])=>{
   return record;
 };
 const identifier=(value:unknown)=>{if(typeof value!=="string"||!/^[a-z][a-z0-9-]{0,63}$/.test(value))return bad();return value;};
-function values(value:unknown,contracts:ReadonlySet<string>,depth=0,world:readonly V4WorldFixture[]=[]):CheckValue[] {
+function values(value:unknown,contracts:ReadonlySet<string>,depth=0,world:readonly V4WorldFixture[]=[],signatures=false):CheckValue[] {
   if(!Array.isArray(value)||value.length>32||depth>6)return bad();
   return value.map(item=>{
     if(typeof item==="boolean")return item;
     if(typeof item==="string"&&item.length<=2048&&!item.includes("\0"))return item;
-    if(Array.isArray(item))return values(item,contracts,depth+1,world);
+    if(Array.isArray(item))return values(item,contracts,depth+1,world,signatures);
     if(!item||typeof item!=="object"||![Object.prototype,null].includes(Object.getPrototypeOf(item))||Object.keys(item).length!==1)return bad();
     if(Object.hasOwn(item,"account")){const name=(item as {account:CheckAccount}).account;if(!CHECK_ACCOUNTS.includes(name))return bad();return {account:name};}
-    if(Object.hasOwn(item,"contract")){const id=identifier((item as {contract:unknown}).contract);if(!contracts.has(id))return bad();return {contract:id};}
+    if(Object.hasOwn(item,"contract")){const id=identifier((item as {contract:unknown}).contract);if(!contracts.has(id))return bad(`contract-reference:${id}:must-be-declared-earlier`);return {contract:id};}
     if(world.length&&Object.hasOwn(item,"fixture")){const id=(item as {fixture:V4WorldFixture}).fixture;if(!world.includes(id))return bad();return {fixture:id};}
     if(world.includes("native-usd-feed")&&Object.hasOwn(item,"fixtureHash")){const id=(item as {fixtureHash:V4WorldFixture}).fixtureHash;if(!world.includes(id))return bad();return {fixtureHash:id};}
     if(world.length&&Object.hasOwn(item,"pool")&&(item as {pool:unknown}).pool===true)return {pool:true};
+    if(signatures&&Object.hasOwn(item,"signature")){
+      const spec=object((item as {signature:unknown}).signature,["kind","signer","contract","values"],["chainId"]);
+      if(!["wallet-link","game-event"].includes(String(spec.kind))||!CHECK_SIGNERS.includes(spec.signer as CheckSigner)
+        ||typeof spec.contract!=="string"||!contracts.has(spec.contract)
+        ||!Array.isArray(spec.values)||spec.values.length!==(spec.kind==="wallet-link"?5:8)
+        ||spec.chainId!==undefined&&(!Number.isSafeInteger(spec.chainId)||Number(spec.chainId)<1||Number(spec.chainId)>0xffffffff))return bad("invalid-local-signature");
+      const fields=values(spec.values,contracts,depth+1,world);
+      const types=spec.kind==="wallet-link"?["bytes32","address","bytes32","bytes32","uint64"]:["bytes32","bytes32","bytes32","address","uint64","uint256","uint64","uint64"];
+      if(fields.some((value,index)=>{
+        const type=types[index];
+        if(type==="address")return typeof value==="string"?!/^0x[0-9a-f]{40}$/i.test(value):!value||Array.isArray(value)||typeof value!=="object"||!("account" in value||"contract" in value||"fixture" in value);
+        if(type==="bytes32")return typeof value!=="string"||!/^0x[0-9a-f]{64}$/i.test(value);
+        return typeof value!=="string"||!/^(?:0|[1-9][0-9]{0,77})$/.test(value)||BigInt(value)>=(1n<<BigInt(type==="uint64"?64:256));
+      }))return bad("invalid-local-signature-fields");
+      return {signature:{kind:spec.kind as CheckSignature["kind"],signer:spec.signer as CheckSigner,contract:spec.contract,
+        values:fields,...(spec.chainId===undefined?{}:{chainId:spec.chainId as number})}};
+    }
     return bad();
   });
 }
@@ -159,7 +177,7 @@ export function normalizeGeneralCheckScenarios(value:unknown,intent:LaunchIntent
       });
     }
     if(expect.status==="revert"||Array.isArray(expect.returns)&&expect.returns.length||expect.swapFeePpm!==undefined||events?.length)for(const id of requirementIds)observed.add(id);
-    return {id,contract:v.contract,signature:v.signature,arguments:values(v.arguments,contractIds,0,fixtureNames),from:v.from as CheckAccount,
+    return {id,contract:v.contract,signature:v.signature,arguments:values(v.arguments,contractIds,0,fixtureNames,true),from:v.from as CheckAccount,
       afterSeconds:v.afterSeconds as number,value:v.value,read:v.read,requirementIds,
       expect:{status:expect.status as "success"|"revert",...(expect.returns!==undefined?{returns:values(expect.returns,contractIds,0,fixtureNames)}:{}),...(expect.swapFeePpm!==undefined?{swapFeePpm:expect.swapFeePpm as number}:{}),...(events?{events}:{})}};
   }catch(error){if(error instanceof TypeError)return bad(`steps[${index}]:${error.message}`);throw error;}});

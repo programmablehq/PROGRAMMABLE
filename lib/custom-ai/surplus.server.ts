@@ -74,7 +74,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
   const signal = AbortSignal.any([deadline, ...(input.signal ? [input.signal] : [])]);
   const timedOut = () => deadline.aborted && !input.signal?.aborted;
   let text = "", inputTokens: number | null = null, outputTokens: number | null = null, finish: unknown;
-  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0]) => new ModelResponseError(failure, { inputTokens, outputTokens },input.captureIncompleteDeclaration?text:undefined);
+  const incomplete = (failure: ConstructorParameters<typeof ModelResponseError>[0], protocolViolation=false) => new ModelResponseError(failure, { inputTokens, outputTokens },input.captureIncompleteDeclaration?text:undefined,undefined,protocolViolation);
   // Long declarations need the same streamed transport as generated source,
   // including internal calls that have no visible text callback.
   const stream = Boolean(input.onText) || input.responseProfile === "contract";
@@ -114,9 +114,10 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
         inputTokens = reportedTokenCount(usage?.prompt_tokens) ?? inputTokens; outputTokens = reportedTokenCount(usage?.completion_tokens) ?? outputTokens;
         const choices = event.choices as { index?: number; delta?: { content?: string; refusal?: string; tool_calls?: unknown }; finish_reason?: string }[] | undefined;
         const choice = choices?.find(item => item.index === 0) ?? choices?.[0];
-        if (choice?.delta?.refusal || choice?.delta?.tool_calls) throw incomplete("refused");
+        if (choice?.delta?.refusal) throw incomplete("refused");
+        if (choice?.delta?.tool_calls) throw incomplete("refused",true);
         if (typeof choice?.delta?.content === "string") text += choice.delta.content;
-        if (unexpectedToolEnvelope(text)) throw incomplete("refused");
+        if (unexpectedToolEnvelope(text)) throw incomplete("refused",true);
         if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
         if (choice?.finish_reason) finish = choice.finish_reason;
         input.onText?.(text);
@@ -132,12 +133,13 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     const choice = value.choices?.[0]; finish = choice?.finish_reason;
     text = typeof choice?.message?.content === "string" ? choice.message.content : "";
     inputTokens = reportedTokenCount(value.usage?.prompt_tokens); outputTokens = reportedTokenCount(value.usage?.completion_tokens);
-    if (choice?.message?.refusal || choice?.message?.tool_calls) throw incomplete("refused");
+    if (choice?.message?.refusal) throw incomplete("refused");
+    if (choice?.message?.tool_calls) throw incomplete("refused",true);
   }
   if (finish === "length" || finish === "max_tokens") throw incomplete("output-limit");
   if (finish !== "stop") throw incomplete("missing-end");
   if (!text) throw incomplete("empty-response");
-  if (unexpectedToolEnvelope(text, true)) throw incomplete("refused");
+  if (unexpectedToolEnvelope(text, true)) throw incomplete("refused",true);
   if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
   try{return { text: format.decode(text), inputTokens, outputTokens };}
   catch(error){throw new ModelResponseError("invalid-schema",{inputTokens,outputTokens},input.captureIncompleteDeclaration?text:undefined,

@@ -72,6 +72,18 @@ beforeEach(async()=>{
 afterEach(async()=>{await database?.close();vi.restoreAllMocks();vi.unstubAllEnvs();vi.clearAllMocks();});
 
 describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable modern Plan source submission",()=>{
+  it("prepares the exact unsigned Plan with the configured public source origin",async()=>{
+    await store.projects.preparations.failPack(owner,id,record.packLease.token,"interrupted");
+    vi.stubEnv("PROJECT_PUBLIC_ORIGIN","https://programmable-project-platform-staging-v1-aficialais-projects.vercel.app");
+    const bridge=vi.fn(),packPlan=vi.fn(packGeneralRobinhoodPlan);
+    const s=createGeneralPreparationService({store,image:async()=>fixture.imageBytes,
+      production:async()=>fixture.source.project.production!,packPlan,bridge,now:()=>clock}),action=await current();
+    const view=await s.prepare(action.req,action.authority,{id,selection:selected(),controllerKind:"eoa"});
+    expect(view).toMatchObject({packState:"complete",launchReady:false});
+    expect(packPlan).toHaveBeenCalledTimes(1);
+    expect(packPlan.mock.calls[0][0].url).toMatch(/^https:\/\/programmable-project-platform-staging-v1-aficialais-projects\.vercel\.app\/api\/custom-ai\/source\/[a-f0-9]{64}$/);
+    expect(bridge).not.toHaveBeenCalled();
+  });
   it("stores the exact Plan and submits once for canonical review without an extra preflight POST",async()=>{
     const saved=await stage();expect(saved).toMatchObject({chainId:4663,controllerKind:"eoa",manifestDigest:record.manifestDigest,packState:"complete"});
     expect(saved.requestHash).toBe(pack.planHash);expect(saved.launchProfileHash).toBeUndefined();

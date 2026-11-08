@@ -1,8 +1,9 @@
 import type { GeneralCheckPlan } from "./behavior-checks";
+import {CHECK_ACCOUNTS,type CheckAccount} from "./check-accounts";
 
 export type ObservedValue = { name: string; type: string; value: string; truncated: boolean };
 export type ExecutionStep = {
-  id: string; contract: string; signature: string; from: "creator" | "trader-a" | "trader-b";
+  id: string; contract: string; signature: string; from: CheckAccount;
   afterSeconds: number; value: string; read: boolean; status: "success" | "revert";
   outputs: ObservedValue[];
   events: { contract: string; name: string; arguments: ObservedValue[] }[];
@@ -36,7 +37,7 @@ export function cachedExecutionTrace(value: unknown, plan?: GeneralCheckPlan): E
     const step = v.steps[index];
     if (!keys(step, ["id", "contract", "signature", "from", "afterSeconds", "value", "read", "status", "outputs", "events", "nativeChanges", "detailsComplete"])
       || !identifier(step.id) || ids.has(step.id) || !identifier(step.contract) || !text(step.signature, 800)
-      || !["creator", "trader-a", "trader-b"].includes(step.from) || !Number.isSafeInteger(step.afterSeconds) || step.afterSeconds < 0 || step.afterSeconds > 315_360_000
+      || !CHECK_ACCOUNTS.includes(step.from) || !Number.isSafeInteger(step.afterSeconds) || step.afterSeconds < 0 || step.afterSeconds > 315_360_000
       || !text(step.value, 30) || !/^\d+$/.test(step.value) || typeof step.read !== "boolean" || !["success", "revert"].includes(step.status) || typeof step.detailsComplete !== "boolean"
       || !values(step.outputs) || !Array.isArray(step.events) || step.events.length > 8 || step.events.some(event =>
         !keys(event, ["contract", "name", "arguments"]) || !identifier(event.contract) || !text(event.name, 100) || !values(event.arguments))

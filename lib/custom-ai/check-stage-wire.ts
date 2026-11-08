@@ -3,6 +3,7 @@ import {V4_WORLD_STEP_SIGNATURES} from "./behavior-world";
 import {bindCanonicalTokenMetadata} from "./deployment-metadata";
 import type {ProductBlueprint} from "./product/blueprint";
 import {productBindingsSchema} from "./product/bindings";
+import {CHECK_ACCOUNTS} from "./check-accounts";
 
 /** Native stage envelopes keep the response itself structured. Only constructor
  * values and the separately documented deployment graph need JSON value text.
@@ -54,7 +55,7 @@ export function interfaceSchemaForGraph(graph:Record<string,unknown>,production:
 }
 const event=object({contract:identifier,signature:string(2000),argumentsJson:string(12000)});
 export const scenarioStageSchema=object({steps:array(object({id:identifier,contract:identifier,signature:string(2000),argumentsJson:string(12000),
-  from:{type:"string",enum:["creator","trader-a","trader-b"]},afterSeconds:{type:"integer",minimum:0},value:string(30),read:{type:"boolean"},
+  from:{type:"string",enum:[...CHECK_ACCOUNTS]},afterSeconds:{type:"integer",minimum:0},value:string(30),read:{type:"boolean"},
   requirementIds:array(identifier,64),expect:object({status:{type:"string",enum:["success","revert"]},returnsJson:{type:["string","null"],maxLength:12000},
     swapFeePpm:{type:["integer","null"],minimum:0,maximum:1000000},events:array(event,32)})}),32),complete:{type:"boolean"}});
 export function scenarioSchemaForInterface(plan:Record<string,unknown>){

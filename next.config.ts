@@ -90,15 +90,18 @@ const customAIWorkerFiles = [
   "./scripts/custom-ai/protected-world-fixture-pin.mjs",
   "./scripts/custom-ai/declared-events.mjs",
   "./scripts/custom-ai/execution-trace.mjs",
+  "./scripts/custom-ai/fixture-signatures.mjs",
   "./scripts/custom-ai/core-bundle.json", "./scripts/custom-ai/toolchain/node_modules/**/*",
 ];
 const customAIPackFiles = [...customAIWorkerFiles, "./packages/launch/package.json", "./packages/launch/src/**/*", "./packages/launch/contracts/**/*"];
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["@vercel/sandbox", "undici"],
   outputFileTracingIncludes: {
     "/api/custom-ai": customAIWorkerFiles,
     "/api/custom-ai/preview": customAIWorkerFiles,
+    "/api/custom-ai/platform/worker": customAIWorkerFiles,
     "/api/custom-ai/general-launch": customAIPackFiles,
     "/api/custom-ai/image": sharpRuntimeFiles,
     "/api/token-image": sharpRuntimeFiles,

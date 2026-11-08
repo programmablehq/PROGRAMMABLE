@@ -17,6 +17,57 @@ import type { ProductImplementation } from "../../lib/custom-ai/product/implemen
 let server:Server,origin:string;
 test.beforeAll(async()=>{server=await createHistoryServer();server.listen(0,"127.0.0.1");await once(server,"listening");const address=server.address();if(!address||typeof address==="string")throw Error("Missing fixture port");origin=`http://127.0.0.1:${address.port}`;});
 test.afterAll(async()=>{if(server)await new Promise<void>((resolve,reject)=>server.close(error=>error?reject(error):resolve()));});
+
+test("pilot denial keeps an existing coin chat and its unsent message available",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),now=new Date().toISOString(),key="alice:"+account+":"+LEGACY_CONVERSATION;
+ f.chats.set(key,{id:LEGACY_CONVERSATION,account,title:"Existing coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ f.studios.set(key,{revision:1,state:{settings:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Earlier private rules"}],input:"Keep my unsent edit"}});
+ let projectWrites=0;
+ await page.route("**/api/custom-ai/platform/**",route=>{if(route.request().method()!=="GET")projectWrites++;return route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}});});
+ await page.goto(origin+"?platform=1");const box=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});
+ await expect(box).toHaveValue("Keep my unsent edit");await expect(page.getByText("Earlier private rules",{exact:true})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Back to projects",exact:true})).toHaveCount(0);expect(projectWrites).toBe(0);expect(f.calls).toEqual([]);
+ await page.reload();await expect(box).toHaveValue("Keep my unsent edit");expect(f.calls).toEqual([]);
+});
+
+test("pilot admission is reconsidered for a different principal using the same wallet",async({page})=>{
+ const f=await fixture(page);
+ await page.route("**/api/custom-ai/platform/**",route=>route.request().headers().authorization?.endsWith(":bob")
+  ?route.fulfill({json:{projects:[]}})
+  :route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1");await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
+ await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toHaveCount(0);
+ await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toBeVisible();expect(f.calls).toEqual([]);
+});
+
+test("a page reload refreshes pilot admission while preserving the existing coin draft",async({page})=>{
+ const f=await fixture(page),account="0x"+"a".repeat(40),now=new Date().toISOString(),key="alice:"+account+":"+LEGACY_CONVERSATION;
+ f.chats.set(key,{id:LEGACY_CONVERSATION,account,title:"Existing coin",archived:false,revision:1,createdAt:now,updatedAt:now});
+ f.studios.set(key,{revision:1,state:{settings:EMPTY_COIN_SETUP,messages:[{role:"user",content:"Earlier private rules"}],input:"Keep this draft after admission changes"}});
+ let admitted=false;
+ await page.route("**/api/custom-ai/platform/**",route=>admitted?route.fulfill({json:{projects:[]}}):route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1");
+ const draft=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});
+ await expect(draft).toHaveValue("Keep this draft after admission changes");
+ admitted=true;await page.reload();
+ await expect(page.getByRole("button",{name:"Create your first project",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Saved coin chats",exact:true}).click();
+ await expect(draft).toHaveValue("Keep this draft after admission changes");expect(f.calls).toEqual([]);
+});
+
+test("pilot denial preserves the explicitly submitted guest idea without starting a model run",async({page})=>{
+ const f=await fixture(page);
+ await page.route("**/api/custom-ai/platform/**",route=>route.fulfill({status:403,json:{code:"platform-pilot",error:"The project workspace is not available for this account yet."}}));
+ await page.goto(origin+"?platform=1&signed-out=1");const idea="A hook that supports our next game";
+ await page.getByRole("textbox",{name:"Describe your project or ask a question",exact:true}).fill(idea);
+ await page.getByRole("textbox",{name:"Describe your project or ask a question",exact:true}).press("Enter");
+ await page.getByRole("button",{name:"Finish sample connection",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true})).toHaveValue(idea);expect(f.calls).toEqual([]);
+});
+
 function generalFixture(revision=1,compiled=true){
  const intent:LaunchIntent={version:1,id:"general-browser-design",revision:(revision===1?"c":"d").repeat(64),...(revision>1?{parentRevision:"c".repeat(64)}:{}),
   requirements:[{id:"counter",text:revision===1?"Anyone can increment the counter":"Anyone can increment and read the counter",kind:"behavior",open:null,origin:{kind:"legacy"}}],unresolved:[],changes:[]};
@@ -86,6 +137,18 @@ test("observed simulation is readable by keyboard and survives reload without ex
  await page.reload();await expect(summary).toBeVisible();await summary.click();
  await expect(observed.getByText("+1000 wei",{exact:true})).toBeVisible();
  expect(f.calls).toHaveLength(1);
+});
+
+for(const width of [360,1440])test(`platform first visit supports app and API ideas before wallet connection at ${width}px`,async({page})=>{
+ const f=await fixture(page);await page.setViewportSize({width,height:900});await page.goto(origin+'/?signed-out=1&platform=1');
+ await expect(page.getByRole('heading',{name:'What would you like to build?',exact:true})).toBeVisible();
+ const region=page.getByRole('region',{name:'Build your project',exact:true});await expect(region).toHaveAttribute('data-chat-state','wallet-required');
+ await expect(region.getByText('New project',{exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'An app with saved data',exact:true}).click();
+ const input=page.getByRole('textbox',{name:'Describe your project or ask a question',exact:true});
+ await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
+ await page.reload();await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(f.calls).toEqual([]);expect(f.chats.size).toBe(0);
 });
 
 for(const width of [360,1440])test(`first visit explains wallet access without exposing unavailable editor controls at ${width}px`,async({page},info)=>{
@@ -212,7 +275,7 @@ test("one result shows the exact fee curve and opens the actual missing detail",
 });
 async function fixture(page:Page,cacheScope="a".repeat(64)){
  const chats=new Map<string,ConversationItem>(),studios=new Map<string,{revision:number;state:StudioState}>(),jobs=new Map<string,{request:ChatRequest;state:string;result?:ChatResult}>();
- const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
+ const calls:ChatRequest[]=[],control={delay:false,lostCreates:0,beforeUpdate:undefined as undefined|(()=>Promise<void>),beforeCreate:undefined as undefined|(()=>Promise<void>),beforeList:undefined as undefined|(()=>Promise<void>),listQueries:[] as {q:string;archived:boolean}[],respond:undefined as undefined|((request:ChatRequest)=>ChatResult|undefined),failure:"",otherReads:[] as string[]};
  const key=(account:string,id:string,principal="alice")=>principal+":"+account+":"+id;
  const create=(account:string,id:string,principal="alice")=>{const k=key(account,id,principal);if(!chats.has(k))chats.set(k,{id,account,title:id===LEGACY_CONVERSATION?"Original idea":"New coin",archived:false,revision:1,updatedAt:new Date().toISOString(),createdAt:new Date().toISOString()});return chats.get(k)!;};
  await page.route("**/api/**",async route=>{
@@ -225,6 +288,7 @@ async function fixture(page:Page,cacheScope="a".repeat(64)){
    if(body?.action==="update"){await control.beforeUpdate?.();const chat=chats.get(key(account,body.id,principal))!;if(body.revision!==chat.revision)return route.fulfill({status:409,json:{error:"Chat changed"}});Object.assign(chat,body.title?{title:body.title,customTitle:true}:{archived:body.archived});chat.revision++;return route.fulfill({json:chat});}
    const one=url.searchParams.get("id");if(one)return route.fulfill({json:chats.get(key(account,one,principal))});
    control.listQueries.push({q:url.searchParams.get("q")??"",archived:url.searchParams.get("archived")==="true"});
+   await control.beforeList?.();
    return route.fulfill({json:{conversations:[...chats.entries()].filter(([entry])=>entry.startsWith(principal+":" )).map(([,chat])=>chat).filter(c=>c.account===account&&c.archived===(url.searchParams.get("archived")==="true")&&c.title.toLowerCase().includes((url.searchParams.get("q")??"").toLowerCase()))}});
   }
   if(url.pathname==="/api/custom-ai/studio"){
@@ -447,6 +511,17 @@ test("retrying a lost create response opens the same chat without making another
  await expect.poll(()=>[...f.studios.entries()].some(([key,saved])=>key.endsWith(created.id)&&saved.state.input==="This is the retried chat")).toBe(true);
  expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
 });
+test("a delayed chat list refresh keeps the lost-create recovery error visible",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);
+ const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
+ const now=new Date();await page.clock.install({time:now});await page.clock.pauseAt(new Date(now.getTime()+1000));
+ const lists=f.control.listQueries.length;f.control.lostCreates=1;
+ await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();
+ const alert=page.getByRole("region",{name:"Your saved chats"}).getByRole("alert");await expect(alert).toBeVisible();
+ await page.clock.runFor(300);await expect.poll(()=>f.control.listQueries.length).toBeGreaterThanOrEqual(lists+2);
+ await expect(alert).toBeVisible();await page.clock.resume();
+ expect(f.chats.size).toBe(2);expect(f.calls).toHaveLength(0);
+});
 test("opening the recovered chat clears the pending create before the next new coin",async({page})=>{
  const f=await fixture(page);await page.goto(origin);
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
@@ -456,6 +531,29 @@ test("opening the recovered chat clears the pending create before the next new c
  await box.fill("Work in the recovered chat");
  await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
+});
+test("waits for the initial saved-chat selection before enabling a new chat",async({page})=>{
+ const f=await fixture(page);let started=false,release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});
+ f.control.beforeList=async()=>{started=true;await pending;};
+ try{
+  await page.goto(origin);await expect.poll(()=>started).toBe(true);
+  const create=page.getByRole("button",{name:"New chat",exact:true,includeHidden:true});await expect(create).toBeDisabled();
+  release();await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();await expect(create).toBeEnabled();
+ }finally{release();}
+});
+test("keeps existing chat actions usable while the list refreshes",async({page})=>{
+ const f=await fixture(page);await page.goto(origin);await expect(page.getByRole("textbox",{name:"Describe your coin or ask a question"})).toBeEditable();
+ let release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});let started=false;
+ f.control.beforeList=async()=>{started=true;await pending;};
+ try{
+  await openChatLibrary(page);await expect.poll(()=>started).toBe(true);
+  const rename=page.getByRole("button",{name:"Rename Original idea",exact:true});await expect(rename).toBeEnabled();await rename.click();
+  await expect(page.getByRole("textbox",{name:"Chat name"})).toBeEditable();
+  await page.getByRole("textbox",{name:"Chat name"}).fill("Name survives refresh");release();
+  await expect(page.getByRole("textbox",{name:"Chat name"})).toHaveValue("Name survives refresh");
+  await page.getByRole("button",{name:"Save chat name"}).click();
+  await expect.poll(()=>[...f.chats.values()].find(c=>c.id===LEGACY_CONVERSATION)?.title).toBe("Name survives refresh");
+ }finally{release();}
 });
 test("separate chats keep unsent text through switches and reload; names and archive are recoverable",async({page},info)=>{
  const f=await fixture(page);await page.goto(origin);

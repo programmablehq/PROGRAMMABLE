@@ -7,6 +7,32 @@ import { tmpdir } from "node:os";
 import { interfacePlan, relatedInputs, runtimeDependencySource, ownedInterfaceTests } from "./interface-plan.mjs";
 import { GENERAL_CONSTRUCTOR_WORKERS, GENERAL_BEHAVIOR_WORKERS } from "./classify-verify-paths.mjs";
 
+test("browser verification installs the compiler before the checked-contract workflow", () => {
+  const directory = mkdtempSync(join(tmpdir(), "interface-browser-dependency-"));
+  try {
+    const script = join(directory, "capture.mjs");
+    writeFileSync(script, `
+      import childProcess from 'node:child_process';
+      import { syncBuiltinESMExports } from 'node:module';
+      const calls = [];
+      childProcess.execFileSync = (command, args) => { calls.push([command, ...args]); return ''; };
+      syncBuiltinESMExports();
+      process.env.PROGRAMMABLE_VERIFY_FULL_INTERFACE = 'true';
+      process.env.PROGRAMMABLE_VERIFY_MAINTENANCE = 'false';
+      process.argv = [process.execPath, 'verify-interface.mjs', 'browser-build'];
+      await import(${JSON.stringify(new URL("./verify-interface.mjs", import.meta.url).href)});
+      console.log(JSON.stringify(calls));
+    `);
+    const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+    assert.equal(result.status, 0, result.stderr);
+    const calls = JSON.parse(result.stdout.trim().split("\n").at(-1));
+    const install = calls.findIndex(call => call[0] === "node" && call[1] === "scripts/custom-ai/install-toolchain.mjs");
+    const browser = calls.findIndex(call => call.includes("playwright.custom-ai.config.ts") && call.includes("flow.spec.ts"));
+    assert.ok(browser >= 0, "The checked-contract browser workflow must remain selected");
+    assert.ok(install >= 0 && install < browser, "Install its pinned compiler before starting the browser workflow");
+  } finally { rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("runtime test selection ignores type-only edges and retains mixed/runtime imports",()=>{
   const source="import type {Config} from './types'; import {type Result} from './result'; export type {Shape} from './shape'; import {type Data, run} from './runtime'; import './side-effect'; type Lazy = import('./lazy').Value;";
   const scanned=runtimeDependencySource(source,"test.ts");

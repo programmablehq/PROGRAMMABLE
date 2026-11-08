@@ -1,0 +1,39 @@
+{
+  "websiteCommit": "805a831a023d0b3e46494b66c6118d8532c5f950",
+  "backendCommit": "82cfdad10adcd884e234e0bb8e33e6808e7f6b4b",
+  "modelProbes": [
+    {
+      "id": "slang-rules",
+      "calls": 1,
+      "inputTokens": 12157,
+      "outputTokens": 1862,
+      "requirements": 6,
+      "sideEffects": [],
+      "error": null
+    },
+    {
+      "id": "whole-project",
+      "calls": 1,
+      "inputTokens": 13199,
+      "outputTokens": 1578,
+      "requirements": 6,
+      "sideEffects": [],
+      "error": null
+    }
+  ],
+  "referenceComparisonTests": {
+    "passed": 9,
+    "failed": 0
+  },
+  "endToEndAcceptance": "not-yet-complete",
+  "sandboxSmoke": {
+    "runtime": "node24",
+    "vcpus": 1,
+    "timeoutSeconds": 30,
+    "networkPolicy": "deny-all",
+    "fileRoundtrip": true,
+    "externalRequestDenied": true,
+    "commandExitCode": 0,
+    "inventoryAfterRemoval": 0
+  }
+}

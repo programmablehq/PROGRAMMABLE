@@ -40,6 +40,59 @@ describe("Custom AI capability discovery", () => {
     expect(body.sourceProjects.state).toBe("source-draft");
     expect(body.productRuntime.state).toBe("requested-contract-observations");
   });
+  it.each([undefined, "false", "1"])("does not advertise project tools when their server gate is %s", async (value) => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED", value);
+    vi.stubEnv("PROJECT_HOSTING_VERCEL_TOKEN", "test-hosting-credential-not-for-response");
+    const body = await GET().json();
+    expect(body.projectPlatform).toEqual({ version: 1, state: "not-enabled" });
+  });
+  it("describes the enabled project workflow without promising a verified project or live service", async () => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_GENERAL_LAUNCH_ENABLED", "false");
+    vi.stubEnv("PROJECT_HOSTING_VERCEL_TOKEN", "");
+    const body = await GET().json();
+    expect(body.projectPlatform).toMatchObject({
+      version: 1, state: "enabled", authentication: "wallet-session",
+      guide: "/developers/project-platform.md", projects: "/api/custom-ai/platform/projects",
+      workModes: ["build", "plan", "test", "deploy"], messageLimit: 24000,
+      recovery: "read-saved-run", sourceBinding: "immutable-project-revision",
+      sandbox: { lifecycle: "per-run", network: "deny-by-default" },
+      connections: { profiles: ["http", "openapi", "oauth-pkce", "remote-mcp", "signed-webhooks"], credentials: "private-project-store", actions: "explicit-project-grants" },
+      hosting: { configuration: "missing-credential", profiles: ["static", "node-api", "vite"], unsupportedProfiles: ["nextjs-server"], visitorAuthentication: "application-defined" },
+      launchPreparation: "not-enabled", readiness: "requires-project-checks-and-separate-publication-evidence",
+    });
+    expect(body.productPlanning.serviceDeployment).toBe("not-automatic");
+  });
+  it("reports configured hosting as needing a provider check and never includes its credential", async () => {
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED", "true");
+    vi.stubEnv("CUSTOM_AI_GENERAL_LAUNCH_ENABLED", "true");
+    vi.stubEnv("PROJECT_HOSTING_VERCEL_TOKEN", "test-hosting-credential-not-for-response");
+    const body = await GET().json();
+    expect(body).toMatchObject({ projectPlatform: {
+      hosting: { configuration: "provider-check-required" },
+      launchPreparation: "requires-current-review-and-preparation",
+    } });
+    expect(JSON.stringify(body)).not.toContain("test-hosting-credential-not-for-response");
+  });
+  it("describes a limited pilot without publishing its account identifiers",async()=>{
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED","true");
+    vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS",'["did:privy:private-pilot-owner"]');
+    const body=await GET().json();expect(body.projectPlatform).toMatchObject({state:"enabled",rollout:"pilot"});
+    expect(JSON.stringify(body)).not.toContain("private-pilot-owner");
+    vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS",undefined);expect((await GET().json()).projectPlatform.rollout).toBe("general");
+  });
+  it("does not advertise availability with invalid pilot configuration",async()=>{
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","invalid-json");
+    expect((await GET().json()).projectPlatform).toEqual({version:1,state:"not-enabled"});
+  });
+  it("does not advertise an explicitly empty pilot to guests or signed-in accounts",async()=>{
+    vi.stubEnv("CUSTOM_AI_PUBLIC_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_ENABLED","true");vi.stubEnv("CUSTOM_AI_PLATFORM_PILOT_OWNERS","[]");
+    const body=await GET().json();expect(body.projectPlatform).toEqual({version:1,state:"not-enabled"});
+    expect(JSON.stringify(body)).not.toContain('"rollout":"general"');
+  });
 });
 
 const context = () => ({ owner: "test", chainId: 1 as const, allowWeb: false, budget: { remaining: 2 } });

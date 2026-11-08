@@ -47,11 +47,24 @@ import { COIN_DETAIL_ACTION, coinDetailReply, feeLaunchDetailIssue } from "@/lib
 import { generalLaunchDetailIssue } from "@/lib/custom-ai/general-details";
 import { Disclosure } from "@/components/disclosure";
 const AuthenticatedChats=lazy(()=>import("./authenticated-chats"));
+const ProjectWorkspace=lazy(()=>import("./platform/workspace"));
+const LegacyProjectImport=lazy(()=>import("./platform/legacy-import").then(module=>({default:module.LegacyProjectImport})));
+const projectStarterIdeas=[
+  {title:"An app with saved data",prompt:"Build a shared scoreboard with a frontend, backend and persistent scores."},
+  {title:"A hook connected to a game",prompt:"Help me plan a coin whose hook reacts to verified game results."},
+  {title:"Connect an external API",prompt:"Help me plan an app that connects to an external API."},
+];
 
-export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean }) {
+export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled = false, platformEnabled = false }: { localPreview?: boolean; generalLaunchEnabled?: boolean; platformEnabled?: boolean }) {
   const wallet = useWallet();
   const owner = localPreview ? "local-preview" : wallet.wallet?.account.toLowerCase() ?? "signed-out";
+  const platformIdentity=`${wallet.sessionOwner??"pending"}:${owner}`;
   const [pendingPrompt,setPendingPrompt]=useState<PromptHandoff>();
+  const [legacyIdentity,setLegacyIdentity]=useState<string>();
+  const legacy=legacyIdentity===platformIdentity;
+  const [platformDenials,setPlatformDenials]=useState<ReadonlySet<string>>(()=>new Set());
+  const platformAvailable=platformEnabled&&!platformDenials.has(platformIdentity);
+  const denyPlatform=useCallback(()=>setPlatformDenials(current=>current.has(platformIdentity)?current:new Set(current).add(platformIdentity)),[platformIdentity]);
   // Reading an owned chat needs the confirmed access session. Waiting for a
   // transaction connector here can hide the chat while its signer reconnects.
   // WalletProvider still enforces that connector for all signing operations.
@@ -84,11 +97,13 @@ export function CustomAIWorkspace({ localPreview = false, generalLaunchEnabled =
     return { Authorization: `Bearer ${access}` };
   };
   if(!localPreview&&(!authReady||owner!=="signed-out"&&pendingPrompt&&!pendingPrompt.principal))return <SessionLoading onReconnect={wallet.openWallet}/>;
+  if(platformAvailable&&!localPreview&&owner!=="signed-out"&&!legacy)return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><ProjectWorkspace key={`${wallet.sessionOwner}:${owner}`} account={owner} headers={headers} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt} generalLaunchEnabled={generalLaunchEnabled} onAccessDenied={denyPlatform} onLegacy={()=>setLegacyIdentity(platformIdentity)}/></Suspense>;
+  if(platformAvailable&&!localPreview&&owner!=="signed-out"&&legacy)return <><button type="button" className={styles.textButton} style={{position:"relative",zIndex:2,marginInline:24}} onClick={()=>setLegacyIdentity(undefined)}>Back to projects</button><Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} onPlatformImport={()=>setLegacyIdentity(undefined)}/></AuthenticatedChats></Suspense></>;
   if(!localPreview&&owner!=="signed-out")return <Suspense fallback={<SessionLoading onReconnect={wallet.openWallet}/>}><AuthenticatedChats account={owner} headers={headers} initialConversationId={boundPrompt?.id}><CustomAISession owner={owner} headers={headers} localPreview={false} generalLaunchEnabled={generalLaunchEnabled} initialPrompt={boundPrompt} onPromptAccepted={acceptPrompt}/></AuthenticatedChats></Suspense>;
-  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
+  return <CustomAISession key={owner} owner={owner} headers={headers} localPreview={localPreview} generalLaunchEnabled={generalLaunchEnabled} projectEntry={platformAvailable&&!localPreview} onConnectPrompt={connectPrompt} onGuestInput={invalidatePrompt}/>;
 }
 
-function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void }) {
+function CustomAISession({ owner, headers: sessionHeaders, localPreview, generalLaunchEnabled, projectEntry=false, initialPrompt, onPromptAccepted, onConnectPrompt, onGuestInput, onPlatformImport }: { owner: string; headers: AISessionHeaders; localPreview: boolean; generalLaunchEnabled: boolean; projectEntry?:boolean; initialPrompt?: PromptHandoff; onPromptAccepted?:(id:string)=>void; onConnectPrompt?:(content:string)=>void; onGuestInput?:(content:string)=>void; onPlatformImport?:()=>void }) {
   const wallet=useWallet(),signedOut=!localPreview&&owner==="signed-out";
   const incomingPrompt=useRef(initialPrompt?{prompt:initialPrompt,accept:onPromptAccepted}:undefined);
   const library=useChatLibrary(),conversationId=library?.id,navigation=library?.navigation;
@@ -637,17 +652,18 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
 
   return <div ref={workspaceElement} className={styles.workspace}>
     <div className={styles.studio} data-guest={signedOut||undefined} data-empty={!signedOut && !showCoinPanel || undefined}>
-    <section className={styles.conversation} aria-label="Build your coin" data-chat-state={signedOut?"wallet-required":activity.id}
+    <section className={styles.conversation} aria-label={projectEntry?"Build your project":"Build your coin"} data-chat-state={signedOut?"wallet-required":activity.id}
       data-build-issue={buildIssue?`${buildIssue.stage}:${buildIssue.code}`:undefined}
       onDragOver={event => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
       onDrop={event => { const file = event.dataTransfer.files[0]; if (file) { event.preventDefault(); void attachImage(file); } }}>
-      <WorkspaceTools name={settings.name}
+      <WorkspaceTools name={projectEntry?"New project":settings.name}
         access={!localPreview&&!signedOut&&<button type="button" className={styles.walletAccess} aria-haspopup="dialog"
           aria-label={`Connected wallet ${owner}. Manage wallet`}
           disabled={launchLocked||switchingCoin||!restored} onClick={()=>wallet.openWallet()}>
           <Wallet size={16} aria-hidden="true"/>{`${owner.slice(0,6)}…${owner.slice(-4)}`}
         </button>}
         navigation={navigation?.tools(launchLocked||!restored||switchingCoin||busy&&!requestSaved)} />
+      {onPlatformImport && conversationId && (generalProject||sourceRecovery) && (sourceId||draftId) && <Suspense fallback={null}><LegacyProjectImport requestId={(sourceId||draftId)!} account={owner} conversationId={conversationId} headers={headers} onImported={onPlatformImport}/></Suspense>}
       <div ref={transcript} className={styles.transcript} role="log" aria-label="Conversation" aria-busy={busy}
         aria-live="polite" aria-relevant="additions" onScroll={event => {
           const element = event.currentTarget;
@@ -657,8 +673,8 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
         {!messages.length && !busy && <div className={styles.empty}>
           {signedOut ? <div className={styles.walletWelcome}>
             <span className={styles.srOnly}>Custom AI</span>
-            <h2>What should your coin do?</h2>
-            <p>Describe its rules in your own words. Connect your wallet to start building.</p>
+            <h2>{projectEntry?"What would you like to build?":"What should your coin do?"}</h2>
+            <p>{projectEntry?"Describe a hook, app or connected experience in your own words. Connect your wallet to start building.":"Describe its rules in your own words. Connect your wallet to start building."}</p>
             <button type="button" className={styles.connectWallet} aria-haspopup="dialog" onClick={()=>connectCurrentIdea()}>
               <Wallet size={18} aria-hidden="true" />Connect wallet
             </button>
@@ -667,7 +683,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             <p>{draft||generalProject ? "Your current rules are saved." : "Describe the rules. Build your coin here, without writing code."}</p>
           </>}
           <div className={styles.starterIdeas} aria-label="Ideas to get started">
-            {starterIdeas.map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
+            {(projectEntry?projectStarterIdeas:starterIdeas).map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
               onClick={() => { setInput(idea.prompt); onGuestInput?.(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}
           </div>
         </div>}
@@ -723,7 +739,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
       <form className={styles.composer} aria-label="Message Custom AI" onSubmit={event => { event.preventDefault(); void send(); }}
         >
         {!signedOut&&<ImageAttachments disabled={activity.blocked || imageBusy} onChoose={() => { setLaunchCommand(undefined); coinEditor.current?.focus("image"); }} onURL={attachImageURL} />}
-        <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : "Describe your coin or ask a question"}</label>
+        <label htmlFor="custom-ai-message" className={styles.srOnly}>{editTarget ? "Describe your change to this rule" : projectEntry?"Describe your project or ask a question":"Describe your coin or ask a question"}</label>
         <textarea ref={textarea} id="custom-ai-message" name="message" autoComplete="off" value={input} maxLength={CHAT_MESSAGE_LIMIT} readOnly={switchingCoin || !restored || launchLocked}
           aria-invalid={Boolean(inputError)} aria-describedby={["custom-ai-help", "custom-ai-state", error && "custom-ai-error", inputError && "custom-ai-input-error", editTarget && "custom-ai-edit-scope"].filter(Boolean).join(" ")}
           placeholder={editTarget ? "What would you like to change?" : "Describe your idea…"} rows={1} onChange={event => { setLaunchCommand(undefined); setInput(event.target.value); onGuestInput?.(event.target.value); setInputError(""); }}

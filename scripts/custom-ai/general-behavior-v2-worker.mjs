@@ -4,6 +4,7 @@ import {createGeneralV4World} from "./general-v4-world.mjs";
 import {createGeneralProtectedV4World} from "./general-protected-v4-world.mjs";
 import {declaredEventsMatch} from "./declared-events.mjs";
 import {createExecutionRecorder} from "./execution-trace.mjs";
+import {createFixtureSignatures} from "./fixture-signatures.mjs";
 const requireTool=createRequire(join(process.argv[2],"package.json"));
 let input="";process.stdin.setEncoding("utf8");
 process.stdin.on("data",chunk=>{input+=chunk;if(Buffer.byteLength(input)>6_000_000)process.exit(3);});
@@ -15,7 +16,8 @@ async function check({chainId,evmVersion,contracts,plan,recordExecution=false}){
  const {parseAbi,toFunctionSignature,encodeDeployData,encodeFunctionData,encodeAbiParameters,getContractAddress,getCreate2Address,keccak256}=requireTool("viem");
  if(plan.version!==2||!Array.isArray(plan.constructorChildren)||!plan.constructorChildren.length||plan.contracts.length+plan.constructorChildren.length>16)throw Error();
  const common=createCustomCommon({chainId},Mainnet,{hardfork:evmVersion==="cancun"?Hardfork.Cancun:Hardfork.Paris});
- const vm=await createVM({common}),accounts={creator:"0x1000000000000000000000000000000000000001","trader-a":"0x2000000000000000000000000000000000000002","trader-b":"0x3000000000000000000000000000000000000003"};
+ const signatures=createFixtureSignatures(requireTool,chainId);
+ const vm=await createVM({common}),accounts={creator:"0x1000000000000000000000000000000000000001","trader-a":"0x2000000000000000000000000000000000000002","trader-b":"0x3000000000000000000000000000000000000003",...signatures.accounts};
  for(const address of Object.values(accounts))await vm.stateManager.putAccount(createAddressFromString(address),createAccount({balance:10n**24n}));
  const deployed=new Map(),failures=[],frames=[],observed=new Set(),nextChild=new Map();
  const recorder=recordExecution?createExecutionRecorder({vm,accounts,deployed,requireTool,plannedSteps:plan.steps.length,recipients:()=>plan.allowedCalls.map(reference=>value(reference))}):undefined;
@@ -25,6 +27,7 @@ async function check({chainId,evmVersion,contracts,plan,recordExecution=false}){
  const value=input=>{
   if(Array.isArray(input))return input.map(value);
   if(input&&typeof input==="object"){
+   if(input.signature)return signatures.read(input.signature);
    if(input.account&&Object.hasOwn(accounts,input.account))return accounts[input.account];
    if(input.contract&&deployed.has(input.contract))return deployed.get(input.contract).address;
    if(input.fixture&&world?.contracts.has(input.fixture))return world.contracts.get(input.fixture).address;
@@ -126,6 +129,7 @@ async function check({chainId,evmVersion,contracts,plan,recordExecution=false}){
   if(!failures.length)for(const step of plan.steps){
    currentCase=step.id;const target=deployed.get(step.contract),fn=target?.artifact.abi.find(item=>item.type==="function"&&toFunctionSignature(item)===step.signature);
    if(!fn){fail("undeclared-function","The declared call is absent from this contract interface.");break;}
+   await signatures.prepare(step.arguments,value,deployed);
    const before=await recorder?.before();
    const result=await run({to:target.address,data:encodeFunctionData({abi:[fn],functionName:fn.name,args:step.arguments.map(value)}),from:step.from,
     afterSeconds:step.afterSeconds,value:step.value,read:step.read});cases++;

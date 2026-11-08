@@ -262,6 +262,7 @@
     "@uniswap/v4-sdk": "2.4.0",
     "@vercel/blob": "2.6.1",
     "@vercel/oidc": "3.8.1",
+    "@vercel/sandbox": "3.9.1",
     "lucide-react": "1.26.0",
     "next": "16.4.2",
     "pg": "8.22.0",
@@ -270,6 +271,7 @@
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
     "sharp": "0.35.5",
+    "undici": "8.12.2",
     "viem": "2.55.5"
   },
   "devDependencies": {

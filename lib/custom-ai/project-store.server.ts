@@ -1,4 +1,5 @@
 import { checkedGeneralLaunchSource, type GeneralLaunchSourceSelection } from "./general-launch-source.server";
+import {readPlatformLaunchSourceInTransaction} from "./platform/launch-source-reader.server";
 import { conversationStorageId } from "./conversation.server";
 import type { Conversation } from "./conversation";
 import type { StudioState } from "./studio";
@@ -225,6 +226,10 @@ export function createProjectStore(transaction: Transaction, now: () => number =
     });
   }
   async function readForLaunchInTransaction(db: AIConnection, owner: string, selected: GeneralLaunchSourceSelection) {
+    if(/^pp-[a-f0-9]{61}$/.test(selected.id)){
+      const legacy=(await db.query("SELECT id FROM programmable_custom_ai_v1.jobs WHERE owner=$1 AND id=$2",[owner,selected.id])).rows.length;
+      if(!legacy)return readPlatformLaunchSourceInTransaction(db,owner,selected);
+    }
     const storageId = conversationStorageId(selected.account, selected.conversation);
       // Match the conversation/studio CAS lock order. No model, compiler,
       // network, funding or signing work is performed while these are held.

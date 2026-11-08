@@ -17,6 +17,9 @@ export function parseIntentRequirements(value: unknown): ProposedRequirement[] {
   if (!Array.isArray(value) || value.length > MAX_INTENT_REQUIREMENTS) throw new CustomAIError("intent", "The complete design was missing. Your saved rules are kept.", 502);
   const ids = new Set<string>();
   return value.map(item => {
+    if (item && typeof item.text === "string" && item.text.length > 600) {
+      throw new CustomAIError("intent", "Keep each requirement within 600 characters; put implementation details in the architecture and checks. Your saved rules are kept.", 502);
+    }
     if (!item || typeof item.id !== "string" || !/^[a-z][a-z0-9-]{0,63}$/.test(item.id) || ids.has(item.id)
       || !boundedText(item.text, 600) || !["behavior", "constraint", "decision"].includes(item.kind)
       || typeof item.instruction !== "string" || item.instruction.length > 8000

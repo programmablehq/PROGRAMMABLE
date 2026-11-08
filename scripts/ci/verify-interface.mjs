@@ -48,7 +48,14 @@ if (mode === "browser-build") {
   if (plan.browser.length) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.wallet-lock.config.ts",
     ...plan.browser.map(name => `${name}.spec.ts`)]);
   if (plan.migration) npm("test:browser:late-migration");
-  if (plan.customAIBrowser.length) run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts", ...plan.customAIBrowser]);
+  if (plan.customAIBrowser.length) {
+    // The flow selection includes the saved-project contract-review fixture,
+    // which performs real compilation even for presentation-only changes.
+    if (plan.customAIBrowser.includes("flow.spec.ts") || plan.customAIBrowser.includes("platform-workflow.spec.ts")) {
+      run("node", ["scripts/custom-ai/install-toolchain.mjs"]);
+    }
+    run("npx", ["--no-install", "playwright", "test", "--config", "playwright.custom-ai.config.ts", ...plan.customAIBrowser]);
+  }
   if (plan.productionBuild) npm("build");
   else { typecheck(); console.log("Interface typecheck passed. The publisher performs the production build once before promotion."); }
 } else {

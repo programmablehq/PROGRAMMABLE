@@ -36,6 +36,8 @@ import { IVenuePolicy } from "../../src/custom-ai/IVenuePolicy.sol";
 import { CustomAIProgramV1 } from "../../src/custom-ai/CustomAIProgramV1.sol";
 import { CustomAIDataFeedV1 } from "../../src/custom-ai/CustomAIDataFeedV1.sol";
 import { CustomAIThresholdFeeModuleV1 } from "../../src/custom-ai/CustomAIThresholdFeeModuleV1.sol";
+import { ProjectPlayerGameEventsV1 } from "../../src/custom-ai/ProjectPlayerGameEventsV1.sol";
+import { ProjectPlayerGameFeeModuleV1 } from "../../src/custom-ai/ProjectPlayerGameFeeModuleV1.sol";
 import { RewardProposalFixture } from "./CustomAIRewardsAndDataV1.t.sol";
 
 import { CustomAIProgramRouterV1 } from "../../src/custom-ai/CustomAIProgramRouterV1.sol";
@@ -525,6 +527,62 @@ contract CustomAILifecycleV1Test is Test {
         assertEq(quote.balanceOf(CREATOR_FEE), 20.6 ether);
         assertEq(quote.balanceOf(launched.rewardVault), 20.9 ether);
         assertEq(CustomAIFeeLedgerV1(launched.ledger).outstandingBacking(), 5.15 ether);
+    }
+
+    function test_signedThirdWinLowersOnlyThePlayersActualSwapFee() public {
+        uint256 issuerKey = 0xABCD;
+        uint256 playerKey = 0xDCBA;
+        address player = vm.addr(playerKey);
+        address nonwinner = makeAddr("nonwinning game player");
+        bytes32 binding = keccak256("player game lifecycle");
+        bytes32 playerId = keccak256("linked game player");
+        bytes32 nonce = keccak256("one player link");
+        uint64 expiry = uint64(block.timestamp + 120);
+        ProjectPlayerGameEventsV1 game = new ProjectPlayerGameEventsV1(binding, vm.addr(issuerKey), 300, 1);
+        upstream = new MockV4Router(manager);
+        ProjectPlayerGameFeeModuleV1 playerModule =
+            new ProjectPlayerGameFeeModuleV1(game, address(upstream), 3, 200, 100);
+        params.feeModule =
+            T.ModuleBinding(address(playerModule), address(playerModule).codehash, playerModule.configurationHash());
+        _prepare();
+        _launch();
+        for (uint256 i; i < 2; i++) {
+            address trader = i == 0 ? player : nonwinner;
+            quote.mint(trader, 100 ether);
+            vm.prank(trader);
+            quote.approve(address(upstream), type(uint256).max);
+        }
+        CustomAIFeeLedgerV1 ledger = CustomAIFeeLedgerV1(launched.ledger);
+        uint256 beforeFee = ledger.additionalReceived();
+        vm.startPrank(player);
+        (uint256 paid,) = _upstreamTrade(player, true, true, 1 ether, 1, "");
+        vm.stopPrank();
+        assertEq(ledger.additionalReceived() - beforeFee, paid * 200 / 10_000);
+
+        bytes32 digest = game.walletDigest(player, playerId, nonce, expiry);
+        (uint8 pv, bytes32 pr, bytes32 ps) = vm.sign(playerKey, digest);
+        (uint8 iv, bytes32 ir, bytes32 is_) = vm.sign(issuerKey, digest);
+        game.bindPlayer(player, playerId, nonce, expiry, abi.encodePacked(pr, ps, pv), abi.encodePacked(ir, is_, iv));
+        for (uint64 sequence = 1; sequence <= 3; sequence++) {
+            ProjectPlayerGameEventsV1.GameEvent memory item = ProjectPlayerGameEventsV1.GameEvent(
+                binding, keccak256(abi.encode(sequence)), playerId, player, sequence, 1, uint64(block.timestamp), expiry
+            );
+            (iv, ir, is_) = vm.sign(issuerKey, game.eventDigest(item));
+            game.submitEvent(item, abi.encodePacked(ir, is_, iv));
+        }
+        assertEq(game.playerScore(player), 3);
+        beforeFee = ledger.additionalReceived();
+        vm.startPrank(player);
+        (paid,) = _upstreamTrade(player, true, true, 1 ether, 1, "");
+        vm.stopPrank();
+        assertEq(ledger.additionalReceived() - beforeFee, paid * 100 / 10_000);
+
+        beforeFee = ledger.additionalReceived();
+        vm.startPrank(nonwinner);
+        (paid,) = _upstreamTrade(nonwinner, true, true, 1 ether, 1, "");
+        vm.stopPrank();
+        assertEq(ledger.additionalReceived() - beforeFee, paid * 200 / 10_000);
+        assertEq(game.playerScore(nonwinner), 0);
     }
 
     function test_signedExternalDataChangesFeeAndStaleDataFallsBack() public {

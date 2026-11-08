@@ -53,5 +53,9 @@ export function checkedGeneralPublicSource(value: GeneralPublicSource, id: strin
 
 export function generalSourcePublicUri(id: string) {
   if (!digest.test(id)) return unavailable();
-  return `https://programmable.market/api/custom-ai/source/${id.slice(7)}`;
+  let origin: URL;
+  try { origin = new URL(process.env.PROJECT_PUBLIC_ORIGIN ?? "https://programmable.market"); }
+  catch { return unavailable(); }
+  if (origin.protocol !== "https:" || origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash) return unavailable();
+  return `${origin.origin}/api/custom-ai/source/${id.slice(7)}`;
 }

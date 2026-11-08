@@ -123,6 +123,13 @@ const ACTIVE_CRONS = Object.freeze([
   }),
 ]);
 
+const PROJECT_RUNTIME_CRON = Object.freeze({
+  path: "/api/ops/project-runtime",
+  schedule: "* * * * *",
+  source: "app/api/ops/project-runtime/route.ts",
+  sha256: "4599f91ce4bf9c50bb9e21c5d8e17f27ad6e468b423b2455e91ae5deb04fd9b5",
+});
+
 const EXACT_MANUAL_VERCEL_PROMOTION =
   'vercel promote "$STAGED_DEPLOYMENT_ID" --yes --token="$VERCEL_TOKEN"';
 const EXACT_MANUAL_VERCEL_ROLLBACK =
@@ -322,6 +329,31 @@ function protocolRevenueCronIsBound(source, cron, overrides) {
     typeof environment === "string" &&
     (environment.match(/^PROTOCOL_REVENUE_AUTOMATION_ENABLED=false$/gmu)?.length ?? 0) === 1 &&
     !environment.includes("NEXT_PUBLIC_PROTOCOL_REVENUE_AUTOMATION_ENABLED");
+}
+
+function projectRuntimeCronIsBound(source) {
+  const route = source(PROJECT_RUNTIME_CRON.source);
+  const environment = source(".env.example");
+  return sha256(route) === PROJECT_RUNTIME_CRON.sha256 &&
+    importedSpecifiers(route).every(specifier => [
+      "node:crypto",
+      "@/lib/custom-ai/platform/run-production.server",
+      "@/lib/custom-ai/http.server",
+      "@/lib/custom-ai/platform/runtime-production.server",
+    ].includes(specifier)) &&
+    hasOrderedFragments(route, [
+      "const secret = process.env.CRON_SECRET",
+      "timingSafeEqual(Buffer.from(actual), Buffer.from(`Bearer ${secret}`))",
+      "status: 401",
+      'process.env.CUSTOM_AI_PLATFORM_ENABLED !== "true"',
+      "disabled: true",
+      "productionDispatchService().dispatchPending(8)",
+      "productionAppReleases().processPending(1)",
+      "productionAppJobs().dispatchDue(4)",
+    ]) &&
+    typeof environment === "string" &&
+    (environment.match(/^CUSTOM_AI_PLATFORM_ENABLED=/gmu)?.length ?? 0) === 1 &&
+    (environment.match(/^CUSTOM_AI_PLATFORM_ENABLED=false$/gmu)?.length ?? 0) === 1;
 }
 
 function hasOrderedFragments(source, fragments) {
@@ -614,16 +646,23 @@ export function evaluateReadModelOperationsSourceContracts(
     "ops-cron-exact-set",
     Array.isArray(activeCrons) &&
       activeCrons.length === ACTIVE_CRONS.length &&
-      crons?.size === ACTIVE_CRONS.length + 2 &&
+      crons?.size === ACTIVE_CRONS.length + 3 &&
       crons.get("/api/ops/robinhood-index") === "* * * * *" &&
       crons.get("/api/ops/custom-ai-index") === "* * * * *" &&
+      crons.get(PROJECT_RUNTIME_CRON.path) === PROJECT_RUNTIME_CRON.schedule &&
       ACTIVE_CRONS.every((expected, index) =>
         activeCrons[index]?.id === expected.id &&
         activeCrons[index]?.path === expected.path &&
         activeCrons[index]?.schedule === expected.schedule &&
         crons.get(expected.path) === expected.schedule
       ),
-    "Vercel schedules protocol revenue, Custom Launch V2 and the isolated Robinhood and Custom AI indexes; retired workers stay disabled",
+    "Vercel schedules the exact existing jobs and the isolated project runtime; retired index workers stay disabled",
+  );
+
+  check(
+    "ops-project-runtime-binding",
+    projectRuntimeCronIsBound(source),
+    "the project dispatcher remains source-bound, authenticated, disabled by default and limited to eight runs, one release and four jobs",
   );
 
   const protocolCron = activeCrons?.find(({ id }) => id === "protocol-revenue");

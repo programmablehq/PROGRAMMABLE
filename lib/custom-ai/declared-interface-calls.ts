@@ -3,18 +3,18 @@ import type {GeneralCheckScenarios} from "./behavior-checks";
 import type {GeneralDeploymentBlueprint} from "./deployment-blueprint";
 import {V4_WORLD_STEP_SIGNATURES} from "./behavior-world";
 
-function compatible(value:unknown,parameter:AbiParameter):boolean{
+function compatible(value:unknown,parameter:AbiParameter,localSignature=false):boolean{
   const array=/^(.*)\[(\d*)\]$/u.exec(parameter.type);
   if(array)return Array.isArray(value)&&(!array[2]||value.length===Number(array[2]))
-    &&value.every(item=>compatible(item,{...parameter,type:array[1]} as AbiParameter));
+    &&value.every(item=>compatible(item,{...parameter,type:array[1]} as AbiParameter,localSignature));
   if(parameter.type==="tuple"){
     if(value&&typeof value==="object"&&!Array.isArray(value)&&"pool" in value)return true;
     const parts="components" in parameter?parameter.components:[];
-    return Array.isArray(value)&&value.length===parts.length&&parts.every((part,index)=>compatible(value[index],part));
+    return Array.isArray(value)&&value.length===parts.length&&parts.every((part,index)=>compatible(value[index],part,localSignature));
   }
   if(value&&typeof value==="object"&&!Array.isArray(value)){
     const ref=value as Record<string,unknown>;
-    const kind="fixtureHash" in ref?"bytes32":"account" in ref||"contract" in ref||"target" in ref||"fixture" in ref?"address"
+    const kind=localSignature&&Object.keys(ref).length===1&&"signature" in ref?"bytes":"fixtureHash" in ref?"bytes32":"account" in ref||"contract" in ref||"target" in ref||"fixture" in ref?"address"
       :"input" in ref?["controller","quote"].includes(String(ref.input))?"address":ref.input==="funding"?"integer":"string"
       :"binding" in ref?String(ref.binding).endsWith("runtime-hash")?"bytes32":String(ref.binding).startsWith("opening-")?"integer":"address":null;
     return kind==="integer"?/^u?int\d*$/u.test(parameter.type):kind===parameter.type;
@@ -25,14 +25,14 @@ function compatible(value:unknown,parameter:AbiParameter):boolean{
   if(/^bytes\d*$/u.test(parameter.type))return typeof value==="string"&&/^0x(?:[0-9a-f]{2})*$/iu.test(value);
   return typeof value==="string";
 }
-function mismatch(value:unknown,parameter:AbiParameter,path:string):string|undefined{
-  if(compatible(value,parameter))return;
+function mismatch(value:unknown,parameter:AbiParameter,path:string,localSignature=false):string|undefined{
+  if(compatible(value,parameter,localSignature))return;
   const array=/^(.*)\[(\d*)\]$/u.exec(parameter.type);
   if(array&&Array.isArray(value))for(const [index,item] of value.entries()){
-    const issue=mismatch(item,{...parameter,type:array[1]} as AbiParameter,`${path}[${index}]`);if(issue)return issue;
+    const issue=mismatch(item,{...parameter,type:array[1]} as AbiParameter,`${path}[${index}]`,localSignature);if(issue)return issue;
   }
   if(parameter.type==="tuple"&&Array.isArray(value)&&"components" in parameter)for(const [index,part] of parameter.components.entries()){
-    const issue=mismatch(value[index],part,`${path}[${index}]${part.name?`(${part.name})`:""}`);if(issue)return issue;
+    const issue=mismatch(value[index],part,`${path}[${index}]${part.name?`(${part.name})`:""}`,localSignature);if(issue)return issue;
   }
   const kind=value&&typeof value==="object"&&!Array.isArray(value)?`reference ${Object.keys(value).join(",")}`:Array.isArray(value)?"array":typeof value;
   return `${path} expects ${parameter.type}, received ${kind}`;
@@ -63,7 +63,7 @@ export function validateDeclaredInterfaceCalls(plan:GeneralCheckScenarios,deploy
     const method=functions.find(item=>toFunctionSignature(item)===step.signature);
     if(!method){issues.push(`${step.id}: ${step.contract}.${step.signature} is absent from the declared interface`);continue;}
     if(step.arguments.length!==method.inputs.length)issues.push(`${step.id}: expected ${method.inputs.length} arguments, received ${step.arguments.length}`);
-    else method.inputs.forEach((parameter,index)=>{const issue=mismatch(step.arguments[index],parameter,`${step.id}: argument ${index}`);if(issue)issues.push(issue);});
+    else method.inputs.forEach((parameter,index)=>{const issue=mismatch(step.arguments[index],parameter,`${step.id}: argument ${index}`,true);if(issue)issues.push(issue);});
     if(!isWorld){
       if(step.expect.returns&&step.expect.returns.length!==method.outputs.length)issues.push(`${step.id}: expected ${method.outputs.length} return values, received ${step.expect.returns.length}`);
       else step.expect.returns?.forEach((value,index)=>{const issue=mismatch(value,method.outputs[index],`${step.id}: return ${index}`);if(issue)issues.push(issue);});

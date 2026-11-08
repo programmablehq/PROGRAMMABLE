@@ -40,9 +40,10 @@ export async function checkGeneralScenarios(project:ContractProject,compilation:
   const fixturePin=join(process.cwd(),"scripts/custom-ai/protected-world-fixture-pin.mjs");
   const eventModule=join(process.cwd(),"scripts/custom-ai/declared-events.mjs");
   const observationModule=join(process.cwd(),"scripts/custom-ai/execution-trace.mjs");
+  const signatureModule=join(process.cwd(),"scripts/custom-ai/fixture-signatures.mjs");
   const worldFiles=plan.world?[join(process.cwd(),plan.world.kind==="v4-protected-native-token-v1"?"scripts/custom-ai/general-protected-v4-fixture.json":"scripts/custom-ai/general-v4-fixture.json"),join(process.cwd(),"scripts/custom-ai/core-bundle.json")]:[];
   const output=await new Promise<string>((resolve,reject)=>{
-    const child=execFile(process.execPath,["--permission",...[toolchain,worker,worldModule,protectedWorldModule,fixturePin,eventModule,observationModule,...worldFiles].map(path=>`--allow-fs-read=${path}`),"--max-old-space-size=384",worker,toolchain],
+    const child=execFile(process.execPath,["--permission",...[toolchain,worker,worldModule,protectedWorldModule,fixturePin,eventModule,observationModule,signatureModule,...worldFiles].map(path=>`--allow-fs-read=${path}`),"--max-old-space-size=384",worker,toolchain],
       {cwd:toolchain,env:{NODE_ENV:"production"},encoding:"utf8",timeout:30_000,maxBuffer:512_000,signal},(error,stdout)=>error
         ?reject(new CustomAIError("behavior-worker","The isolated contract checks did not finish. Your saved source and artifacts are kept.",503)):resolve(stdout));
     child.stdin?.on("error",()=>undefined);child.stdin?.end(JSON.stringify({chainId:project.chainId,evmVersion:project.compiler.evmVersion,contracts:compilation.contracts,plan,recordExecution:true}));

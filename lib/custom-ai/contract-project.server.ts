@@ -29,9 +29,9 @@ export async function compileContractProject(project: ContractProject, signal?: 
   const compiler = await realpath(/* turbopackIgnore: true */ process.env.CUSTOM_AI_COMPILER_DIR ?? join(process.cwd(), "scripts/custom-ai/toolchain"));
   const worker = join(process.cwd(), "scripts/custom-ai/general-project-worker.mjs");
   const directory = await mkdtemp(join(tmpdir(), "custom-ai-project-"));
-  // IR optimization of a complete protected graph needs more time on shared
-  // CPUs. Keep both profiles bounded without restarting completed generation.
-  const timeout = project.compiler.viaIR ? 75_000 : 35_000;
+  // Complete protected graphs need more time for IR optimization on shared
+  // CPUs. Stay below the agent's 250-second and worker's 280-second bounds.
+  const timeout = project.compiler.viaIR ? 180_000 : 35_000;
   try {
     const output = await new Promise<string>((resolve, reject) => {
       const child = execFile(process.execPath, ["--permission", `--allow-fs-read=${compiler}`, `--allow-fs-read=${worker}`,

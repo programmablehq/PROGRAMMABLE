@@ -6,6 +6,8 @@ Connect and sign in with your wallet before building or saving a hook. You can w
 
 Browser agents can use the same labelled controls and saved chats. The [browser workflow guide](https://programmable.market/developers/custom-ai-browser.md) describes input, progress and recovery. Read [live capabilities](https://programmable.market/api/custom-ai/capabilities) for the current network and launch-preparation scope.
 
+When live capabilities reports `projectPlatform.state: "enabled"`, the [project workspace guide](https://programmable.market/developers/project-platform.md) covers persistent projects, editable files, private connections and application previews in that environment. Existing coin conversations remain accessible through **Saved coin chats**. An enabled workspace does not establish that an individual project is verified or published.
+
 The fixed fee builder supports launches on Ethereum and Robinhood. Its accepted drafts do not need a manual submission review. General contract projects use a separate source, behavior-check and Custom Launch review process. Generating or compiling a project does not make it launch-ready.
 
 The chat can fill in the name, ticker, chain, pair token and initial buy. Open **Coin details** to edit those settings. Choose an image, review the checked rules and select **Launch coin**. If a name, ticker or image is missing, the next action opens the relevant editor. The final launch action confirms that exact version. Keep an interrupted launch open so its saved wallet transaction can be checked again.

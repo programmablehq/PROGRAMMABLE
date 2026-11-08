@@ -1,4 +1,8 @@
 /artifacts/
+/tmp/
+/test-results/
+/playwright-report/
+/blob-report/
 contracts/cache/
 contracts/out/
 docs/programmable-x-launch-article*.md
