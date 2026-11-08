@@ -150,6 +150,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
     rememberDraft();generation.current++;await saveSelection(id);
     if(loaded)setProjects(current=>[{projectId:loaded.projectId,revisionId:loaded.revisionId,title:loaded.document.title,updatedAt:loaded.createdAt},...current.filter(p=>p.projectId!==id)]);
     setProject(loaded);setRuns([]);setInput(drafts.current.get(id??newDraft)??"");setError("");setSelected(id);setNotice("");setHistoryOpen(false);setMobilePane("chat");
+    if(id&&id===selected&&!loaded)await refresh();
   }
   async function choose(id:string){if(locked||busy)return;await runTask(async()=>{if(legacyOpen)await beforeLeaveLegacy?.();await activate(id);onProject?.();focusContent();});}
   async function chooseLegacy(id?:string){if(locked||busy)return;await runTask(async()=>{if(legacyOpen)await beforeLeaveLegacy?.();rememberDraft();await saveSelection(selected);onLegacy(id);setHistoryOpen(false);focusContent();});}
