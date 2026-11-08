@@ -50,6 +50,7 @@ test("one work history opens projects and saves a legacy draft before switching"
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});await expect(box).toHaveValue("An unsent coin edit");
  await box.fill("Keep this newer unsent edit");await work.getByRole("button",{name:/Game counter.*Project/}).click();
  await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeVisible();
+ await expect(page.getByRole("tabpanel",{name:"Project",exact:true}).getByRole("heading",{name:"Game counter",exact:true})).toBeVisible();
  await expect.poll(()=>f.studios.get(key)?.state.input).toBe("Keep this newer unsent edit");
  await work.getByRole("button",{name:/Earlier coin.*Coin chat/}).click();await expect(box).toHaveValue("Keep this newer unsent edit");
  await page.getByRole("button",{name:"Switch sample identity",exact:true}).click();
