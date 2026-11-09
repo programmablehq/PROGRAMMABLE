@@ -20,6 +20,35 @@ function request(body: unknown) { return new Request(`https://programmable.marke
 }); }
 const decision = { reviewId: review.reviewId, subjectHash: review.subjectHash, revision: 1, decision: "approve", reason: "Reviewed" };
 describe("manual launch approval", () => {
+  it("waits for a cold source review beyond 60 seconds and still bounds an unresponsive backend", async () => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(milliseconds => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("Review timed out", "TimeoutError")), milliseconds);
+      return controller.signal;
+    });
+    try {
+      const delayed = (milliseconds: number): typeof fetch => async (_url, init) => new Promise((resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+        setTimeout(() => resolve(Response.json({ review })), milliseconds);
+      });
+      const route = (milliseconds: number) => createManualReviewBridgeV1({
+        authenticator: { authenticate: async () => ({ privyUserId: "did:privy:admin", privySessionId: "session", wallets: [WEBSITE_ADMIN_WALLET] }) },
+        backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43),
+        fetchBackend: delayed(milliseconds),
+      });
+      const completed = route(125_000)(request(decision));
+      await vi.advanceTimersByTimeAsync(125_000);
+      expect((await completed).status).toBe(200);
+      const stalled = route(200_000)(request(decision));
+      await vi.advanceTimersByTimeAsync(150_000);
+      expect((await stalled).status).toBe(503);
+    } finally {
+      timeout.mockRestore();
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
   it("captures the approved server-side detail after responding, without changing approval or requiring applicant input", async () => {
     const detail = { ...review, request: { projectMetadata: { presentation: { description: "Public project" } } } };
     const fetchBackend = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({ review })).mockResolvedValueOnce(Response.json({ review: detail }));

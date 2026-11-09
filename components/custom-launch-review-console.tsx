@@ -9,6 +9,7 @@ import { customLaunchOwnerException, customLaunchReviewLabel, customLaunchReview
 import { buildOperationsRows, reviewListView, reviewProject, type OperationsReview, type ReviewListView } from "@/lib/launch-operations";
 import styles from "./custom-launch-review-console.module.css";
 import { ReviewHttpError, saveReviewDecision, type ReviewDecision } from "@/lib/custom-launch-review-decision";
+import { REVIEW_DECISION_BROWSER_TIMEOUT_MS } from "@/lib/custom-launch-review-timeouts";
 type ReviewRow = CustomLaunchReview & { launchId: string; requestSummary: Record<string, unknown> };
 type ReviewDetail = CustomLaunchReview & { launchId: string; request: Record<string, unknown>; technicalStatus: Record<string, unknown>; assessment?: unknown; operations?: unknown };
 export function CustomLaunchReviewConsole({ initialReviewId }: { initialReviewId?: string } = {}) {
@@ -45,7 +46,7 @@ function AccountReviews({ account, initialReviewId }: { account: string; initial
         ...(decision.choice === "record_checks" ? { operation: decision.choice, report: decision.report } : decision.choice === "request_information" ? { operation: decision.choice, message: decision.reason, links: [] }
           : decision.choice === "replace" ? { operation: decision.choice, replacementReviewId: decision.replacementReviewId }
           : { decision: decision.choice, reason: decision.reason }) }) : undefined,
-      signal: AbortSignal.timeout(70_000),
+      signal: AbortSignal.timeout(decision ? REVIEW_DECISION_BROWSER_TIMEOUT_MS : 70_000),
     });
     const value = await response.json();
     if (!response.ok) throw new ReviewHttpError(value?.error?.code === "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED" ? "Record passing buy and sell checks for the 0.3% platform fee collected by this pool before approving." : value?.error?.code === "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT" ? "The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it." : response.status === 409 ? "This review changed. Refresh before deciding." : response.status === 403 ? "This wallet is not authorized to review launches." : "Could not load launch reviews. Try again.", response.status);

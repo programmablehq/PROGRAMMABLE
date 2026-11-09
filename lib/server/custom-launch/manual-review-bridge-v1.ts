@@ -8,6 +8,7 @@ import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
 import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticationErrorV1, type WalletPrincipalAuthenticatorV1 } from "../creator-article/wallet-principal.server";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "./wallet-admin-bff-assertion-v2";
 import { rememberApprovedLaunchPresentation } from "../approved-launch-presentation";
+import { REVIEW_DECISION_BACKEND_TIMEOUT_MS } from "@/lib/custom-launch-review-timeouts";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const headers = { "Content-Type": "application/json", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Authorization, X-Privy-Identity-Token" };
@@ -75,7 +76,9 @@ export function createManualReviewBridgeV1(input: {
       const backend = await input.fetchBackend(target, { method: request.method, body: body?.toString("utf8"),
         headers: { Accept: "application/json", "Content-Type": "application/json", Authorization: `Bearer ${input.websiteToken}`,
           "X-Programmable-Privy-User-Id": principal.privyUserId, "X-Programmable-Wallet-Address": getAddress(wallet), ...assertion },
-        cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(reviewId || request.method === "POST" ? 60_000 : 12_000)]) });
+        cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(
+          request.method === "POST" ? REVIEW_DECISION_BACKEND_TIMEOUT_MS : reviewId ? 60_000 : 12_000,
+        )]) });
       if (backend.status === 409) {
         const error = JSON.parse(await boundedBody(backend, 65536));
         const code = ["REVIEW_EMBEDDED_DEADLINE_TOO_SHORT", "REVIEW_REPLAN_REQUIRED", "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED"].includes(error?.error?.code) ? error.error.code : "REVIEW_CHANGED_REFRESH";
