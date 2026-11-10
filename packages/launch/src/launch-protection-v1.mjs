@@ -34,8 +34,10 @@ export function protectedLaunchExemptionsV1(developer, extra = []) {
 async function kit(chainId) {
   const baseKit = Number(chainId) === 8453;
   const hyperKit = Number(chainId) === 999;
-  const root = hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
-  const contractNames = hyperKit ? { ...names, initializer: 'HyperEvmProtectedNativeInitializerV1', hook:'HyperEvmProtectedNative30HookV1', module:'HyperEvmLaunchProtectionModuleV1' } : baseKit ? { ...names, initializer: 'BaseProtectedNativeInitializerV1', hook:'BaseProtectedNative30HookV1', module:'BaseLaunchProtectionModuleV1' } : names;
+  const elysiumKit = Number(chainId) === 99901;
+  const root = elysiumKit ? new URL('../contracts/elysium-launch-protection-v1/', import.meta.url) : hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
+  const prefix=elysiumKit?'Elysium':hyperKit?'HyperEvm':baseKit?'Base':null;
+  const contractNames = prefix ? { ...names, initializer: prefix+'ProtectedNativeInitializerV1', hook:prefix+'ProtectedNative30HookV1', module:prefix+'LaunchProtectionModuleV1' } : names;
   const standardJsonBytes = await readFile(new URL('standard-json.json', root));
   const artifacts = Object.fromEntries(await Promise.all(Object.entries(contractNames).map(async ([role, name]) =>
     [role, JSON.parse(await readFile(new URL(name + '.artifact.json', root), 'utf8'))])));

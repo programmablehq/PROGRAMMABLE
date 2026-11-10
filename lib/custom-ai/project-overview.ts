@@ -45,7 +45,7 @@ export function cachedProjectOverview(value:unknown):ProjectOverview|undefined {
   const v=value as ProjectOverview,c=v.compiler;
   const scenarios=v.scenarios?cachedScenarioOverview(v.scenarios):undefined;
   if(typeof v.requestId!=="string"||!/^[a-zA-Z0-9-]{16,64}$/.test(v.requestId)||typeof v.projectHash!=="string"||!/^sha256:[a-f0-9]{64}$/.test(v.projectHash)
-    ||![1,4663,8453,999].includes(v.chainId)||typeof v.intentRevision!=="string"||!/^[a-f0-9]{64}$/.test(v.intentRevision)
+    ||![1,4663,8453,999,99901].includes(v.chainId)||typeof v.intentRevision!=="string"||!/^[a-f0-9]{64}$/.test(v.intentRevision)
     ||!Number.isInteger(v.sourceFiles)||v.sourceFiles<1||v.sourceFiles>GENERAL_PROJECT_LIMITS.files||!Number.isInteger(v.sourceBytes)||v.sourceBytes<1||v.sourceBytes>GENERAL_PROJECT_LIMITS.sourceBytes
     ||!approvedProjectCompiler(c)
     ||!["pending","compiled","diagnostics"].includes(v.compilation)||v.artifactHash!==undefined&&!/^sha256:[a-f0-9]{64}$/.test(v.artifactHash)

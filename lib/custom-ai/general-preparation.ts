@@ -28,7 +28,7 @@ export type GeneralPrepareSelection = {
 export type GeneralPrepareInput = { selection: GeneralPrepareSelection; controllerKind?: "eoa" };
 export type GeneralLaunchStatus = {
   schemaVersion: "programmable.wallet-launch-status.v1"; kind: "graph-v3" | "plan-v1";
-  chainId: "1" | "4663" | "8453" | "999"; resourceId: string; controller: string;
+  chainId: "1" | "4663" | "8453" | "999" | "99901"; resourceId: string; controller: string;
   requestHash: `sha256:${string}`; rawRequestSha256: `sha256:${string}` | null;
   status: string; errorCode: string | null; createdAt: string; updatedAt: string; checkedAt: string;
   deadline: string | null; launchReady: false;
@@ -108,7 +108,7 @@ export function readGeneralPreparation(value: unknown, account: string, id?: str
     "packState", "code", "requestHash", "createdAt", "updatedAt", "expiresAt", "preflight", "submission", "launchReady"])
     || v.version !== 1 || v.launchReady !== false || !identifier(v.id) || id !== undefined && v.id !== id
     || typeof v.account !== "string" || !/^0x[a-f0-9]{40}$/iu.test(v.account) || v.account.toLowerCase() !== account.toLowerCase()
-    || ![1, 4663, 8453, 999].includes(Number(v.chainId)) || typeof v.chainId !== "number"
+    || ![1, 4663, 8453, 999, 99901].includes(Number(v.chainId)) || typeof v.chainId !== "number"
     || !identifier(v.sourceId) || !identifier(v.conversationId) || !hash(v.projectHash) || !hash(v.artifactHash)
     || !["packing", "interrupted", "failed", "complete"].includes(String(v.packState))
     || ["createdAt", "updatedAt", "expiresAt"].some(key => !Number.isSafeInteger(v[key]) || Number(v[key]) < 0)
@@ -120,7 +120,7 @@ export function readGeneralPreparation(value: unknown, account: string, id?: str
 
 export function generalSubmissionUrl(preparation: GeneralPreparationView): string | undefined {
   const id = preparation.submission?.state === "completed" ? preparation.submission.resourceId : undefined;
-  if (!uuid(id) || ![1, 4663, 8453, 999].includes(preparation.chainId)) return;
+  if (!uuid(id) || ![1, 4663, 8453, 999, 99901].includes(preparation.chainId)) return;
   const query = new URLSearchParams(preparation.chainId === 4663 ? { view: "history", chainId: "4663", launchId: id }
     : { launchId: id, ...(preparation.chainId === 1 ? {} : { chainId: String(preparation.chainId) }) });
   return `/developers/api-keys?${query}`;

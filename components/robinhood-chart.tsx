@@ -7,7 +7,7 @@ import styles from "./robinhood-token-view.module.css";
 import liveStyles from "./robinhood-live-chart.module.css";
 
 type ChartMarket = RobinhoodCoinMarket & Readonly<{ source?: "dexscreener" | "uniswap-v4" | "codex" }>;
-type ChartProps = Readonly<{ poolId: string; tokenAddress?: string; name: string; market?: ChartMarket | null; chainId?: 1 | 4663 | 8453 | 999 }>;
+type ChartProps = Readonly<{ poolId: string; tokenAddress?: string; name: string; market?: ChartMarket | null; chainId?: 1 | 4663 | 8453 | 999 | 99901 }>;
 export type RobinhoodLivePrice = Readonly<{ time: number; price: number }>;
 
 const MAX_POINTS = 120;

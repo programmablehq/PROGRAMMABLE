@@ -7,7 +7,7 @@ export function openingFixtureInputs(proposal:RecordValue,chainId:BuilderChainId
   const world=proposal.world as RecordValue|undefined,opening=(proposal.deployment as RecordValue|undefined)?.openingPrice as RecordValue|undefined;
   if(world?.kind!=="v4-protected-native-token-v1"||!opening)return;
   if(typeof opening.supply!=="string"||typeof opening.targetFdvUsd!=="string"||typeof world.nativeUsdAnswer!=="string"||!/^\d{1,38}$/u.test(world.nativeUsdAnswer))throw new TypeError("Declare bounded synthetic opening inputs.");
-  const price=protectedOpeningPriceV1({supply:opening.supply,targetFdvUsd:opening.targetFdvUsd,answer:BigInt(world.nativeUsdAnswer),feedDecimals:chainId===999?18:8});
+  const price=protectedOpeningPriceV1({supply:opening.supply,targetFdvUsd:opening.targetFdvUsd,answer:BigInt(world.nativeUsdAnswer),feedDecimals:(chainId===999||chainId===99901)?18:8});
   return {source:"pinned-protected-opening-price",synthetic:true,tick:String(price.initialTick),sqrtPriceX96:String(price.sqrtPriceX96),fdvUsd:String(price.openingFdvUsd),supply:opening.supply,targetFdvUsd:opening.targetFdvUsd,nativeUsdAnswer:world.nativeUsdAnswer};
 }
 export function resolveOpeningFixtureValue(value:unknown,inputs?:OpeningFixtureInputs,depth=0,nodes={count:0}):unknown{

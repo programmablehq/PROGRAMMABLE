@@ -60,7 +60,7 @@ const exchangeKey = (operation: GeneralExchangeOperation) => operation === "crea
 function validRecord(value: unknown, id: string): GeneralPreparation {
   const v = value as GeneralPreparation | undefined;
   if (!v || v.version !== 1 || v.id !== id || !validId(id) || !/^0x[a-f0-9]{40}$/iu.test(v.account)
-    || ![1,4663,8453,999].includes(v.chainId) || !v.identity || !v.packLease || !v.selection
+    || ![1,4663,8453,999,99901].includes(v.chainId) || !v.identity || !v.packLease || !v.selection
     || !["packing","failed","complete"].includes(v.packState)) throw corrupt();
   return v;
 }

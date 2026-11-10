@@ -8,7 +8,7 @@ const same=(a:unknown,b:string)=>typeof a==="string"&&a.toLowerCase()===b.toLowe
 const object=(v:unknown):Record<string,unknown>|undefined=>v&&typeof v==="object"&&!Array.isArray(v)?v as Record<string,unknown>:undefined;
 export function checkedProductActionReadCall(call:ProductActionReadCall):ProductActionReadCall{
   if(!call||Object.keys(call).sort().join()!=="blockHash,blockNumber,chainId,data,from,to"
-    ||![1,4663,8453,999].includes(call.chainId)||!/^0x[0-9a-f]{40}$/i.test(call.from)||!/^0x[0-9a-f]{40}$/i.test(call.to)
+    ||![1,4663,8453,999,99901].includes(call.chainId)||!/^0x[0-9a-f]{40}$/i.test(call.from)||!/^0x[0-9a-f]{40}$/i.test(call.to)
     ||!/^0x(?:[0-9a-f]{2}){4,8192}$/i.test(call.data)||!/^\d{1,30}$/.test(call.blockNumber)||!/^0x[0-9a-f]{64}$/i.test(call.blockHash))throw new TypeError("Use one bound product read.");
   return Object.freeze({...call});
 }

@@ -1,4 +1,7 @@
 import "server-only";
+import { readElysiumLaunchEvidence } from "@/lib/server/elysium-explore";
+import { EVM_CUSTOM_CHAINS } from "@/lib/evm-custom-chains";
+type TradingChain = 999 | 99901;
 import { boundedEvmFetch } from "@/lib/server/evm-bounded-fetch";
 import { createPublicClient, http, decodeFunctionResult, encodeFunctionData, encodeAbiParameters, getAddress, keccak256, parseAbi, toHex, type Address, type Hex } from "viem";
 import { canonicalBrowserJsonV2, canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
@@ -34,16 +37,17 @@ const origins = new Map<string, {
 export class EvmSwapError extends Error {
   constructor(message: string, readonly status = 503) { super(message); }
 }
-export function hyperEvmSwapRpcs(): readonly [
+export function evmCustomSwapRpcs(chainId: TradingChain): readonly [
   Rpc,
   Rpc
 ] {
-  const endpoints = [process.env.HYPEREVM_RPC_PRIMARY_URL, process.env.HYPEREVM_RPC_SECONDARY_URL ?? "https://rpc.hyperliquid.xyz/evm"];
+  const network=EVM_CUSTOM_CHAINS[chainId];
+  const endpoints = chainId===99901 ? [process.env.ELYSIUM_RPC_PRIMARY_URL, process.env.ELYSIUM_RPC_SECONDARY_URL ?? "https://rpc.elysium.kinetiq.xyz"] : [process.env.HYPEREVM_RPC_PRIMARY_URL, process.env.HYPEREVM_RPC_SECONDARY_URL ?? "https://rpc.hyperliquid.xyz/evm"];
   const hosts = endpoints.map(value => { if (!value)
-    throw new EvmSwapError("HyperEVM trading is temporarily unavailable."); const u = new URL(value); if (u.protocol !== "https:" || u.username || u.password || u.hash)
-    throw new EvmSwapError("HyperEVM trading is temporarily unavailable."); return u.hostname; });
-  if (hosts[0] === hosts[1] || !hosts.includes("rpc.hyperliquid.xyz"))
-    throw new EvmSwapError("Independent HyperEVM providers are required.");
+    throw new EvmSwapError(`${network.name} trading is temporarily unavailable.`); const u = new URL(value); if (u.protocol !== "https:" || u.username || u.password || u.hash)
+    throw new EvmSwapError(`${network.name} trading is temporarily unavailable.`); return u.hostname; });
+  if (hosts[0] === hosts[1] || !hosts.includes(chainId===99901?"rpc.elysium.kinetiq.xyz":"rpc.hyperliquid.xyz"))
+    throw new EvmSwapError(`Independent ${network.name} providers are required.`);
   return endpoints.map(endpoint => {
     let client = clients.get(endpoint!);
     if (!client) {
@@ -72,11 +76,11 @@ export function hyperEvmSwapRpcs(): readonly [
 const agree = async (rpcs: readonly [
   Rpc,
   Rpc
-], method: string, params: readonly unknown[]) => {
+], method: string, params: readonly unknown[], chainId:TradingChain=999) => {
   const values = await Promise.all(rpcs.map(r => r(method, params)));
   const comparable = values.map(value => {
-    if (method === "eth_getTransactionReceipt" && value !== null) return receiptForConsensus(value);
-    if (method !== "eth_getBlockByNumber" || value === null || typeof value !== "object" || Array.isArray(value)) return value;
+    if (chainId===999 && method === "eth_getTransactionReceipt" && value !== null) return receiptForConsensus(value);
+    if (chainId!==999 || method !== "eth_getBlockByNumber" || value === null || typeof value !== "object" || Array.isArray(value)) return value;
     // HyperEVM providers serialize the same block differently. `size` is
     // transport metadata; the block hash and all remaining fields must agree.
     const block = { ...value as Record<string, unknown> };
@@ -88,6 +92,7 @@ const agree = async (rpcs: readonly [
   return values[0];
 };
 export { agree as readHyperEvmRpcAgreement };
+export const hyperEvmSwapRpcs=()=>evmCustomSwapRpcs(999);
 
 function receiptForConsensus(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new EvmSwapError("Invalid HyperEVM receipt.");
@@ -118,13 +123,11 @@ function receiptForConsensus(value: unknown) {
   delete receipt.transactionIndex;
   return { ...receipt, logs };
 }
-export async function readHyperEvmSwapCheckpoint(rpcs: readonly [
-  Rpc,
-  Rpc
-]) {
+export async function readHyperEvmSwapCheckpoint(rpcs: readonly [Rpc,Rpc], chainId:TradingChain=999) {
+  if(quantity(await agree(rpcs,"eth_chainId",[],chainId))!==BigInt(chainId)) throw new EvmSwapError("Trading chain differs.");
   const heads = await Promise.all(rpcs.map(r => r("eth_blockNumber", []).then(quantity)));
   const number = heads[0] < heads[1] ? heads[0] : heads[1];
-  const raw = await agree(rpcs, "eth_getBlockByNumber", [toHex(number), false]) as {
+  const raw = await agree(rpcs, "eth_getBlockByNumber", [toHex(number), false],chainId) as {
     number: Hex;
     hash: Hex;
     timestamp: Hex;
@@ -140,13 +143,13 @@ async function call(rpcs: readonly [
 async function origin(launch: FinalizedCustomLaunchMetadataV1, rpcs: readonly [
   Rpc,
   Rpc
-]): Promise<EvmCustomSwapDescriptor> {
-  const p = EVM_SWAP_PROTOCOLS[999];
+],chainId:TradingChain): Promise<EvmCustomSwapDescriptor> {
+  const p = EVM_SWAP_PROTOCOLS[chainId];
   if (!launch.poolKey || !launch.creator || !launch.routingFeePolicy || !same(launch.router, p.router) || !same(launch.poolManager, p.poolManager))
     throw new EvmSwapError("This launch has no verified trading route.");
   const reference = { blockHash: launch.finality.blockHash, requireCanonical: true };
   const [receiptRaw, stampRaw, launchIdRaw, ...codes] = await Promise.all([
-    agree(rpcs, "eth_getTransactionReceipt", [launch.finality.transactionHash]),
+    agree(rpcs, "eth_getTransactionReceipt", [launch.finality.transactionHash],chainId),
     call(rpcs, getAddress(p.router), encodeFunctionData({ abi: STAMP, functionName: "launchStamp", args: [launch.routerLaunchId] }), reference),
     call(rpcs, getAddress(p.router), encodeFunctionData({ abi: STAMP, functionName: "launchIdByToken", args: [launch.token] }), reference),
     ...([p.router, p.poolManager, p.universalRouter, p.permit2] as Address[]).map(a => agree(rpcs, "eth_getCode", [a, reference]).then(hex)),
@@ -173,24 +176,24 @@ async function origin(launch: FinalizedCustomLaunchMetadataV1, rpcs: readonly [
   const [tokenDecimals, quoteDecimals] = await Promise.all([decimals(launch.token), decimals(quote)]);
   if ([tokenDecimals, quoteDecimals].some(v => !Number.isInteger(v) || v < 0 || v > 36))
     throw new EvmSwapError("Unsupported token precision.");
-  return { chainId: 999, token: launch.token, creator: launch.creator, poolId: launch.poolId, poolKey: key, launchId: launch.routerLaunchId, launchTransaction: launch.finality.transactionHash, stampHash: binding.stampHash, tokenDecimals, quoteDecimals, quoteSymbol: same(quote, NATIVE) ? "HYPE" : `${quote.slice(0, 6)}…${quote.slice(-4)}`, quoteAsset: quote };
+  return { chainId, token: launch.token, creator: launch.creator, poolId: launch.poolId, poolKey: key, launchId: launch.routerLaunchId, launchTransaction: launch.finality.transactionHash, stampHash: binding.stampHash, tokenDecimals, quoteDecimals, quoteSymbol: same(quote, NATIVE) ? "HYPE" : `${quote.slice(0, 6)}…${quote.slice(-4)}`, quoteAsset: quote };
 }
-export async function readHyperEvmSwapDescriptor(token: string, rpcs = hyperEvmSwapRpcs(), readLaunch = readHyperEvmLaunchEvidence) {
+export async function readEvmCustomSwapDescriptor(token: string, rpcs:readonly [Rpc,Rpc], readLaunch:typeof readHyperEvmLaunchEvidence|undefined, chainId:TradingChain) {
   if (!/^0x[0-9a-f]{40}$/i.test(token))
     throw new EvmSwapError("Invalid token.", 400);
-  const launch = await readLaunch(token);
+  const launch = await (readLaunch ?? (chainId===99901?readElysiumLaunchEvidence:readHyperEvmLaunchEvidence))(token);
   if (!launch)
     throw new EvmSwapError("This launch is not indexed yet.", 404);
-  const key = launch.finality.transactionHash, prior = origins.get(key);
+  const key = `${chainId}:${launch.finality.transactionHash}`, prior = origins.get(key);
   if (prior && prior.expires > Date.now())
     return prior.value;
-  const value = origin(launch, rpcs).catch(error => { origins.delete(key); throw error; });
+  const value = origin(launch, rpcs,chainId).catch(error => { origins.delete(key); throw error; });
   if (origins.size >= 128)
     origins.delete(origins.keys().next().value!);
   origins.set(key, { expires: Date.now() + 300000, value });
   return value;
 }
-export async function prepareHyperEvmSwap(input: unknown, dependencies: {
+export async function prepareEvmCustomSwap(input: unknown, dependencies: {
   rpcs?: readonly [
     Rpc,
     Rpc
@@ -201,7 +204,7 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
   try { request = parseEvmCustomSwapRequest(input); }
   catch { throw new EvmSwapError("Invalid trade request.", 400); }
   const now = Math.floor(Date.now() / 1000);
-  if (request.chainId !== 999)
+  if (request.chainId !== 999 && request.chainId !== 99901)
     throw new EvmSwapError("Unsupported trade chain.", 400);
   if (BigInt(request.deadline) < BigInt(now + 30) || BigInt(request.deadline) > BigInt(now + 1200))
     throw new EvmSwapError("Refresh your trade request.", 400);
@@ -213,9 +216,9 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
     throw new EvmSwapError("Trade checks are busy. Try again shortly.", 429);
   activePreparations++;
   const work = (async () => {
-    const rpcs = dependencies.rpcs ?? hyperEvmSwapRpcs();
-    const descriptor = await readHyperEvmSwapDescriptor(request.token, rpcs, dependencies.readLaunch);
-    const block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true }, p = EVM_SWAP_PROTOCOLS[999];
+    const rpcs = dependencies.rpcs ?? evmCustomSwapRpcs(request.chainId as TradingChain);
+    const descriptor = await readEvmCustomSwapDescriptor(request.token, rpcs, dependencies.readLaunch,request.chainId as TradingChain);
+    const block = await readHyperEvmSwapCheckpoint(rpcs,request.chainId as TradingChain), reference = { blockHash: block.hash, requireCanonical: true }, p = EVM_SWAP_PROTOCOLS[request.chainId];
     const inputToken = request.buy ? descriptor.quoteAsset : descriptor.token, output = request.buy ? descriptor.token : descriptor.quoteAsset;
     // The same caller and balances are used; only quote helper code and transient approvals are overridden.
     const tx = buildEvmCustomSwap(descriptor, request, "0");
@@ -248,18 +251,18 @@ export async function prepareHyperEvmSwap(input: unknown, dependencies: {
   return work;
 }
 const HOOK_FEES = parseAbi(["function feeVault() view returns(address)", "function openingTaxVault() view returns(address)"]);
-export async function prepareHyperEvmFeeClaim(input: unknown, dependencies: {
+export async function prepareEvmCustomFeeClaim(input: unknown, dependencies: {
   rpcs?: readonly [Rpc, Rpc];
   readLaunch?: typeof readHyperEvmLaunchEvidence;
 } = {}) {
   const q = input as {
-    chainId: 999;
+    chainId: TradingChain;
     token: Address;
     owner: Address;
     vaultKind: "fees" | "opening";
     recipientKind: "creator" | "platform";
   };
-  if (!q || Object.keys(q).sort().join() !== "chainId,owner,recipientKind,token,vaultKind" || q.chainId !== 999 || ![q.owner, q.token].every(v => typeof v === "string" && /^0x[0-9a-f]{40}$/i.test(v)) || !["fees", "opening"].includes(q.vaultKind) || !["creator", "platform"].includes(q.recipientKind))
+  if (!q || Object.keys(q).sort().join() !== "chainId,owner,recipientKind,token,vaultKind" || ![999,99901].includes(q.chainId) || ![q.owner, q.token].every(v => typeof v === "string" && /^0x[0-9a-f]{40}$/i.test(v)) || !["fees", "opening"].includes(q.vaultKind) || !["creator", "platform"].includes(q.recipientKind))
     throw new EvmSwapError("Invalid fee claim.", 400);
   const key = canonicalBrowserJsonV2(q), prior = inflightFeeClaims.get(key);
   if (prior) return prior;
@@ -267,14 +270,14 @@ export async function prepareHyperEvmFeeClaim(input: unknown, dependencies: {
     throw new EvmSwapError("Transaction checks are busy. Try again shortly.", 429);
   activePreparations++;
   const work = (async () => {
-    const rpcs = dependencies.rpcs ?? hyperEvmSwapRpcs(), descriptor = await readHyperEvmSwapDescriptor(q.token, rpcs, dependencies.readLaunch), block = await readHyperEvmSwapCheckpoint(rpcs), reference = { blockHash: block.hash, requireCanonical: true };
+    const rpcs = dependencies.rpcs ?? evmCustomSwapRpcs(q.chainId), descriptor = await readEvmCustomSwapDescriptor(q.token, rpcs, dependencies.readLaunch,q.chainId), block = await readHyperEvmSwapCheckpoint(rpcs,q.chainId), reference = { blockHash: block.hash, requireCanonical: true };
     const fn = q.vaultKind === "fees" ? "feeVault" : "openingTaxVault";
     const vault = decodeFunctionResult({ abi: HOOK_FEES, functionName: fn, data: await call(rpcs, descriptor.poolKey.hooks, encodeFunctionData({ abi: HOOK_FEES, functionName: fn }), reference) });
     const read = async (fn: "kernel" | "poolManager" | "creatorRecipient" | "PLATFORM_RECIPIENT" | "creatorAccrued" | "platformAccrued") => decodeFunctionResult({ abi: EVM_FEE_VAULT_ABI, functionName: fn, data: await call(rpcs, vault, encodeFunctionData({ abi: EVM_FEE_VAULT_ABI, functionName: fn }), reference) });
     const [kernel, manager, recipientRaw, amountRaw] = await Promise.all([read("kernel"), read("poolManager"), read(q.recipientKind === "creator" ? "creatorRecipient" : "PLATFORM_RECIPIENT"), read(q.recipientKind === "creator" ? "creatorAccrued" : "platformAccrued")]);
-    if (typeof kernel !== "string" || !same(kernel, descriptor.poolKey.hooks) || typeof manager !== "string" || !same(manager, EVM_SWAP_PROTOCOLS[999].poolManager) || typeof recipientRaw !== "string" || typeof amountRaw !== "bigint")
+    if (typeof kernel !== "string" || !same(kernel, descriptor.poolKey.hooks) || typeof manager !== "string" || !same(manager, EVM_SWAP_PROTOCOLS[q.chainId].poolManager) || typeof recipientRaw !== "string" || typeof amountRaw !== "bigint")
       throw new EvmSwapError("Fee vault binding changed.");
-    if (q.recipientKind === "platform" && !same(recipientRaw, EVM_SWAP_PROTOCOLS[999].platformTreasury))
+    if (q.recipientKind === "platform" && !same(recipientRaw, EVM_SWAP_PROTOCOLS[q.chainId].platformTreasury))
       throw new EvmSwapError("Fee recipient changed.");
     if (amountRaw === 0n)
       throw new EvmSwapError("No fees are available to claim.", 409);
@@ -288,3 +291,8 @@ export async function prepareHyperEvmFeeClaim(input: unknown, dependencies: {
   inflightFeeClaims.set(key, work);
   return work;
 }
+
+// Compatibility exports retain existing integrations on HyperEVM.
+export const readHyperEvmSwapDescriptor=(token:string,rpcs=hyperEvmSwapRpcs(),readLaunch=readHyperEvmLaunchEvidence)=>readEvmCustomSwapDescriptor(token,rpcs,readLaunch,999);
+export const prepareHyperEvmSwap=prepareEvmCustomSwap;
+export const prepareHyperEvmFeeClaim=prepareEvmCustomFeeClaim;

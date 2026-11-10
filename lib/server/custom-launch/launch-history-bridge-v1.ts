@@ -159,7 +159,7 @@ export type DeveloperCustomLaunchV2 = Readonly<{
 }>;
 
 export type DeveloperCustomLaunchV3 = Readonly<{
-  chainId?: "1" | "8453" | "999";
+  chainId?: "1" | "8453" | "999" | "99901";
   manualReview?: CustomLaunchReview;
   schemaVersion: "programmable.custom-launch.v3";
   launchId: string;
@@ -438,7 +438,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         const expectedWallet = walletAddress.toLowerCase();
         const readVersion = async (version: BackendHistoryVersion) => {
           const cursorState = query.cursor?.[version];
-          if (cursorState?.done || ((query.chainId === "8453" || query.chainId === "999") && version !== "v3")) {
+          if (cursorState?.done || ((query.chainId === "8453" || query.chainId === "999" || query.chainId === "99901") && version !== "v3")) {
             return Object.freeze({
               version,
               launches: Object.freeze([] as DeveloperCustomLaunch[]),
@@ -447,7 +447,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             });
           }
           const backendUrl = new URL(
-            (query.chainId === "8453" || query.chainId === "999") && version === "v3"
+            (query.chainId === "8453" || query.chainId === "999" || query.chainId === "99901") && version === "v3"
               ? `/v4/chains/${query.chainId}/wallet-admin/custom-launches`
               : version === "v4"
               ? "/v4/chains/4663/wallet-admin/custom-launches"
@@ -588,7 +588,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         );
         const readVersion = async (version: BackendHistoryVersion) => {
           const backendUrl = new URL(
-            (walletInput.chainId === "8453" || walletInput.chainId === "999") && version === "v3"
+            (walletInput.chainId === "8453" || walletInput.chainId === "999" || walletInput.chainId === "99901") && version === "v3"
               ? `/v4/chains/${walletInput.chainId}/wallet-admin/custom-launches/${encodeURIComponent(launchId.toLowerCase())}`
               : version === "v4"
               ? `/v4/chains/4663/wallet-admin/custom-launches/${
@@ -862,7 +862,7 @@ function exactHistoryQuery(request: Request) {
     throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   }
   const chainId = search.get("chainId") ?? "1";
-  if (chainId !== "1" && chainId !== "8453" && chainId !== "999") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
+  if (chainId !== "1" && chainId !== "8453" && chainId !== "999" && chainId !== "99901") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   const limitValue = search.get("limit");
   const limit = limitValue === null
     ? DEFAULT_PAGE_SIZE
@@ -890,7 +890,7 @@ function exactWalletQuery(request: Request) {
   const walletAddress = search.get("walletAddress");
   const versionValue = search.get("version");
   const chainId = search.get("chainId") ?? "1";
-  if (chainId !== "1" && chainId !== "8453" && chainId !== "999" || chainId !== "1" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
+  if (chainId !== "1" && chainId !== "8453" && chainId !== "999" && chainId !== "99901" || chainId !== "1" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   if (
     !walletAddress ||
     (versionValue !== null
@@ -1717,7 +1717,7 @@ function parseLaunch(
   value: JsonValue,
   expectedWallet: string,
   version: BackendHistoryVersion,
-  options: Readonly<{ requireAuthorizedArtifactBinding: boolean; chainId?: "1" | "8453" | "999" }>,
+  options: Readonly<{ requireAuthorizedArtifactBinding: boolean; chainId?: "1" | "8453" | "999" | "99901" }>,
 ): DeveloperCustomLaunch {
   const record = jsonRecord(value);
   if (record.chainId !== undefined && record.chainId !== (options.chainId ?? "1")) throw new BackendContractErrorV1();
@@ -1936,7 +1936,7 @@ function validatedV3FundingIntentHash(
 
 function parseOptionalWalletHandoff(
   record: Readonly<Record<string, JsonValue>>,
-  chainId: "1" | "8453" | "999" = "1",
+  chainId: "1" | "8453" | "999" | "99901" = "1",
 ) {
   const hasHandoff = [
     "walletHandoffUrl",

@@ -2,12 +2,12 @@ const launchIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f
 
 /** Ethereum graph handoffs omit chainId. Robinhood's Plan and V4 graph
  * handoffs declare 4663 explicitly; never reinterpret an Ethereum ID as V4. */
-export function developerLaunchDestination(query: URLSearchParams): { launchId: string | null; chainId: "4663" | "8453" | "999" | null } {
+export function developerLaunchDestination(query: URLSearchParams): { launchId: string | null; chainId: "4663" | "8453" | "999" | "99901" | null } {
   const candidate = query.get("launchId"), chainId = query.get("chainId");
-  const validChain = chainId === null || ["1", "4663", "8453", "999"].includes(chainId);
+  const validChain = chainId === null || ["1", "4663", "8453", "999", "99901"].includes(chainId);
   const launchId = candidate && launchIdPattern.test(candidate) && query.getAll("launchId").length === 1
     && query.getAll("chainId").length <= 1 && validChain ? candidate.toLowerCase() : null;
-  return { launchId, chainId: chainId === "8453" || chainId === "999" ? chainId : chainId === "1" || launchId && chainId === null ? null : "4663" };
+  return { launchId, chainId: chainId === "8453" || chainId === "999" || chainId === "99901" ? chainId : chainId === "1" || launchId && chainId === null ? null : "4663" };
 }
 
 export function developerApiKeysInitialSection(

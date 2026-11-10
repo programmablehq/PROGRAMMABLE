@@ -1,3 +1,4 @@
+import { readElysiumToken } from "./elysium-explore";
 import { readHyperEvmToken } from "./hyperevm-explore";
 import { readBaseToken } from "./base-explore";
 import "server-only";
@@ -13,6 +14,7 @@ import { tokenDetailPageChainId } from "@/lib/token-page-chain";
 export const resolveTokenPage = cache(async (address: string, explicitChain?: string | string[]) => {
   const chainId = tokenDetailPageChainId(explicitChain);
   if (chainId === null) return null;
+  if (explicitChain === "99901") return readElysiumToken(address);
   if (explicitChain === "999") return readHyperEvmToken(address);
   if (explicitChain === "8453") return readBaseToken(address);
   if (explicitChain === "1") return readEthereumToken(address);

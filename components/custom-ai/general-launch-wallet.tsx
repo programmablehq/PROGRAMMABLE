@@ -36,7 +36,7 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
   }
   function syncRecovery() {
     try { setRecovery(subject.chainId === 4663 ? { plan: parseLaunchSendAttemptV1(readLaunchSendJournalV1(subject.controller), subject.controller) }
-      : { graph: readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999") }); }
+      : { graph: readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999" | "99901") }); }
     catch (caught) { setRecovery({ error: caught instanceof Error ? caught.message : "The original wallet attempt could not be read." }); }
   }
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     // API, start endpoint or cost estimate is called until an explicit click.
     const sync = () => {
       try { setRecovery(subject.chainId === 4663 ? { plan: parseLaunchSendAttemptV1(readLaunchSendJournalV1(subject.controller), subject.controller) }
-        : { graph: readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999") }); }
+        : { graph: readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999" | "99901") }); }
       catch (caught) { setRecovery({ error: caught instanceof Error ? caught.message : "The original wallet attempt could not be read." }); }
     };
     sync(); return subject.chainId === 4663 ? subscribeLaunchSendV1(sync) : subscribeGraphWalletAttempts(sync);
@@ -82,9 +82,9 @@ export default function GeneralLaunchWallet({ subject, name, headers, disabled, 
     } else {
       const finalHash = await generalGraphFinalizedReceipt(subject, fresh); assertCurrent();
       if (finalHash) {
-        await withGeneralWalletJournalLock(subject.controller, String(subject.chainId) as "1" | "8453" | "999", async () => {
+        await withGeneralWalletJournalLock(subject.controller, String(subject.chainId) as "1" | "8453" | "999" | "99901", async () => {
           assertCurrent();
-          const attempt = readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999").find(item => item.requestId === subject.resourceId);
+          const attempt = readGraphWalletAttempts(subject.controller, String(subject.chainId) as "1" | "8453" | "999" | "99901").find(item => item.requestId === subject.resourceId);
           if (attempt) {
             if (attempt.requestHash !== subject.requestHash || attempt.transactionHash && attempt.transactionHash !== finalHash) throw Error("The final transaction differs from the original saved attempt. Keep its receipt for reconciliation.");
             await releaseFinalizedBrowserWalletRequest({ account: subject.controller, chainId: String(subject.chainId), requestSubject: JSON.stringify(["custom-ai-graph-wallet-action-v1", attempt.actionHash]), assertCurrentSession: assertCurrent });

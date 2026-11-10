@@ -1,3 +1,4 @@
+import { ELYSIUM_CUSTOM_ROOTS_V1 } from "./elysium-release-v1";
 import { HYPEREVM_CUSTOM_ROOTS_V1 } from "./hyperevm-release-v1";
 import {
   decodeAbiParameters,
@@ -21,7 +22,8 @@ export const CUSTOM_LAUNCH_MAINNET_ROUTER_V1 =
   CANONICAL_LAUNCH_STAMP_V1.routerAddress;
 
 export const CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1 = "0xBE4bF6Ac8c6F012E1C8f25747A9fBccB2FDAC4C3" as const;
-export function customLaunchChainForRouterV1(value: unknown): "1" | "8453" | "999" | undefined {
+export function customLaunchChainForRouterV1(value: unknown): "1" | "8453" | "999" | "99901" | undefined {
+  if (sameAddress(value, ELYSIUM_CUSTOM_ROOTS_V1.router)) return "99901";
   if (sameAddress(value, HYPEREVM_CUSTOM_ROOTS_V1.router)) return "999";
   if (sameAddress(value, BASE_CUSTOM_ROOTS_V1.router)) return "8453";
   if (sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_V1) || sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1)) return "1";
@@ -31,7 +33,7 @@ export function isCustomLaunchRouterV1(value: unknown): boolean {
   return customLaunchChainForRouterV1(value) !== undefined;
 }
 export function customLaunchMaximumLifetimeSecondsV1(router: unknown): bigint {
-  return (sameAddress(router, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1) || sameAddress(router, BASE_CUSTOM_ROOTS_V1.router) || sameAddress(router, HYPEREVM_CUSTOM_ROOTS_V1.router)) ? 86_400n : 3_600n;
+  return (sameAddress(router, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1) || sameAddress(router, BASE_CUSTOM_ROOTS_V1.router) || sameAddress(router, HYPEREVM_CUSTOM_ROOTS_V1.router) || sameAddress(router, ELYSIUM_CUSTOM_ROOTS_V1.router)) ? 86_400n : 3_600n;
 }
 
 const UINT256_MAXIMUM = (1n << 256n) - 1n;
@@ -62,7 +64,7 @@ const LAUNCH_AND_STAMP_PARAMETERS_V1 = parseAbiParameters(
 );
 
 export type CustomLaunchWalletActionV1 = Readonly<{
-  chainId: "1" | "8453" | "999";
+  chainId: "1" | "8453" | "999" | "99901";
   from: Address;
   to: Address;
   data: Hex;

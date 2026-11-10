@@ -29,7 +29,7 @@ export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus 
       openingTaxRecipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da" };
     if (typeof v.required !== "boolean" || v.unsupportedLegacyLaunches !== (v.required ? "paused" : "unchanged")
       || Object.entries(expected).some(([key, expected]) => v[key] !== expected)
-      || !Array.isArray(v.supportedChains) || !same([...v.supportedChains].sort(), ["1","4663","8453","999"])) throw Error();
+      || !Array.isArray(v.supportedChains) || !same([...v.supportedChains].sort(), ["1","4663","8453","999","99901"])) throw Error();
     return { required: v.required, openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
       openingFeePpm: 990000, openingSeconds: 30, buyerLimitBps: 200, recipientLimitBps: 200,
       protectionSeconds: 300, maximumAdditionalTaxExemptWallets: 6, minimumFdvUsd: "15000" } };
@@ -37,7 +37,7 @@ export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus 
 }
 function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | undefined, legacy: LaunchProductionContext["protections"]) {
   if (!status) return { version: 1 as const, protections: legacy };
-  const required = status.required || chainId === 8453 || chainId === 999;
+  const required = status.required || chainId === 8453 || chainId === 999 || chainId === 99901;
   if (legacy && !same(legacy, status.protections)) throw unavailable();
   const pins=PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
   return { version: 3 as const, protections: required ? status.protections : null,
@@ -55,7 +55,7 @@ function binding(address: unknown, runtimeCodeHash: unknown): ProductionBinding 
 }
 function policyFee(value: unknown, chainId: BuilderChainId): LaunchProductionContext["tradeFee"] {
   const p = object(value), d = object(p.defaultCollection);
-  if (p.schemaVersion !== `programmable.${chainId === 8453 ? "base" : chainId === 999 ? "hyperevm" : "ethereum"}-programmable-trade-fee-policy.v1`
+  if (p.schemaVersion !== `programmable.${chainId === 8453 ? "base" : chainId === 99901 ? "elysium" : chainId === 999 ? "hyperevm" : "ethereum"}-programmable-trade-fee-policy.v1`
     || p.rateDenominator !== "1000000" || !/^(?:0|[1-9][0-9]{0,6})$/u.test(String(p.ratePpm))
     || Number(p.ratePpm) > 1_000_000 || Number(p.ratePpm) !== Number(p.rateBps) * 100
     || d.mode !== (chainId === 1 ? "programmable_routed" : "pool_enforced")) throw Error();
@@ -133,7 +133,7 @@ export function projectLaunchProductionContext(value: unknown, chainId: BuilderC
  * profile. All addresses, hashes, fees and protections still pass the same
  * closed validator. This snapshot cannot admit or prepare a launch. */
 export function projectLaunchBuildContext(value: unknown, chainId: BuilderChainId, protectionValue?: unknown): LaunchProductionContext {
-  if (chainId !== 8453 && chainId !== 999) return projectLaunchProductionContext(value, chainId, protectionValue);
+  if (chainId !== 8453 && chainId !== 999 && chainId !== 99901) return projectLaunchProductionContext(value, chainId, protectionValue);
   try {
     const cap = object(value), profile = object(cap.profile);
     if (typeof profile.productionLaunchAuthorized !== "boolean"

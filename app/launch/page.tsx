@@ -24,7 +24,7 @@ export default async function LaunchPage() {
   const initialViewChainId = parseViewChainId(
     requestCookies.get(VIEW_CHAIN_COOKIE_NAME)?.value,
   );
-  if (initialViewChainId === 8453 || initialViewChainId === 999) {
+  if (initialViewChainId === 8453 || initialViewChainId === 999 || initialViewChainId === 99901) {
     const network = EVM_CUSTOM_CHAINS[initialViewChainId];
     return <div className={studioStyles.launchPage}><section className={styles.customEntry}>
       <h1>Launch on {network.name}</h1>

@@ -227,7 +227,7 @@ Use setupPatch.socialPost for a user-provided X post URL (/handle/status/id), se
 Set each field to null unless the user
 asks to set or change it. Apply explicit coin details in chat even without a request to change the hook.
 When building a named coin, include its supplied name and ticker in setupPatch as well as the source.
-Use chainId 1 for Ethereum mainnet, 4663 for Robinhood, 8453 for Base and 999 for HyperEVM. Never infer an unsupported chain.
+Use chainId 1 for Ethereum mainnet, 4663 for Robinhood, 8453 for Base, 999 for HyperEVM and 99901 for Elysium. Never infer an unsupported chain.
 Base and HyperEVM source builds use the general Custom Contract route, not the fixed fee core. Select the route for the new chain when setupPatch changes it.
 For the default native pair, set pairToken to "ETH" on Ethereum, Robinhood or Base (including WETH), or "HYPE" on HyperEVM (including WHYPE). For any other pair,
 use the exact contract address supplied by the user. Never invent an address or silently replace a named

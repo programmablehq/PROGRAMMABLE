@@ -1,3 +1,4 @@
+import { ELYSIUM_CUSTOM_ROOTS_V1, parseElysiumRoutingFeePolicyV1, type ElysiumRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/elysium-release-v1";
 import { HYPEREVM_CUSTOM_ROOTS_V1, parseHyperEvmRoutingFeePolicyV1, type HyperEvmRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/hyperevm-release-v1";
 import "server-only";
 import { BASE_CUSTOM_ROOTS_V1, parseBaseRoutingFeePolicyV1, type BaseRoutingFeePolicyBindingV1 } from "@/lib/custom-launch/base-release-v1";
@@ -155,7 +156,7 @@ type ProjectTokenMetadataFieldBindingV1 = Readonly<{
 }>;
 
 type FinalizedCheckpointV1 = Readonly<{
-  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-launch-finalized-checkpoint-quorum.v1" | "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1";
+  schemaVersion: typeof FINALIZED_CHECKPOINT_SCHEMA_V1 | "programmable.base-launch-finalized-checkpoint-quorum.v1" | "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" | "programmable.elysium-launch-finalized-checkpoint-quorum.v1";
   blockNumber: string;
   blockHash: Hex32;
   quorumSize: 2;
@@ -177,8 +178,8 @@ export type FinalizedCustomLaunchMetadataV1 = Readonly<{
   resourceId: string;
   routerLaunchId: Hex32;
   launchProfileVersion: LaunchProfileVersionV1;
-  routingFeePolicy?: EthereumRoutingFeePolicyBindingV1 | BaseRoutingFeePolicyBindingV1 | HyperEvmRoutingFeePolicyBindingV1;
-  chainId: "1" | "8453" | "999";
+  routingFeePolicy?: EthereumRoutingFeePolicyBindingV1 | BaseRoutingFeePolicyBindingV1 | HyperEvmRoutingFeePolicyBindingV1 | ElysiumRoutingFeePolicyBindingV1;
+  chainId: "1" | "8453" | "999" | "99901";
   creator?: Address;
   poolKey?: Readonly<{ currency0: Address; currency1: Address; fee: number; tickSpacing: number; hooks: Address }>;
   router: Address;
@@ -283,7 +284,7 @@ export type RouterCustomMetadataEnrichedSnapshotV1<
 > = Snapshot & Readonly<{ metadataOverlay: RouterCustomMetadataOverlayV1 }>;
 
 type ReaderDependenciesV1 = Readonly<{
-  chainId?: "1" | "8453" | "999";
+  chainId?: "1" | "8453" | "999" | "99901";
   fetchFeed?: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
@@ -391,7 +392,7 @@ export function createFinalizedCustomLaunchMetadataFeedReaderV1(
 }
 
 export async function readFinalizedCustomLaunchMetadataPagesV1(input: Readonly<{
-  chainId?: "1" | "8453" | "999";
+  chainId?: "1" | "8453" | "999" | "99901";
   fetchFeed: typeof fetch;
   now?: () => number;
   timeoutMs?: number;
@@ -723,7 +724,7 @@ export function metadataMatchesRouterEntryV1(
     && metadata.finality.logIndex === stamp.launchLogIndex;
 }
 
-function parseFeedPageV1(value: JsonValue, now: number, chainId: "1" | "8453" | "999" = "1"): FeedPageV1 {
+function parseFeedPageV1(value: JsonValue, now: number, chainId: "1" | "8453" | "999" | "99901" = "1"): FeedPageV1 {
   const hasQuality = value !== null
     && typeof value === "object"
     && !Array.isArray(value)
@@ -817,8 +818,8 @@ function parseFeedQualityV1(
     publishedRowCount: record.publishedRowCount, quarantinedRowCount: record.quarantinedRowCount, diagnostics };
 }
 
-function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" | "999" = "1"): FinalizedCustomLaunchMetadataV1 {
-  const evmRoots=chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
+function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" | "999" | "99901" = "1"): FinalizedCustomLaunchMetadataV1 {
+  const evmRoots=chainId === "99901" ? ELYSIUM_CUSTOM_ROOTS_V1 : chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
   const hasRoutingFeePolicy = value !== null && typeof value === "object"
     && !Array.isArray(value) && Object.hasOwn(value, "routingFeePolicy");
   const hasPartnerAttribution = value !== null
@@ -859,7 +860,7 @@ function parseLaunchV1(value: JsonValue, chainId: "1" | "8453" | "999" = "1"): F
   if (hasRoutingFeePolicy !== (record.launchProfileVersion === "3.6.0")) {
     throw new Error("Finalized Custom routing fee policy is missing or unexpected");
   }
-  const routingFeePolicy = hasRoutingFeePolicy ? (chainId === "999" ? parseHyperEvmRoutingFeePolicyV1(record.routingFeePolicy) : chainId === "8453"
+  const routingFeePolicy = hasRoutingFeePolicy ? (chainId === "99901" ? parseElysiumRoutingFeePolicyV1(record.routingFeePolicy) : chainId === "999" ? parseHyperEvmRoutingFeePolicyV1(record.routingFeePolicy) : chainId === "8453"
     ? parseBaseRoutingFeePolicyV1(record.routingFeePolicy) : parseEthereumRoutingFeePolicyV1(record.routingFeePolicy)) : null;
   if (chainId !== "1" && (record.launchProfileVersion !== "3.6.0"
     || typeof record.router !== "string" || record.router.toLowerCase() !== evmRoots.router.toLowerCase()
@@ -1086,7 +1087,7 @@ function parseTokenMetadataReadbackV1(
   });
 }
 
-function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" = "1") {
+function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" | "99901" = "1") {
   const record = exactRecord(value, [
     "state", "transactionHash", "blockNumber", "blockHash", "logIndex",
     "confirmationDepth", "requiredConfirmationDepth", "finalizedCheckpoint",
@@ -1119,8 +1120,8 @@ function parseFinalityV1(value: JsonValue | undefined, chainId: "1" | "8453" | "
   });
 }
 
-function parseFinalizedCheckpointV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" = "1"): FinalizedCheckpointV1 {
-  const expectedSchema = chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
+function parseFinalizedCheckpointV1(value: JsonValue | undefined, chainId: "1" | "8453" | "999" | "99901" = "1"): FinalizedCheckpointV1 {
+  const expectedSchema = chainId === "99901" ? "programmable.elysium-launch-finalized-checkpoint-quorum.v1" : chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : FINALIZED_CHECKPOINT_SCHEMA_V1;
   const record = exactRecord(value, [
     "schemaVersion", "blockNumber", "blockHash", "quorumSize", "observations",
   ], "finalized checkpoint");

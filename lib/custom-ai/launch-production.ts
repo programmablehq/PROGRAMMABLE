@@ -52,13 +52,13 @@ export function createLaunchProductionContext(body: ContextBody): LaunchProducti
     || !integer(body.tradeFee.ratePpm, 1_000_000) || !address.test(body.tradeFee.recipient)
     || body.tradeFee.collection !== (body.chainId === 4663 ? "programmable-routed-output" : body.chainId === 1 ? "programmable-routed-native" : "pool-enforced-native")
     || (body.chainId === 4663 ? !digest.test(body.manifestDigest ?? "") || body.graphProfile !== null : body.manifestDigest !== null || !body.graphProfile)
-    || body.version === 1 && ((body.chainId === 8453 || body.chainId === 999) !== Boolean(body.protections))) return invalid();
+    || body.version === 1 && ((body.chainId === 8453 || body.chainId === 999 || body.chainId === 99901) !== Boolean(body.protections))) return invalid();
   if (body.version >= 2) {
     const policy = body.protectionPolicy;
     if (!policy || !exact(policy,"policyVersion,required,appliesTo,evidenceAuthority,componentRoles,openingTaxRecipient")
       || policy.policyVersion !== "programmable.launch-protection.v1" || typeof policy.required !== "boolean"
       || policy.appliesTo !== "custom-contract" || policy.evidenceAuthority !== "authenticated-original-source-and-graph-review"
-      || policy.required !== Boolean(body.protections) || (body.chainId === 8453 || body.chainId === 999) && !policy.required
+      || policy.required !== Boolean(body.protections) || (body.chainId === 8453 || body.chainId === 999 || body.chainId === 99901) && !policy.required
       || JSON.stringify(policy.componentRoles) !== JSON.stringify(policy.required ? PROTECTED_COMPONENT_ROLES : [])
       || (policy.required ? typeof policy.openingTaxRecipient !== "string" || !address.test(policy.openingTaxRecipient) : policy.openingTaxRecipient !== null)) return invalid();
   }

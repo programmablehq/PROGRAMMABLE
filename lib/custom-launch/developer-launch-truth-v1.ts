@@ -346,9 +346,9 @@ export function parseSourceVerificationStatusV1(
 export function parseCustomLaunchWalletHandoffV1(
   value: unknown,
   launchId: string,
-  chainId: "1" | "8453" | "999" = "1",
+  chainId: "1" | "8453" | "999" | "99901" = "1",
 ): CustomLaunchWalletHandoffV1 | null {
-  if (!isRecord(value) || !UUID.test(launchId) || !["1", "8453", "999"].includes(chainId)) return null;
+  if (!isRecord(value) || !UUID.test(launchId) || !["1", "8453", "999", "99901"].includes(chainId)) return null;
   const rawUrl = value.walletHandoffUrl;
   const rawExpiry = value.expiresAt;
   const rawSeconds = value.secondsRemaining;

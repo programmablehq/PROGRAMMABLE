@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { ToolCapability } from "./types";
 export const lookupInputSchema = { type: "object", properties: {
-  query: { type: "string", maxLength: 500 }, chainId: { enum: [1, 4663, 8453, 999] },
+  query: { type: "string", maxLength: 500 }, chainId: { enum: [1, 4663, 8453, 999, 99901] },
   address: { type: "string", maxLength: 42 },
 }, required: ["query", "chainId", "address"], additionalProperties: false };
 export function defineTool(id: string, description: string, execute: ToolCapability["execute"],

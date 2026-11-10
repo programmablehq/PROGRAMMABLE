@@ -2,7 +2,7 @@ import { keccak256, type Hex } from "viem";
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import { errorIsExplicitWalletRejection, WalletRequestNotSubmittedError } from "@/lib/wallet-request-lock";
 
-export type GraphWalletChain = "1" | "8453" | "999";
+export type GraphWalletChain = "1" | "8453" | "999" | "99901";
 export type GraphWalletAction = Readonly<{ chainId: string; from: string; to: string; data: Hex; value: Hex }>;
 export type GraphWalletContext = Readonly<{ requestId: string; requestHash: `sha256:${string}`; actionHash: `sha256:${string}` }>;
 export type GraphWalletAttempt = GraphWalletContext & Readonly<{
@@ -17,7 +17,7 @@ const address = (v: unknown): v is string => typeof v === "string" && /^0x[a-f0-
 const hash = (v: unknown): v is Hex => typeof v === "string" && /^0x(?!0{64}$)[a-f0-9]{64}$/u.test(v);
 const quantity = (v: unknown): v is Hex => typeof v === "string" && /^0x(?:0|[1-9a-f][a-f0-9]{0,63})$/u.test(v);
 const id = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(v);
-const chain = (v: unknown): v is GraphWalletChain => v === "1" || v === "8453" || v === "999";
+const chain = (v: unknown): v is GraphWalletChain => v === "1" || v === "8453" || v === "999" || v === "99901";
 const bad = (): never => { throw Error("The saved wallet attempt cannot be read. Recover its original transaction before continuing."); };
 const storage = () => window.localStorage;
 function key(controller: string, chainId: GraphWalletChain) {

@@ -8,7 +8,7 @@ import {checkedGeneralSourceAudit,type GeneralSourceAudit} from "./source-audit.
 
 export type AutomaticSourceReceipt = {
   schemaVersion:"programmable.automatic-source-context.v1";reviewId:string;subjectHash:`sha256:${string}`;
-  chainId:"1"|"4663"|"8453"|"999";controller:string;sourceGeneratedAt:number;
+  chainId:"1"|"4663"|"8453"|"999"|"99901";controller:string;sourceGeneratedAt:number;
   artifactHash:`sha256:${string}`;intentHash:`sha256:${string}`;productionHash:`sha256:${string}`;verifierRevision:`sha256:${string}`;
   intent:OwnedGeneralLaunchSource["project"]["intent"];compilationUnits:{id:string;inputHash:`sha256:${string}`}[];
   projectHash:`sha256:${string}`;sourceAudit:GeneralSourceAudit;

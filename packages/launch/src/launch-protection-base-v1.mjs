@@ -18,10 +18,12 @@ async function exactFile(file, content) {
 /** Builds the Base API request. It never submits, signs or sends a transaction. */
 export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabilities, input, permitWindow }) {
   const chainId=capabilities.chain?.id;
-  if (!['8453','999'].includes(chainId) || capabilities.profile?.profileVersion !== '3.6.0') throw new TypeError('Current EVM capabilities are required');
+  if (!['8453','999','99901'].includes(chainId) || capabilities.profile?.profileVersion !== '3.6.0') throw new TypeError('Current EVM capabilities are required');
   const hyper=chainId==='999';
-  const kitUrl=new URL(hyper?'../contracts/hyperevm-launch-protection-v1/':'../contracts/base-launch-protection-v1/',import.meta.url);
-  const contracts={initializer:hyper?'HyperEvmProtectedNativeInitializerV1':'BaseProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:hyper?'HyperEvmProtectedNative30HookV1':'BaseProtectedNative30HookV1'};
+  const elysium=chainId==='99901';
+  const kitUrl=new URL(elysium?'../contracts/elysium-launch-protection-v1/':hyper?'../contracts/hyperevm-launch-protection-v1/':'../contracts/base-launch-protection-v1/',import.meta.url);
+  const prefix=elysium?'Elysium':hyper?'HyperEvm':'Base';
+  const contracts={initializer:prefix+'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:prefix+'ProtectedNative30HookV1'};
   const root = path.resolve(projectRoot), metadata = input.projectMetadata;
   const selection = { schemaVersion: 'programmable.direct-native-hook-graph-profile-selection.v3',
     profileId: 'programmable.direct-native-hook-graph.v1', profileRevision: 3,
@@ -95,5 +97,10 @@ export const buildProtectedEvmLaunchV1=buildProtectedBaseLaunchV1;
 
 export async function buildProtectedHyperEvmLaunchV1(options) {
   if (options.capabilities?.chain?.id !== '999') throw new TypeError('HyperEVM capabilities required');
+  return buildProtectedEvmLaunchV1(options);
+}
+
+export async function buildProtectedElysiumLaunchV1(options) {
+  if (options.capabilities?.chain?.id !== '99901') throw new TypeError('Elysium capabilities required');
   return buildProtectedEvmLaunchV1(options);
 }

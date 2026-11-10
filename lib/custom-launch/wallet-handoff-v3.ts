@@ -1,3 +1,4 @@
+import { ELYSIUM_CUSTOM_ROOTS_V1 } from "./elysium-release-v1";
 import { HYPEREVM_CUSTOM_ROOTS_V1 } from "./hyperevm-release-v1";
 import { BASE_CUSTOM_ROOTS_V1 } from "./base-release-v1";
 import {
@@ -389,7 +390,7 @@ export type CustomLaunchRouterReviewV3 = Readonly<{
  * It is not a wallet action or signing authorization. Require the current
  * two-provider checkpoint before a local send journal can be reconciled. */
 export function readCustomGraphFinalizedTransactionV3(value: unknown, expected: {
-  chainId: "1" | "8453" | "999"; onchainLaunchId: Hex;
+  chainId: "1" | "8453" | "999" | "99901"; onchainLaunchId: Hex;
 }): Hex {
   const evidence = record(value);
   if (evidence.finalityState !== "finalized" || !Object.hasOwn(evidence, "finalizedCheckpoint")
@@ -742,7 +743,7 @@ function assertExactCustomGraphRouterCalldataV3(
   expectedInitializerCalldataHash: Hex,
 ) {
   const chainId = BigInt(action.chainId);
-  const graphFactory = action.chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1.graphFactory : action.chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY_V1;
+  const graphFactory = action.chainId === "99901" ? ELYSIUM_CUSTOM_ROOTS_V1.graphFactory : action.chainId === "999" ? HYPEREVM_CUSTOM_ROOTS_V1.graphFactory : action.chainId === "8453" ? BASE_CUSTOM_ROOTS_V1.graphFactory : CUSTOM_GRAPH_FACTORY_V1;
   const calldata = exactLowerHexData(action.data);
   if (calldata.slice(0, 10) !== CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1) {
     return invalid();
@@ -1280,7 +1281,7 @@ function assertAuthorizedEvidenceV3(
 
 function assertCurrentRouterHandoffV3(
   action: Readonly<Record<string, unknown>>,
-  chainId: "1" | "8453" | "999" | undefined,
+  chainId: "1" | "8453" | "999" | "99901" | undefined,
 ) {
   if (typeof action.walletHandoffUrl !== "string"
     || typeof action.expiresAt !== "string") return invalid();
@@ -1389,8 +1390,8 @@ function assertSignedPermitV3(
     router: unknown;
   }>,
 ) {
-  const isBase = ["8453","999"].includes(customLaunchChainForRouterV1(expected.router) ?? "");
-  const evmRoots=customLaunchChainForRouterV1(expected.router) === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
+  const isBase = ["8453","999","99901"].includes(customLaunchChainForRouterV1(expected.router) ?? "");
+  const evmRoots=customLaunchChainForRouterV1(expected.router) === "99901" ? ELYSIUM_CUSTOM_ROOTS_V1 : customLaunchChainForRouterV1(expected.router) === "999" ? HYPEREVM_CUSTOM_ROOTS_V1 : BASE_CUSTOM_ROOTS_V1;
   const permit = exactRecord(value, isBase
     ? [...SIGNED_PERMIT_KEYS, "releaseId"] : SIGNED_PERMIT_KEYS);
   if (isBase) exactSha256(permit.releaseId);
@@ -1398,7 +1399,7 @@ function assertSignedPermitV3(
   const deadline = canonicalUint256(permit.deadline).parsed;
   if (permit.schemaVersion !== "programmable.signed-prepared-launch-permit.v1"
     || !customLaunchChainForRouterV1(expected.router) || permit.chainId !== customLaunchChainForRouterV1(expected.router)
-    || (["8453","999"].includes(String(permit.chainId)) && (!sameAddress(permit.authoritySafe, evmRoots.permitAuthority) || !sameAddress(permit.signerAddress, evmRoots.permitSigner)))
+    || (["8453","999","99901"].includes(String(permit.chainId)) && (!sameAddress(permit.authoritySafe, evmRoots.permitAuthority) || !sameAddress(permit.signerAddress, evmRoots.permitSigner)))
     || (expected.artifactHash !== undefined
       && exactSha256(permit.artifactHash) !== expected.artifactHash)
     || (expected.permitDigest !== undefined
@@ -1467,7 +1468,7 @@ function assertOnchainEvidenceV3(value: unknown, router: unknown) {
 function assertFinalizedCheckpointV3(
   value: unknown,
   context: Readonly<{
-    chainId: "1" | "8453" | "999";
+    chainId: "1" | "8453" | "999" | "99901";
     launchBlockNumber: bigint;
     observedAtBlockNumber: bigint;
     launchFinalityState: unknown;
@@ -1477,7 +1478,7 @@ function assertFinalizedCheckpointV3(
   const blockNumber = canonicalUint256(checkpoint.blockNumber).parsed;
   const blockHash = exactLowerBytes32(checkpoint.blockHash);
   if (checkpoint.schemaVersion
-      !== (context.chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
+      !== (context.chainId === "99901" ? "programmable.elysium-launch-finalized-checkpoint-quorum.v1" : context.chainId === "999" ? "programmable.hyperevm-launch-finalized-checkpoint-quorum.v1" : context.chainId === "8453" ? "programmable.base-launch-finalized-checkpoint-quorum.v1" : "programmable.ethereum-finalized-checkpoint-quorum.v1")
     || checkpoint.quorumSize !== 2
     || blockNumber > context.observedAtBlockNumber
     || (context.launchFinalityState === "finalized"

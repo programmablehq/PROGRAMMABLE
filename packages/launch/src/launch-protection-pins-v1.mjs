@@ -3,6 +3,9 @@ export const PROTECTED_LAUNCH_POLICY_V1 = Object.freeze({ minimumFdvUsd: '15000'
   buyerLimitBps: 200, protectionSeconds: 300, openingTotalFeePpm: 990000, openingFeeSeconds: 30,
   maximumAdditionalTaxExemptWallets: 6, treasury: '0xD88539d3c4C460136a733A3Fd60cf6BF269079da' });
 export const PROTECTED_LAUNCH_CHAIN_PINS_V1 = Object.freeze({
+  99901: Object.freeze({manager:'0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1',
+    router:'0xA13f7611115752DEB2B13813BDDE16A5073e4b45',routerCodeHash:'0x1a7af429c3883cbf53ec7e54fad35a99232faffe04505efb971a799a993ca6a8',
+    feed:'0x65AF2809dd2d7E1974c34730E97Ce3ac95F46FDB',feedCodeHash:'0xfa352649c8e8706c4b815ccb5031e62c8091ad94acc1b60cd2b3c4e2854efc75',maxAge:86520n}),
   999: Object.freeze({manager:'0x12D4Fd9C5DeDd00ab8a0bCe2CF0167bbf94b6B1F',
     router:'0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF',routerCodeHash:'0x0710561487244e5d288bd93fe4c055a4a33fd486a07e8b4c982124c57c6d3224',
     feed:'0x2b25BC41D55de29F3A2e163F8Eebf63966B25b57',feedCodeHash:'0xbd6f524cdc4268b6bd1bb6f77a8821faeea9c52ee9e0afa0b6d948ce82c966c2',maxAge:86520n}),

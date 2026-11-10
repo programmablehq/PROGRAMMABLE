@@ -667,3 +667,9 @@ HyperEVM uses `chainId: "999"` (`eip155:999`) and native HYPE. Use the [HyperEVM
 `buildProtectedHyperEvmLaunchV1` builds the protected native-HYPE reference package. General custom contracts use the same exact-source graph layout and review flow as Base. The wallet needs an activated HyperCore account and large-block mode for contract deployment; `enableHyperEvmLargeTransactionsV1` prepares that mode for the connected wallet. A key does not sign transactions. Module Mode is not offered on this chain.
 
 `programmable-launch status REQUEST_UUID --chain-id 999 --watch --until finalized` follows the launch. The finalized metadata cursor at `/v4/chains/999/finalized-custom-launches` is the source for indexing; do not repeatedly scan the chain or a market-data provider for new launches.
+
+## Elysium Custom Launch API (4.4.0)
+
+Elysium uses `chainId: "99901"` (`eip155:99901`) and native HYPE. Read the [Elysium guide](https://programmable.market/developers/elysium-custom-launch-api-v1.md), `/v4/chains/99901/capabilities` and `/v4/chains/99901/readiness`. Require active public availability before submitting.
+
+`buildProtectedElysiumLaunchV1` builds the native-HYPE protected reference graph using Elysium's own PoolManager, Universal Router and authenticated HYPE/USD feed. It preserves the same opening FDV floor, opening tax, wallet limits and platform fee. The controller reviews and signs on Elysium directly; no HyperEVM large-block account setting is used.

@@ -1,6 +1,167 @@
 {
   "version": 1,
   "families": {
+    "elysium-launch-protection-v1": [
+      {
+        "source": "src/elysium-custom-v1/ElysiumProtectedNativeInitializerV1.sol",
+        "contract": "ElysiumProtectedNativeInitializerV1",
+        "sourceSha256": "ec4464e45510a815521cc70370ef777381e9d1cface24830d7beb46fde96f91a",
+        "constructor": "address,address,address,bytes32",
+        "functions": [
+          "function MAX_FEED_AGE() view returns (uint256)",
+          "function MINIMUM_FDV_USD() view returns (uint256)",
+          "function feedCodeHash() view returns (bytes32)",
+          "function feedDecimals() view returns (uint8)",
+          "function graphFactory() view returns (address)",
+          "function initialize(address hook,address token,int24 startTick,address buyer,uint256 minTokenOut) payable",
+          "function initialized() view returns (bool)",
+          "function lockedLiquidity() view returns (uint128)",
+          "function nativeUsdFeed() view returns (address)",
+          "function openingFdvUsd() view returns (uint256)",
+          "function poolManager() view returns (address)",
+          "function unlockCallback(bytes data) returns (bytes)"
+        ],
+        "events": [
+          "event ProtectedLaunch(address indexed,address indexed,uint256,uint128,uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/launch-protection/ProtectedLaunchTokenV1.sol",
+        "contract": "ProtectedLaunchTokenV1",
+        "sourceSha256": "496ea707aace0ee807ff3772b282825ccc896c6deef1c14155b7ab406e168b91",
+        "constructor": "string,string,uint256,address,address",
+        "functions": [
+          "function POLICY_REVISION() view returns (uint256)",
+          "function PROTECTION_SECONDS() view returns (uint256)",
+          "function WALLET_LIMIT_BPS() view returns (uint256)",
+          "function allowance(address owner,address spender) view returns (uint256)",
+          "function approve(address spender,uint256 value) returns (bool)",
+          "function balanceOf(address account) view returns (uint256)",
+          "function burn(uint256 amount)",
+          "function decimals() view returns (uint8)",
+          "function initializer() view returns (address)",
+          "function launchSupply() view returns (uint256)",
+          "function name() view returns (string)",
+          "function poolManager() view returns (address)",
+          "function receivedDuringProtection(address) view returns (uint256)",
+          "function start()",
+          "function startedAt() view returns (uint256)",
+          "function symbol() view returns (string)",
+          "function totalSupply() view returns (uint256)",
+          "function transfer(address to,uint256 value) returns (bool)",
+          "function transferFrom(address from,address to,uint256 value) returns (bool)",
+          "function walletTokenLimit() view returns (uint256)"
+        ],
+        "events": [
+          "event Approval(address indexed,address indexed,uint256)",
+          "event Transfer(address indexed,address indexed,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/elysium-custom-v1/ElysiumProtectedNative30HookV1.sol",
+        "contract": "ElysiumProtectedNative30HookV1",
+        "sourceSha256": "e9c2325dc63d7be1761961f615900b8528e6cd2b8bdad6e5d0f4eae40d71e677",
+        "constructor": "address,(address,uint24,int24,uint160,address,address,uint16,uint16,address,uint24),address,address,bytes32,address[6]",
+        "functions": [
+          "function CANONICAL_POOL_MANAGER() view returns (address)",
+          "function CHAIN_ID() view returns (uint256)",
+          "function FEE_DENOMINATOR() view returns (uint16)",
+          "function FEE_PROFILE() view returns (bytes32)",
+          "function PLATFORM_FEE_BPS() view returns (uint16)",
+          "function PLATFORM_RECIPIENT() view returns (address)",
+          "function POLICY_REVISION() view returns (uint256)",
+          "function afterAddLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,int256 delta0,int256 delta1,bytes hookData) returns (bytes4,int256)",
+          "function afterDonate(address sender,(address,address,uint24,int24,address) key,uint256 amount0,uint256 amount1,bytes hookData) returns (bytes4)",
+          "function afterInitialize(address sender,(address,address,uint24,int24,address) key,uint160 sqrtPriceX96,int24 tick) returns (bytes4)",
+          "function afterRemoveLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,int256 delta0,int256 delta1,bytes hookData) returns (bytes4,int256)",
+          "function afterSwap(address sender,(address,address,uint24,int24,address) key,(bool,int256,uint160) params,int256 delta,bytes hookData) returns (bytes4,int128)",
+          "function beforeAddLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,bytes hookData) returns (bytes4)",
+          "function beforeDonate(address sender,(address,address,uint24,int24,address) key,uint256 amount0,uint256 amount1,bytes hookData) returns (bytes4)",
+          "function beforeInitialize(address sender,(address,address,uint24,int24,address) key,uint160 sqrtPriceX96) returns (bytes4)",
+          "function beforeRemoveLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,bytes hookData) returns (bytes4)",
+          "function beforeSwap(address sender,(address,address,uint24,int24,address) key,(bool,int256,uint160) params,bytes hookData) returns (bytes4,int256,uint24)",
+          "function boughtDuringProtection(address) view returns (uint256)",
+          "function creatorBuyFeeBps() view returns (uint16)",
+          "function creatorSellFeeBps() view returns (uint16)",
+          "function feeVault() view returns (address)",
+          "function getHookPermissions() pure returns ((bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool) permissions)",
+          "function initialSqrtPriceX96() view returns (uint160)",
+          "function initialized() view returns (bool)",
+          "function initializer() view returns (address)",
+          "function lpFee() view returns (uint24)",
+          "function maxModuleLpFeePips() view returns (uint24)",
+          "function module() view returns (address)",
+          "function moduleCodeHash() view returns (bytes32)",
+          "function openingTaxVault() view returns (address)",
+          "function poolKey() view returns ((address,address,uint24,int24,address))",
+          "function poolManager() view returns (address)",
+          "function previewTradeFees(uint256 amount,bool amountIsNet,bool isBuy,address buyer) view returns (uint256 gross,uint256 platformFee,uint256 creatorFee,uint256 openingTax)",
+          "function quoteFees(uint256 amount,bool amountIsNet,bool isBuy) view returns (uint256 gross,uint256 platformFee,uint256 creatorFee)",
+          "function tickSpacing() view returns (int24)",
+          "function token() view returns (address)"
+        ],
+        "events": [
+          "event NativeFeesAccrued(bytes32 indexed,address indexed,bool,uint256,uint256,uint256)",
+          "event OpeningTaxAccrued(bytes32 indexed,address indexed,uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/ethereum-native30-v3/EthereumNativeFeeVaultV3.sol",
+        "contract": "EthereumNativeFeeVaultV3",
+        "sourceSha256": "1a6c084408d7f9e70c15c1e2bc207db659f3eb0c3d8b5355cb7b3fd838ee3078",
+        "constructor": "address,address",
+        "functions": [
+          "function PLATFORM_RECIPIENT() view returns (address)",
+          "function claimCreator() returns (uint256 amount)",
+          "function claimPlatform() returns (uint256 amount)",
+          "function creatorAccrued() view returns (uint256)",
+          "function creatorRecipient() view returns (address)",
+          "function kernel() view returns (address)",
+          "function platformAccrued() view returns (uint256)",
+          "function poolManager() view returns (address)",
+          "function recordFees(uint256 platformAmount,uint256 creatorAmount)",
+          "function unlockCallback(bytes data) returns (bytes)"
+        ],
+        "events": [
+          "event FeesClaimed(address indexed,uint256,bool)",
+          "event FeesRecorded(uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/elysium-custom-v1/ElysiumLaunchProtectionModuleV1.sol",
+        "contract": "ElysiumLaunchProtectionModuleV1",
+        "sourceSha256": "060a43dcf03f12594713f8e5620a3128622ceb02355182ad949c12157be99806",
+        "constructor": "address,address,address,address,bytes32,uint16,address[6]",
+        "functions": [
+          "function DECAY_SECONDS() view returns (uint256)",
+          "function OPENING_TOTAL_PPM() view returns (uint256)",
+          "function additionalTaxPpmForBuyer(address buyer) view returns (uint24)",
+          "function afterSwap(address,(address,address,uint24,int24,address),(bool,int256,uint160),int256,bytes) view returns (bytes4,int128)",
+          "function beforeSwap(address,(address,address,uint24,int24,address) key,(bool,int256,uint160),bytes) view returns (bytes4,int256,uint24)",
+          "function developer() view returns (address)",
+          "function exemptWallets() view returns (address[6])",
+          "function isTaxExempt(address wallet) view returns (bool)",
+          "function kernel() view returns (address)",
+          "function normalBuyFeePpm() view returns (uint256)",
+          "function openingTaxPpmForSender(address sender) view returns (uint24)",
+          "function protectedBuyer(address sender) view returns (address)",
+          "function router() view returns (address)",
+          "function routerCodeHash() view returns (bytes32)",
+          "function token() view returns (address)"
+        ],
+        "events": [],
+        "allowReceive": false,
+        "allowFallback": false
+      }
+    ],
     "launch-protection-v1": [
       {
         "source": "src/launch-protection/ProtectedNativeInitializerV1.sol",

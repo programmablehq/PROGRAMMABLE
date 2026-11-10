@@ -42,8 +42,8 @@ export async function executeGeneralGraphWalletSend(input: {
 
 export type GeneralGraphWalletRecovery = Readonly<{ attempt: GraphWalletAttempt; transactionHash: Hex; assertCurrent(): void }>;
 /** Share the send lock without acquiring, expiring or clearing its lease. */
-export async function withGeneralWalletJournalLock<Result>(controller: string, chainId: "1" | "4663" | "8453" | "999", work: () => Promise<Result>): Promise<Result> {
-  if (!/^0x[a-f0-9]{40}$/iu.test(controller) || !["1", "4663", "8453", "999"].includes(chainId) || !navigator.locks) throw Error("Safe transaction recovery is unavailable in this browser.");
+export async function withGeneralWalletJournalLock<Result>(controller: string, chainId: "1" | "4663" | "8453" | "999" | "99901", work: () => Promise<Result>): Promise<Result> {
+  if (!/^0x[a-f0-9]{40}$/iu.test(controller) || !["1", "4663", "8453", "999", "99901"].includes(chainId) || !navigator.locks) throw Error("Safe transaction recovery is unavailable in this browser.");
   return navigator.locks.request(`programmable:wallet-request:v1:${chainId}:${controller.toLowerCase()}:exclusive`, { mode: "exclusive", ifAvailable: true }, async lock => {
     if (!lock) throw Error("The original wallet request is still open. Confirm or cancel it in your wallet first.");
     return work();
