@@ -1,3 +1,4 @@
+import elysiumSourcePackage from "@/packages/launch/contracts/elysium-launch-protection-v1/standard-json.json";
 import "server-only";
 import sourcePackage from "@/packages/launch/contracts/launch-protection-v1/standard-json.json";
 import baseSourcePackage from "@/packages/launch/contracts/base-launch-protection-v1/standard-json.json";
@@ -30,7 +31,7 @@ export function canonicalGeneralLibraries(previous?: ContractProject): ContractP
  * compiled by the builder. */
 export function canonicalGeneralSourceCatalog(previous: ContractProject | undefined, chainId: BuilderChainId): ContractProject["sources"] {
   builderChain(chainId);
-  const kit = chainId === 8453 ? baseSourcePackage : chainId === 999 ? hyperSourcePackage : sourcePackage;
+  const kit = chainId === 99901 ? elysiumSourcePackage : chainId === 8453 ? baseSourcePackage : chainId === 999 ? hyperSourcePackage : sourcePackage;
   return sourceCatalog(kit.sources, previous);
 }
 
@@ -43,7 +44,7 @@ export type CanonicalInterfaceContext={id:`sha256:${string}`;contracts:(typeof i
 export function canonicalInterfaceContext(chainId:BuilderChainId):CanonicalInterfaceContext {
   builderChain(chainId);
   const saved=interfaceCache.get(chainId);if(saved)return structuredClone(saved);
-  const family=chainId===8453?"base-launch-protection-v1":chainId===999?"hyperevm-launch-protection-v1":"launch-protection-v1";
+  const family=chainId===99901?"elysium-launch-protection-v1":chainId===8453?"base-launch-protection-v1":chainId===999?"hyperevm-launch-protection-v1":"launch-protection-v1";
   const sources=canonicalGeneralSourceCatalog(undefined,chainId),contracts=interfaces.families[family];
   for(const contract of contracts){
     const source=sources[contract.source];

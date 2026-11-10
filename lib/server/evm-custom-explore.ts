@@ -1,6 +1,7 @@
 import { EVM_CUSTOM_CHAINS, type EvmCustomChainId } from "@/lib/evm-custom-chains";
 import "server-only";
 import { enrichHyperEvmMarkets } from "./hyperevm-market";
+import { enrichElysiumMarkets } from "./elysium-market";
 import { createFinalizedCustomLaunchMetadataFeedReaderV1 } from "./custom-launch/finalized-custom-launch-metadata-feed-v1";
 import { selectUnifiedExplorePage, exploreIdentityKey } from "@/lib/unified-explore";
 import { readCodexMarkets } from "./codex-market";
@@ -63,6 +64,10 @@ export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainI
       for (const [address, market] of enriched)
         markets.set(address, market);
     }
+    if (chainId === 99901) {
+      const enriched = await enrichElysiumMarkets(selected.items, markets);
+      for (const [address, market] of enriched) markets.set(address, market);
+    }
     const addresses = new Set(selected.items.map(row => row.tokenAddress.toLowerCase()));
     return { chainId, ...catalog, ...selected, presentations: catalog.presentations
         .filter(row => addresses.has(row.tokenAddress.toLowerCase()))
@@ -75,6 +80,8 @@ export function createEvmCustomExploreReaders<T extends EvmCustomChainId>(chainI
     let markets = token ? await readCodexMarkets([token], chainId).catch(() => new Map()) : new Map();
     if (chainId === 999 && token)
       markets = await enrichHyperEvmMarkets([token], markets);
+    if (chainId === 99901 && token)
+      markets = await enrichElysiumMarkets([token], markets);
     return { chainId, token, status: catalog.status, updatedAt: catalog.updatedAt,
       presentation: presentation ? { ...presentation, market: markets.get(address.toLowerCase()) ?? null } : null };
   }

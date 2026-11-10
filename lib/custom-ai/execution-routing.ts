@@ -1,7 +1,7 @@
 import { canonicalBrowserSha256V2 } from "@/lib/custom-launch/browser-authority-v2";
 import type { LaunchIntent } from "./launch-intent";
 
-export type BuilderChainId = 1 | 4663 | 8453 | 999;
+export type BuilderChainId = 1 | 4663 | 8453 | 999 | 99901;
 export type BuilderRoute = "fee-module" | "composed-module" | "custom-contract";
 
 /** Route descriptions are configuration. Discovery and exact preparation still
@@ -15,6 +15,8 @@ export const builderChains = [
     capabilitiesPath: "/v4/chains/8453/capabilities", preflightPath: "/v4/chains/8453/custom-launches/preflight", createPath: "/v4/chains/8453/custom-launches" },
   { id: 999, name: "HyperEVM", currency: "HYPE", feeCore: false,
     capabilitiesPath: "/v4/chains/999/capabilities", preflightPath: "/v4/chains/999/custom-launches/preflight", createPath: "/v4/chains/999/custom-launches" },
+  { id: 99901, name: "Elysium", currency: "HYPE", feeCore: false,
+    capabilitiesPath: "/v4/chains/99901/capabilities", preflightPath: "/v4/chains/99901/custom-launches/preflight", createPath: "/v4/chains/99901/custom-launches" },
 ] as const;
 
 export function builderChain(chainId: number) {

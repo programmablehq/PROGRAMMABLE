@@ -1,3 +1,4 @@
+import ELYSIUM_PROFILE_V1 from "./elysium-profile-v1.json" with {type: "json"};
 import HYPEREVM_PROFILE_V1 from "./hyperevm-profile-v1.json" with {type: "json"};
 import BASE_PROFILE_V1 from "./base-profile-v1.json" with {type: "json"};
 import { canonicalizeJson } from "./canonical-json.mjs";
@@ -58,7 +59,7 @@ export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3 = deepFre
 });
 
 export function assertDirectNativeProgrammableTradeFeePolicyV36(value) {
-  if (![HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
+  if (![ELYSIUM_PROFILE_V1.programmableTradeFeePolicy, HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
     throw new TypeError("PROFILE_36_PROGRAMMABLE_TRADE_FEE_POLICY_MISMATCH");
   }
   return value;

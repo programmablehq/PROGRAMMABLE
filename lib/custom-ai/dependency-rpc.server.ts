@@ -66,6 +66,16 @@ function selectedEndpoints(chain: Chain, env: Environment): readonly [string, st
     try { const pair = productionMainnetRpcPair(env); return [pair.primary.url, pair.secondary.url]; }
     catch { throw unavailable(); }
   }
+  if(chain===99901) {
+    for(const [role,provider,domain,authentication] of [["PRIMARY","alchemy","alchemy.com","provider-credential"],["SECONDARY","kinetiq","kinetiq.xyz","public"]]) {
+      for(const [field,expected] of [["PROVIDER_ID",provider],["TRUST_DOMAIN",domain],["AUTHENTICATION",authentication]]) {
+        const configured=env[`ELYSIUM_RPC_${role}_${field}`];
+        if(configured!==undefined&&configured!==expected)throw unavailable();
+      }
+    }
+    return [endpoint(env.ELYSIUM_RPC_PRIMARY_URL,"elysium-mainnet.g.alchemy.com",/^\/v2\/[A-Za-z0-9_-]{16,256}$/u),
+      endpoint(env.ELYSIUM_RPC_SECONDARY_URL??"https://rpc.elysium.kinetiq.xyz","rpc.elysium.kinetiq.xyz",/^\/$/u)];
+  }
   const prefix = chain === 4663 ? "ROBINHOOD_V4" : chain === 8453 ? "BASE" : chain === 999 ? "HYPEREVM" : undefined;
   if (!prefix) throw unavailable();
   const network = chain === 4663 ? "robinhood" : chain === 8453 ? "base" : "hyperliquid";

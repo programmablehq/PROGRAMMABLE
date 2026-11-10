@@ -20,8 +20,8 @@ describe("Custom AI capability discovery", () => {
     expect(body.chainScope).toBe("fixed-fee-launches");
     expect(body.browser).toEqual({ url: "https://programmable.market/launch/custom-ai", guide: "https://programmable.market/developers/custom-ai-browser.md",
       authentication: "wallet-session", messageLimit: 8000, recovery: "read-saved-request", stateAttribute: "data-chat-state" });
-    expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999], state: "source-draft", requiresSession: true });
-    expect(body.productRuntime).toMatchObject({requiresSession:true,chains:[1,4663,8453,999],maximumContracts:16,maximumRPCReadsPerProvider:32,cacheSeconds:60,polling:false,walletActions:false});
+    expect(body.sourceProjects).toMatchObject({ chains: [1,4663,8453,999,99901], state: "source-draft", requiresSession: true });
+    expect(body.productRuntime).toMatchObject({requiresSession:true,chains:[1,4663,8453,999,99901],maximumContracts:16,maximumRPCReadsPerProvider:32,cacheSeconds:60,polling:false,walletActions:false});
     expect(body.productValues).toMatchObject({requiresSession:true,maximumRPCReadsPerProvider:4,providers:2,cacheSeconds:10,polling:false,walletActions:false,tokenUnits:"not-inferred"});
     expect(body.capabilities.find((value:{id:string})=>value.id==="arbitrary-hooks").state).toBe("source-draft");
     expect(body.capabilities.find((value:{id:string})=>value.id==="fee-allocation-planning").state).toBe("design-only");

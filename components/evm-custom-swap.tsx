@@ -1,19 +1,22 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
+import { EVM_CUSTOM_CHAINS } from "@/lib/evm-custom-chains";
 import { formatUnits, parseUnits } from "viem";
 import { EvmCustomFees } from "./evm-custom-fees";
 import { useWallet } from "./wallet-provider";
 import { validateEvmCustomSwapDescriptor, validateEvmCustomSwapPreparation, type EvmCustomSwapDescriptor, type EvmCustomSwapPreparation } from "@/lib/swap/evm-custom";
 import styles from "./swap-panel.module.css";
-export function EvmCustomSwap({ token, symbol }: {
+export function EvmCustomSwap({ token, symbol, chainId=999 }: {
   token: `0x${string}`;
   symbol: string;
+  chainId?: 999 | 99901;
 }) {
-  return <EvmCustomSwapForm key={token.toLowerCase()} token={token} symbol={symbol} />;
+  return <EvmCustomSwapForm key={`${chainId}:${token.toLowerCase()}`} token={token} symbol={symbol} chainId={chainId} />;
 }
-function EvmCustomSwapForm({ token, symbol }: {
+function EvmCustomSwapForm({ token, symbol, chainId=999 }: {
   token: `0x${string}`;
   symbol: string;
+  chainId?: 999 | 99901;
 }) {
   const wallet = useWallet(), id = useId(), busyRef = useRef(false);
   const [descriptor, setDescriptor] = useState<EvmCustomSwapDescriptor | null>(null), [buy, setBuy] = useState(true), [amount, setAmount] = useState("");
@@ -21,12 +24,12 @@ function EvmCustomSwapForm({ token, symbol }: {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [hash, setHash] = useState<`0x${string}` | null>(null);
   useEffect(() => {
     const abort = new AbortController();
-    fetch(`/api/swap/evm/prepare?token=${token}`, { signal: abort.signal }).then(async (response) => { const body = await response.json(); if (abort.signal.aborted) return; if (!response.ok)
-      throw new Error(body.error); validateEvmCustomSwapDescriptor(body); if (body.chainId !== 999 || body.token.toLowerCase() !== token.toLowerCase())
+    fetch(`/api/swap/evm/prepare?token=${token}&chainId=${chainId}`, { signal: abort.signal }).then(async (response) => { const body = await response.json(); if (abort.signal.aborted) return; if (!response.ok)
+      throw new Error(body.error); validateEvmCustomSwapDescriptor(body); if (body.chainId !== chainId || body.token.toLowerCase() !== token.toLowerCase())
       throw new Error("Trading route changed"); setDescriptor(body); }).catch(e => { if (!abort.signal.aborted)
       setError(e instanceof Error ? e.message : "Trading information is unavailable."); });
     return () => abort.abort();
-  }, [token]);
+  }, [token,chainId]);
   const quote = savedQuote?.request.owner.toLowerCase() === wallet.wallet?.account.toLowerCase() ? savedQuote : null;
   async function prepare() {
     if (busyRef.current)
@@ -46,7 +49,7 @@ function EvmCustomSwapForm({ token, symbol }: {
         throw new Error("Enter a valid amount.");
       if ((amount.split(".")[1]?.length ?? 0) > (buy ? descriptor.quoteDecimals : descriptor.tokenDecimals))
         throw new Error("This amount has too many decimal places.");
-      const request = { chainId: 999 as const, token, owner: wallet.wallet.account, buy, amountIn: parseUnits(amount, buy ? descriptor.quoteDecimals : descriptor.tokenDecimals).toString(), slippageBps: slippage, deadline: String(Math.floor(Date.now() / 1000) + 1200) };
+      const request = { chainId, token, owner: wallet.wallet.account, buy, amountIn: parseUnits(amount, buy ? descriptor.quoteDecimals : descriptor.tokenDecimals).toString(), slippageBps: slippage, deadline: String(Math.floor(Date.now() / 1000) + 1200) };
       const response = await fetch("/api/swap/evm/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request) });
       const body = await response.json();
       if (!response.ok)
@@ -95,8 +98,8 @@ function EvmCustomSwapForm({ token, symbol }: {
  <select id={`${id}-slippage`} value={slippage} disabled={busy} onChange={e => { setSlippage(Number(e.target.value)); setQuote(null); }} style={{ marginLeft: 12 }}><option value={50}>0.5%</option><option value={100}>1%</option><option value={300}>3%</option><option value={500}>5%</option></select></div>
  {quote && descriptor ? <p aria-live="polite">Estimated output: {formatUnits(BigInt(quote.quote.amountOut), buy ? descriptor.tokenDecimals : descriptor.quoteDecimals)} {buy ? symbol : descriptor.quoteSymbol}<br />Minimum received: {formatUnits(BigInt(quote.quote.minimumOut), buy ? descriptor.tokenDecimals : descriptor.quoteDecimals)}<br />{quote.status === "approval-required" ? "Approve the exact amount, then refresh the quote." : "Network fees are shown in your wallet."}</p> : null}
  <div style={{ marginTop: 20 }}>{quote ? <button className={styles.primary} type="button" disabled={busy} onClick={submit}>{busy ? "Waiting for wallet…" : quote.status === "approval-required" ? "Approve amount" : "Confirm swap"}</button> : <button className={styles.primary} type="button" disabled={busy || (!descriptor && !!wallet.wallet)} onClick={prepare}>{!wallet.wallet ? "Connect wallet" : busy ? "Checking trade…" : "Get quote"}</button>}</div>
- {hash ? <p role="status">Transaction submitted. <a href={`https://hyperevmscan.io/tx/${hash}`} target="_blank" rel="noreferrer">View transaction</a>. Refresh the quote after confirmation.</p> : null}
+ {hash ? <p role="status">Transaction submitted. <a href={`${EVM_CUSTOM_CHAINS[chainId].explorer}/tx/${hash}`} target="_blank" rel="noreferrer">View transaction</a>. Refresh the quote after confirmation.</p> : null}
  {error ? <p role="alert">{error}</p> : null}
-<EvmCustomFees token={token}/>
+<EvmCustomFees token={token} chainId={chainId}/>
 </section>;
 }

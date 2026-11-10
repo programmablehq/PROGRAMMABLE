@@ -20,7 +20,7 @@ export function interfaceKey(declaration:string):string|undefined {
 /** ABI and construction knowledge only, never implementation input to the
  * independent scenario planner or a claim that arbitrary shares are supported. */
 export function implementationPatternReferences(chainId:number){
-  const references=[1,4663,8453,999].includes(chainId)?[{id:"native-fee-flow-with-owned-liquidity-v1",
+  const references=[1,4663,8453,999,99901].includes(chainId)?[{id:"native-fee-flow-with-owned-liquidity-v1",
     description:"Reference architecture for collected-fee allocation to creator-owned liquidity, buyback and burn, daily top-ten holder claims and a fixed creator. All shares, rates, timing, eligibility and failure behavior still come from the saved intent.",
     contracts:feeFlow.contracts,
     semantics:{
@@ -61,7 +61,7 @@ type ImplementationPattern={chainId:number;contracts:{id:string;role:string;sour
 export function matchImplementationPattern(blueprint:GeneralCheckBlueprint,paths:readonly string[],canonical?:{
   sources:ContractProject["sources"];references:readonly {source:string;contract:string}[];
 },allowAdditionalInterface=false):ContractProject["sources"]|undefined {
-  if(![1,4663,8453,999].includes(blueprint.chainId))return;
+  if(![1,4663,8453,999,99901].includes(blueprint.chainId))return;
   // Prefer the smaller, complete fee-split reference over trimming a holder
   // registry that the user never asked for. New references retain their own
   // chain boundary; only the existing Base reference has cross-chain adapters.

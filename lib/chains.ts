@@ -35,3 +35,9 @@ export const robinhoodChain = defineChain({
     },
   },
 });
+
+export const elysiumChain = defineChain({
+  id: 99901, name: "Elysium", nativeCurrency: { decimals: 18, name: "HYPE", symbol: "HYPE" },
+  rpcUrls: { default: { http: ["https://rpc.elysium.kinetiq.xyz"] } },
+  blockExplorers: { default: { name: "Elysium Explorer", url: "https://elysium.kinetiq.xyz" } },
+});

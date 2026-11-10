@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn(), base: vi.fn(), hyperevm: vi.fn() }));
+const mocks = vi.hoisted(() => ({ chart: vi.fn(), robinhood: vi.fn(), ethereum: vi.fn(), base: vi.fn(), hyperevm: vi.fn(), elysium: vi.fn() }));
+vi.mock("server-only", () => ({}));
+vi.mock("@/lib/server/elysium-explore", () => ({ readElysiumToken: mocks.elysium }));
 vi.mock("@/lib/server/codex-market", () => ({ readCodexChart: mocks.chart }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodToken: mocks.robinhood }));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumExploreCatalog: mocks.ethereum }));

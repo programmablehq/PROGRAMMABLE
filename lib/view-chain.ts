@@ -1,4 +1,4 @@
-export type ViewChainId = 1 | 4663 | 8453 | 999;
+export type ViewChainId = 1 | 4663 | 8453 | 999 | 99901;
 
 export const DEFAULT_VIEW_CHAIN_ID: ViewChainId = 4663;
 // Earlier releases saved Ethereum automatically. Start the Robinhood default
@@ -13,6 +13,7 @@ export const VIEW_CHAIN_OPTIONS = [
   { id: 4663, label: "Robinhood" },
   { id: 8453, label: "Base" },
   { id: 999, label: "HyperEVM" },
+  { id: 99901, label: "Elysium" },
 ] as const satisfies ReadonlyArray<{
   id: ViewChainId;
   label: string;
@@ -23,11 +24,12 @@ export function tryParseViewChainId(value: unknown): ViewChainId | null {
   if (value === 4663 || value === "4663") return 4663;
   if (value === 8453 || value === "8453") return 8453;
   if (value === 999 || value === "999") return 999;
+  if (value === 99901 || value === "99901") return 99901;
   return null;
 }
 
 export function isViewChainId(value: unknown): value is ViewChainId {
-  return value === 1 || value === 4663 || value === 8453 || value === 999;
+  return value === 1 || value === 4663 || value === 8453 || value === 999 || value === 99901;
 }
 
 export function parseViewChainId(value: unknown): ViewChainId {

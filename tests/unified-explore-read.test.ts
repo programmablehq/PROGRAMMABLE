@@ -6,12 +6,13 @@ import type { CanonicalTokenExploreEntry } from "@/lib/tokens";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 
 vi.mock("server-only", () => ({}));
-const sources = vi.hoisted(() => ({ rh: vi.fn(), eth: vi.fn(), base: vi.fn(), hyperevm: vi.fn(), ai: vi.fn(), rhMarkets: vi.fn(), ethMarkets: vi.fn(), presentations: vi.fn() }));
+const sources = vi.hoisted(() => ({ rh: vi.fn(), eth: vi.fn(), base: vi.fn(), hyperevm: vi.fn(), elysium: vi.fn(), ai: vi.fn(), rhMarkets: vi.fn(), ethMarkets: vi.fn(), presentations: vi.fn() }));
 vi.mock("@/lib/custom-ai/index.server", () => ({ readCustomAICatalog: sources.ai }));
 const recent = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/server/module-foundation/recent-launch-store", () => ({ readRecentFoundationLaunches: recent }));
 vi.mock("@/lib/server/robinhood-index/read", () => ({ readRobinhoodExploreCatalog: sources.rh }));
 vi.mock("@/lib/server/hyperevm-explore", () => ({ readHyperEvmExploreCatalog:sources.hyperevm }));
+vi.mock("@/lib/server/elysium-explore", () => ({ readElysiumExploreCatalog: sources.elysium }));
 vi.mock("@/lib/server/base-explore", () => ({ readBaseExploreCatalog: sources.base }));
 vi.mock("@/lib/server/ethereum-explore", () => ({ readEthereumUnifiedExploreCatalog: sources.eth }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: sources.rhMarkets, readRobinhoodPresentations: sources.presentations }));
@@ -40,6 +41,7 @@ beforeEach(() => {
   recent.mockResolvedValue([]);
   sources.ai.mockResolvedValue({ status: "inactive", updatedAt: null, items: [] });
   sources.hyperevm.mockResolvedValue({status:"ready",updatedAt:"2026-10-03T10:00:00Z",items:[],presentations:[],sourceEvidence:{verified:"hyperevm"}});
+  sources.elysium.mockResolvedValue({status:"ready",updatedAt:"2026-10-03T10:00:00Z",items:[],presentations:[],sourceEvidence:{verified:"elysium"}});
   sources.base.mockResolvedValue({status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [], presentations: [], sourceEvidence: { verified: "base" }});
   sources.rh.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", items: [rh], sourceEvidence: { verified: "rh" } });
   sources.eth.mockResolvedValue({ status: "ready", updatedAt: "2026-10-03T10:00:00Z", entries: [eth], sourceEvidence: { verified: "eth" } });
@@ -237,6 +239,7 @@ describe("Unified verified source adapter", () => {
     sources.rh.mockRejectedValue(new Error("unavailable"));
     sources.base.mockRejectedValue(new Error("unavailable"));
     sources.hyperevm.mockRejectedValue(new Error("unavailable"));
+    sources.elysium.mockRejectedValue(new Error("unavailable"));
     expect(await readUnifiedLaunches()).toMatchObject({ status: "unavailable", items: [] });
   });
   it("keeps the Ethereum pool proof's quote when optional quote metadata and markets are absent", async () => {
@@ -324,7 +327,7 @@ describe("Unified verified source adapter", () => {
     expect(result.items.map(row => [row.chainId, row.name])).toEqual([[1, "ETH custom"], [4663, "RH token"]]);
     expect(result.presentations.map(row => [row.chainId, row.market?.marketCapUsd])).toEqual([[4663, 20], [1, 100]]);
     expect(result.items).toHaveLength(2);
-    expect(result.sourceEvidence).toEqual({ robinhood: { verified: "rh" }, ethereum: { verified: "eth" }, base: { verified: "base" }, hyperevm: { verified: "hyperevm" } });
+    expect(result.sourceEvidence).toEqual({ robinhood: { verified: "rh" }, ethereum: { verified: "eth" }, base: { verified: "base" }, hyperevm: { verified: "hyperevm" }, elysium: { verified: "elysium" } });
     expect(sources.rhMarkets).toHaveBeenCalledExactlyOnceWith([rh], [{ tokenAddress: address, poolId: pool }]);
     expect(sources.ethMarkets).toHaveBeenCalledExactlyOnceWith([eth], 1, { universe: [{ tokenAddress: address, poolId: pool }] });
   });
@@ -344,6 +347,7 @@ describe("Unified verified source adapter", () => {
     sources.rh.mockResolvedValue({ status: "unavailable", updatedAt: null, items: [], sourceEvidence: null });
     sources.base.mockRejectedValue(new Error("unavailable"));
     sources.hyperevm.mockRejectedValue(new Error("unavailable"));
+    sources.elysium.mockRejectedValue(new Error("unavailable"));
     expect(await readUnifiedLaunches()).toMatchObject({ status: "unavailable", items: [] });
   });
 

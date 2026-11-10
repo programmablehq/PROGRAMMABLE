@@ -12,13 +12,14 @@ export const LAUNCH_MODE_OPTIONS = [
   { value: "custom", label: "Custom" },
 ] as const;
 
-export type ExploreChainFilter = "all" | 1 | 4663 | 8453 | 999;
+export type ExploreChainFilter = "all" | 1 | 4663 | 8453 | 999 | 99901;
 export const LAUNCH_CHAIN_OPTIONS = [
   { value: "all", label: "All chains" },
   { value: 4663, label: "Robinhood" },
   { value: 1, label: "Ethereum" },
   { value: 8453, label: "Base" },
   { value: 999, label: "HyperEVM" },
+  { value: 99901, label: "Elysium" },
 ] as const satisfies ReadonlyArray<{ value: ExploreChainFilter; label: string }>;
 
 export const ROBINHOOD_EXPLORE_PAGE_SIZE = 10;
@@ -59,7 +60,7 @@ export function parseRobinhoodExploreQuery(query: URLSearchParams, options: { al
     || !/^[1-9]\d{0,5}$/.test(page) || q.length > 128
     || !LAUNCH_SORT_OPTIONS.some((option) => option.value === sort)
     || !LAUNCH_MODE_OPTIONS.some((option) => option.value === mode)
-    || !(chain === "all" || ["1", "4663", "8453", "999"].includes(chain))
+    || !(chain === "all" || ["1", "4663", "8453", "999", "99901"].includes(chain))
     || !["6", "8", "10", "50"].includes(pageSize)) return null;
   const filters: RobinhoodExploreFilters = { sort, mode } as RobinhoodExploreFilters;
   if (chain !== "all") filters.chain = Number(chain) as Exclude<ExploreChainFilter, "all">;

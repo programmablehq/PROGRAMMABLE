@@ -1,6 +1,6 @@
 export type AutomaticLaunchTransport = {
   schemaVersion:"programmable.automatic-launch-transport.v1";
-  reviewId:string;resourceId:string;chainId:"1"|"4663"|"8453"|"999";controller:string;
+  reviewId:string;resourceId:string;chainId:"1"|"4663"|"8453"|"999"|"99901";controller:string;
   subjectHash:`sha256:${string}`;originalRequestHash:`sha256:${string}`;requestHash:`sha256:${string}`;
   rawRequestSha256:`sha256:${string}`|null;deadline:string;checkedAt:string;
   currentStatus:Record<string,unknown>;

@@ -9,7 +9,7 @@ import type { LaunchPlanRecordV1 } from "@/lib/custom-launch/launch-plan-v1";
 import { readGeneralLaunchStatus, type GeneralPreparationView, type GeneralLaunchStatus } from "./general-preparation";
 import type { AISessionHeaders } from "./client";
 
-export type GeneralWalletSubject = Readonly<{ chainId: 1 | 4663 | 8453 | 999; controller: string; resourceId: string;
+export type GeneralWalletSubject = Readonly<{ chainId: 1 | 4663 | 8453 | 999 | 99901; controller: string; resourceId: string;
   requestHash: `sha256:${string}`; rawRequestSha256: `sha256:${string}` | null; deadline: string }>;
 export type GeneralWalletResource = { kind: "graph"; launch: LaunchResource } | { kind: "plan"; plan: LaunchPlanRecordV1 };
 export type GeneralGraphWalletReview = Readonly<{ router: CustomLaunchRouterReviewV3; projectBinding: unknown }>;
@@ -24,7 +24,7 @@ export function generalWalletSubject(saved: GeneralPreparationView, status: Gene
     rawRequestSha256: checked.rawRequestSha256, deadline: checked.deadline! });
 }
 export function generalWalletDetailUrl(subject: GeneralWalletSubject): string {
-  if (![1, 4663, 8453, 999].includes(subject.chainId) || !/^0x[a-f0-9]{40}$/iu.test(subject.controller)
+  if (![1, 4663, 8453, 999, 99901].includes(subject.chainId) || !/^0x[a-f0-9]{40}$/iu.test(subject.controller)
     || !/^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(subject.resourceId)
     || !/^sha256:[a-f0-9]{64}$/u.test(subject.requestHash)) return fail();
   const query = new URLSearchParams({ walletAddress: subject.controller, ...(subject.chainId === 4663 ? { source: "custom_launch_plan_v1" }
@@ -49,7 +49,7 @@ export async function readGeneralWalletResource(subject: GeneralWalletSubject, b
   // Reuse the established full-resource parser. Load its UI chunk only after
   // an explicit request for the wallet details, never during status polling.
   const { parseLaunch } = await import("@/components/developer-launch-history");
-  const launch = parseLaunch(body, subject.controller, String(subject.chainId) as "1" | "8453" | "999");
+  const launch = parseLaunch(body, subject.controller, String(subject.chainId) as "1" | "8453" | "999" | "99901");
   if (!launch || launch.routeId !== "custom-launch:create:v3" || launch.launchId !== subject.resourceId || launch.requestHash !== subject.requestHash) return fail();
   return { kind: "graph", launch };
 }
@@ -85,7 +85,7 @@ export async function generalGraphFinalizedReceipt(subject: GeneralWalletSubject
   if (!stamp || typeof stamp !== "object" || Array.isArray(stamp) || stamp.launchId !== launch.onchainLaunchId
     || !permit || typeof permit !== "object" || Array.isArray(permit) || typeof permit.launchWallet !== "string"
     || permit.launchWallet.toLowerCase() !== subject.controller.toLowerCase() || String(permit.chainId) !== String(subject.chainId)) return fail();
-  return readCustomGraphFinalizedTransactionV3(output.onchain, { chainId: String(subject.chainId) as "1" | "8453" | "999", onchainLaunchId: launch.onchainLaunchId });
+  return readCustomGraphFinalizedTransactionV3(output.onchain, { chainId: String(subject.chainId) as "1" | "8453" | "999" | "99901", onchainLaunchId: launch.onchainLaunchId });
 }
 export async function generalWalletRequest(subject: GeneralWalletSubject, headers: AISessionHeaders, signal: AbortSignal,
   options: { stepId: string; transactionHash: Hex } | undefined = undefined, fetcher: typeof fetch = fetch): Promise<unknown> {
@@ -124,4 +124,4 @@ async function generalWalletJson(url: string, headers: AISessionHeaders, signal:
     text += decoder.decode(); lifetime.throwIfAborted(); return JSON.parse(text) as unknown;
   } finally { lifetime.removeEventListener("abort", abort); if (!done) void reader.cancel().catch(() => {}); reader.releaseLock(); }
 }
-export const generalWalletValue = (value: string, chainId: GeneralWalletSubject["chainId"]) => `${formatEther(BigInt(value))} ${chainId === 999 ? "HYPE" : "ETH"}`;
+export const generalWalletValue = (value: string, chainId: GeneralWalletSubject["chainId"]) => `${formatEther(BigInt(value))} ${(chainId === 999 || chainId === 99901) ? "HYPE" : "ETH"}`;

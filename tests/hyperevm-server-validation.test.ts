@@ -27,14 +27,14 @@ describe("HyperEVM receipt coordinates", () => {
 describe("HyperEVM provider block agreement", () => {
   const hash = `0x${"ab".repeat(32)}`;
   const block = () => ({ number: "0x64", hash, timestamp: `0x${Math.floor(Date.now() / 1000).toString(16)}`, size: "0xacc" });
-  const provider = (value: ReturnType<typeof block>) => vi.fn(async (method: string) => method === "eth_blockNumber" ? "0x64" : value);
+  const provider = (value: ReturnType<typeof block>) => vi.fn(async (method: string) => method === "eth_chainId" ? "0x3e7" : method === "eth_blockNumber" ? "0x64" : value);
 
   it("accepts the same block when providers report different serialized sizes", async () => {
     const first = block();
     const primary = provider(first), secondary = provider({ ...first, size: "0x77d" });
     expect(await readHyperEvmSwapCheckpoint([primary, secondary])).toEqual({ number: 100n, hash });
-    expect(primary).toHaveBeenCalledTimes(2);
-    expect(secondary).toHaveBeenCalledTimes(2);
+    expect(primary).toHaveBeenCalledTimes(3);
+    expect(secondary).toHaveBeenCalledTimes(3);
   });
 
   it.each(["hash", "number", "timestamp"] as const)("rejects differing %s even when size differs", async field => {

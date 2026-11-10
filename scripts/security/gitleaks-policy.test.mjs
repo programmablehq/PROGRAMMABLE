@@ -152,6 +152,20 @@ test("HyperEVM discovery allows only its exact public WHYPE runtime commitment",
   }
 });
 
+test("Elysium discovery permits only exact public funding bindings on its two paths", t => {
+  const paths = ["packages/launch/src/elysium-profile-v1.json", "public/openapi/elysium-custom-launch-v1.json"];
+  const profile = JSON.parse(readFileSync(new URL("../../packages/launch/src/elysium-profile-v1.json", import.meta.url)));
+  for (const field of ["fundingToken", "fundingTokenRuntimeCodeHash"]) {
+    const value = profile[field], line = `  "${field}": "${value}",`;
+    for (const path of paths) {
+      assert.deepEqual(scan(t, { [path]: line }, { raw: true }), []);
+      assertFiles(scan(t, { [path]: line.replace(value, `0x${material.slice(0, value.length - 2)}`) }, { raw: true }), [path]);
+      assert.ok(scan(t, { [path]: `${line} "apiKey": "${material}",` }, { raw: true }).length > 0);
+      assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
+    }
+  }
+});
+
 test("Eulerian public identity comparisons do not hide changed or adjacent credentials", t => {
   const path = "lib/server/robinhood-presentation.ts";
   const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");

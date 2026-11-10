@@ -1,3 +1,4 @@
+import { ELYSIUM_CUSTOM_ROOTS_V1 } from "@/lib/custom-launch/elysium-release-v1";
 import { Actions, URVersion, V4Planner } from "@uniswap/v4-sdk";
 import { CommandType, RoutePlanner, UniversalRouterVersion } from "@uniswap/universal-router-sdk";
 import { encodeFunctionData, getAddress, parseAbi, type Address, type Hex } from "viem";
@@ -9,6 +10,7 @@ import { customV4PoolId, type CustomV4PoolKey } from "./custom-v4";
 export const EVM_SWAP_SCHEMA = "programmable.evm-custom-swap.v1";
 export const NATIVE = "0x0000000000000000000000000000000000000000" as Address;
 export const EVM_SWAP_PROTOCOLS = {
+  99901: { ...ELYSIUM_CUSTOM_ROOTS_V1, permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3", poolManagerHash: "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1", universalRouterHash: "0x1a7af429c3883cbf53ec7e54fad35a99232faffe04505efb971a799a993ca6a8", permit2Hash: "0xecc8810a534829aab9326a3f868a21ed05f1c62b57dcc82429c8a78b3a27cfdc", routerHash: "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7" },
   999: { ...HYPEREVM_CUSTOM_ROOTS_V1, permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3", poolManagerHash: "0x7846a5013818d482274dd4895ff7a7190967ec6a4936fa071f3fbd48a7d2d5be", universalRouterHash: "0x0710561487244e5d288bd93fe4c055a4a33fd486a07e8b4c982124c57c6d3224", permit2Hash: "0x10f4ff92b79ad2dca1393ef990940a13e25fb56afd1ff4a6e15853b069020da0", routerHash: "0x46b8df86a30338c9ad41b19c96194970fcc3ea3d2f4062f2353a6ae90fcccbdc" },
   8453: { ...BASE_CUSTOM_ROOTS_V1, permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3", poolManagerHash: "0x83b2af6e9f3158defc2811cbcb0db71ecf8b2ba2abea39c39e370ac5c6f43eb6", universalRouterHash: "0x816c75fe7f6ccf8fe8b14825091e8dff301fe7ffd4b962f89b2981a747facc08", permit2Hash: "0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed", routerHash: "" },
 } as const;
@@ -67,7 +69,7 @@ export function parseEvmCustomSwapRequest(value: unknown): EvmCustomSwapRequest 
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw Error("Invalid swap request");
   const v = value as EvmCustomSwapRequest;
-  if (Object.keys(v).sort().join() !== "amountIn,buy,chainId,deadline,owner,slippageBps,token" || ![8453, 999].includes(v.chainId) || typeof v.token !== "string" || typeof v.owner !== "string" || !address.test(v.token) || !address.test(v.owner)
+  if (Object.keys(v).sort().join() !== "amountIn,buy,chainId,deadline,owner,slippageBps,token" || ![8453, 999, 99901].includes(v.chainId) || typeof v.token !== "string" || typeof v.owner !== "string" || !address.test(v.token) || !address.test(v.owner)
     || same(v.owner, NATIVE) || same(v.token, NATIVE) || typeof v.buy !== "boolean" || typeof v.amountIn !== "string" || !decimal.test(v.amountIn) || BigInt(v.amountIn) <= 0n || BigInt(v.amountIn) >= (1n << 128n)
     || !Number.isInteger(v.slippageBps) || v.slippageBps < 1 || v.slippageBps > 500 || typeof v.deadline !== "string" || !decimal.test(v.deadline))
     throw Error("Invalid swap request");
@@ -75,7 +77,7 @@ export function parseEvmCustomSwapRequest(value: unknown): EvmCustomSwapRequest 
 }
 export function validateEvmCustomSwapDescriptor(d: EvmCustomSwapDescriptor): void {
   if (!d || Object.keys(d).sort().join() !== "chainId,creator,launchId,launchTransaction,poolId,poolKey,quoteAsset,quoteDecimals,quoteSymbol,stampHash,token,tokenDecimals"
-    || ![8453, 999].includes(d.chainId) || ![d.token, d.creator, d.quoteAsset].every(v => typeof v === "string" && address.test(v))
+    || ![8453, 999, 99901].includes(d.chainId) || ![d.token, d.creator, d.quoteAsset].every(v => typeof v === "string" && address.test(v))
     || ![d.poolId, d.launchId, d.launchTransaction, d.stampHash].every(v => typeof v === "string" && hash.test(v))
     || ![d.tokenDecimals, d.quoteDecimals].every(v => Number.isInteger(v) && v >= 0 && v <= 36) || typeof d.quoteSymbol !== "string" || d.quoteSymbol.length > 20
     || !d.poolKey || Object.keys(d.poolKey).sort().join() !== "currency0,currency1,fee,hooks,tickSpacing"
@@ -94,7 +96,7 @@ export function buildEvmCustomSwap(descriptor: EvmCustomSwapDescriptor, request:
   if (!same(quoteAsset, descriptor.quoteAsset))
     throw Error("Quote asset changed");
   const planner = new V4Planner();
-  const recent = request.chainId === 999;
+  const recent = request.chainId === 999 || request.chainId === 99901;
   const version = recent ? URVersion.V2_1_1 : URVersion.V2_0;
   planner.addAction(Actions.SWAP_EXACT_IN_SINGLE, [{ poolKey: descriptor.poolKey, zeroForOne: same(input, descriptor.poolKey.currency0), amountIn: request.amountIn, amountOutMinimum: minimumOut, ...(recent ? { minHopPriceX36: "0" } : {}), hookData: "0x" }], version);
   planner.addAction(Actions.SETTLE_ALL, [input, request.amountIn], version);
@@ -140,7 +142,7 @@ export const EVM_FEE_VAULT_ABI = parseAbi(["function kernel() view returns(addre
 export interface EvmFeeClaimPreparation {
   schemaVersion: typeof EVM_FEE_CLAIM_SCHEMA;
   request: {
-    chainId: 999;
+    chainId: 999 | 99901;
     token: Address;
     owner: Address;
     vaultKind: "fees" | "opening";
@@ -166,7 +168,7 @@ export function validateEvmFeeClaimPreparation(value: unknown, expected: {
   token: Address;
 }): EvmFeeClaimPreparation {
   const p = value as EvmFeeClaimPreparation;
-  if (!p || p.schemaVersion !== EVM_FEE_CLAIM_SCHEMA || !p.request || p.request.chainId !== 999 || expected.chainId !== 999 || !same(p.request.owner, expected.owner) || !same(p.request.token, expected.token)
+  if (!p || p.schemaVersion !== EVM_FEE_CLAIM_SCHEMA || !p.request || ![999,99901].includes(p.request.chainId) || p.request.chainId !== expected.chainId || !same(p.request.owner, expected.owner) || !same(p.request.token, expected.token)
     || !["fees", "opening"].includes(p.request.vaultKind) || !["creator", "platform"].includes(p.request.recipientKind) || !address.test(p.vault) || !address.test(p.recipient) || !decimal.test(p.amount) || BigInt(p.amount) <= 0n || !Number.isSafeInteger(p.validUntil) || p.validUntil <= Date.now() / 1000 || p.validUntil > Date.now() / 1000 + 45)
     throw Error("Fee claim expired or changed");
   validateEvmCustomSwapDescriptor(p.descriptor);

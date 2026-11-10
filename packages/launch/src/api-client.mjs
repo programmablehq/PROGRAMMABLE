@@ -1,3 +1,4 @@
+import ELYSIUM_PROFILE_V1 from "./elysium-profile-v1.json" with {type: "json"};
 import HYPEREVM_PROFILE_V1 from "./hyperevm-profile-v1.json" with {type: "json"};
 import BASE_PROFILE_V1 from "./base-profile-v1.json" with { type: "json" };
 import { assertDirectNativeProgrammableTradeFeePolicyV36, directNativeProgrammableTradeFeePolicyHashV36 } from "./profile-v36.mjs";
@@ -140,7 +141,7 @@ export class ProgrammableApiError extends Error {
 
 export async function getLaunchCapabilities(options = {}) {
   const apiOrigin = productionApiOrigin(options.apiOrigin);
-  const isEvmCustom = ["8453","999"].includes(String(options.chainId));
+  const isEvmCustom = ["8453","999","99901"].includes(String(options.chainId));
   const apiVersion = isEvmCustom ? 3 : normalizeApiVersion(options.apiVersion ?? 3);
   const chainId = isEvmCustom ? String(options.chainId) : apiVersion === 4
     ? normalizeV4ChainId(options.chainId)
@@ -194,7 +195,7 @@ export async function validateLaunchRemote(options) {
   const request = isV4
     ? parseV4RequestBytes(requestBytes)
     : parseStrictJson(decodeExactUtf8(requestBytes, "V3 request"), { maximumBytes: MAX_REQUEST_BYTES });
-  const isEvmCustom = !isV4 && ["8453","999"].includes(request.chainId);
+  const isEvmCustom = !isV4 && ["8453","999","99901"].includes(request.chainId);
   const chainId = isEvmCustom ? request.chainId : isV4 ? normalizeV4ChainId(request.chainId) : undefined;
   const serverRequestHash = isV4
     ? customLaunchRequestHashV4(request)
@@ -310,7 +311,7 @@ export async function submitLaunch(options) {
   const localArtifactBindings = isV4
     ? exactLocalV4ArtifactBindings(validation, request, localCommitments)
     : null;
-  const isEvmCustom = !isV4 && ["8453","999"].includes(request.chainId);
+  const isEvmCustom = !isV4 && ["8453","999","99901"].includes(request.chainId);
   const chainId = isEvmCustom ? request.chainId : isV4 ? normalizeV4ChainId(request.chainId) : undefined;
   const requestPath = isEvmCustom ? `/v4/chains/${chainId}/custom-launches` : isV4
     ? v4Path(CREATE_PATH_TEMPLATE_V4, chainId)
@@ -432,7 +433,7 @@ export async function statusLaunch(options) {
     throw new TypeError("status requires the Custom launch request UUID");
   }
   const apiOrigin = productionApiOrigin(options.apiOrigin);
-  const isEvmCustom = ["8453","999"].includes(String(options.chainId));
+  const isEvmCustom = ["8453","999","99901"].includes(String(options.chainId));
   const apiVersion = isEvmCustom ? 3 : normalizeApiVersion(options.apiVersion ?? 3);
   const chainId = isEvmCustom ? String(options.chainId) : apiVersion === 4 ? normalizeV4ChainId(options.chainId) : undefined;
   const requestPath = isEvmCustom ? `/v4/chains/${chainId}/custom-launches` : createPathForApiVersion(apiVersion, chainId);
@@ -2345,9 +2346,9 @@ function assertPreflightV4Field(condition, field) {
 
 
 function assertProfile36RequestMatchesCapabilities(request, capabilities) {
-  if (["8453","999"].includes(request?.chainId)) {
+  if (["8453","999","99901"].includes(request?.chainId)) {
     assertEvmCapabilitiesResponse(capabilities, request.chainId);
-    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(request.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1), "profile.exactBaseBindings");
+    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(request.chainId === "99901" ? ELYSIUM_PROFILE_V1 : request.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1), "profile.exactBaseBindings");
     return;
   }
   if (request?.launchProfile?.profileVersion !== DIRECT_NATIVE_PROFILE_VERSION_V36) return;
@@ -2360,11 +2361,11 @@ function assertProfile36RequestMatchesCapabilities(request, capabilities) {
 
 export function assertBaseCapabilitiesResponse(value) { return assertEvmCapabilitiesResponse(value, "8453"); }
 export function assertEvmCapabilitiesResponse(value, chainId) {
-  const canonicalProfile=chainId === "999" ? HYPEREVM_PROFILE_V1 : chainId === "8453" ? BASE_PROFILE_V1 : null;
+  const canonicalProfile=chainId === "99901" ? ELYSIUM_PROFILE_V1 : chainId === "999" ? HYPEREVM_PROFILE_V1 : chainId === "8453" ? BASE_PROFILE_V1 : null;
   assertCapabilitiesField(canonicalProfile !== null, "chain");
   assertCapabilitiesField(isPlainObject(value), "$");
   assertCapabilitiesField(value.schemaVersion === "programmable.custom-launch-capabilities.v1" && value.apiVersion === "v4", "schemaVersion");
-  assertCapabilitiesField(value.chain?.id === chainId && value.chain?.name === (chainId === "999" ? "HyperEVM" : "Base"), "chain");
+  assertCapabilitiesField(value.chain?.id === chainId && value.chain?.name === (chainId === "99901" ? "Elysium" : chainId === "999" ? "HyperEVM" : "Base"), "chain");
   assertCapabilitiesField(Number.isFinite(Date.parse(value.serverTime)) && SHA256.test(value.releaseId), "release");
   assertCapabilitiesField(["active", "canary"].includes(value.mode), "mode");
   assertCapabilitiesField(value.publicLaunchAuthorized === (value.mode === "active") && value.moduleMode === false, "publicLaunchAuthorized");

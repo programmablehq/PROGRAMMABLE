@@ -7,7 +7,7 @@ import { CustomAIError } from "./types";
 import type { KnowledgeResult } from "./knowledge";
 
 const abi=parseAbi(["function name() view returns(string)","function symbol() view returns(string)","function decimals() view returns(uint8)","function totalSupply() view returns(uint256)"]);
-const explorers:Record<BuilderChainId,string>={1:"https://etherscan.io",4663:"https://robinhoodchain.blockscout.com",8453:"https://basescan.org",999:"https://hyperevmscan.io"};
+const explorers:Record<BuilderChainId,string>={1:"https://etherscan.io",4663:"https://robinhoodchain.blockscout.com",8453:"https://basescan.org",999:"https://hyperevmscan.io",99901:"https://elysium.kinetiq.xyz"};
 const unavailable=()=>new CustomAIError("lookup","The selected network's contract data could not be verified. Try again shortly.",503);
 
 /** An exact-address metadata observation, shared briefly across conversations.

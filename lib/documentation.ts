@@ -7,6 +7,7 @@ export const DOCUMENTATION = {
   quickstart: "/docs/developers/custom-launch-quickstart",
   customLaunch: "/docs/developers/custom-launch-quickstart/custom-launch",
   base: "/docs/developers/custom-launch-quickstart/base-custom-launch",
+  elysium: "/developers/elysium-custom-launch-api-v1.md",
   hyperevm: "/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",
   moduleMode: "/docs/launch/module-mode",
   creatorLaunch: "/docs/launch/module-mode/launch",

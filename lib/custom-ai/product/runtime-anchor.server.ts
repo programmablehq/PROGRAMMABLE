@@ -31,5 +31,5 @@ export function productRuntimeAnchor(reply:BackendLaunchReply,source:ProductRunt
     ||!output||output.schemaVersion!=="programmable.custom-launch-authorization-result.v3"||output.integrationState!=="ready"
     ||output.stage!=="onchain-observation"||output.actionRequired!==null||!onchain||!same(onchain.token,source.token)||!same(onchain.hook,source.hook))return fail();
   const launchId=record.onchainLaunchId as Hex;
-  return {transactionHash:readCustomGraphFinalizedTransactionV3(onchain,{chainId:String(source.chainId) as "1"|"8453"|"999",onchainLaunchId:launchId}),launchId};
+  return {transactionHash:readCustomGraphFinalizedTransactionV3(onchain,{chainId:String(source.chainId) as "1"|"8453"|"999"|"99901",onchainLaunchId:launchId}),launchId};
 }

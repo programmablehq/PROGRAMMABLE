@@ -603,7 +603,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
                 </Link>
                 {details?.links.length ? <RobinhoodProjectLinks links={details.links}
                   name={launch.name?.trim() || (hasAsset ? "Token" : "Project")} className={styles.socials} /> : null}
-                {profile?.enableClaims && launchChainId !== 8453 && launchChainId !== 999 && profile.account.toLowerCase() === launch.creator.toLowerCase() ? <div className={styles.profileCardActions}>
+                {profile?.enableClaims && launchChainId !== 8453 && launchChainId !== 999 && launchChainId !== 99901 && profile.account.toLowerCase() === launch.creator.toLowerCase() ? <div className={styles.profileCardActions}>
                   <div className={styles.profileCardRewards}><ProfileLaunchRewards launch={launch} account={profile.account} chainId={launchChainId}
                     sendWallet={profile.sendWallet} onEthereumClaim={profile.onEthereumClaim} /></div>
                   <FomoTeamTagButton name={launch.name?.trim() || "your coin"} />

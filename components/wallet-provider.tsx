@@ -38,6 +38,8 @@ import {
   type ReactNode,
 } from "react";
 import { base, hyperEvm, mainnet, sepolia } from "viem/chains";
+import { elysiumChain } from "@/lib/chains";
+import { readEvmCustomWalletFees } from "@/lib/evm-wallet-gas";
 import { bytesToHex, hexToBytes, type Address, type Hex } from "viem";
 
 import {
@@ -797,7 +799,7 @@ const privyConfig = {
       createOnLogin: "users-without-wallets",
     },
   },
-  supportedChains: [robinhoodChain, mainnet, base, hyperEvm],
+  supportedChains: [robinhoodChain, mainnet, base, hyperEvm, elysiumChain],
   defaultChain: robinhoodChain,
 } satisfies PrivyClientConfig;
 
@@ -3150,7 +3152,7 @@ function PrivyWalletBridge({
     if (!connectedWallet || !wallet) {
       throw new Error("Connect your wallet before continuing");
     }
-    const targetChain = input.chainId === "999" ? hyperEvm : input.chainId === "8453" ? base : appChain;
+    const targetChain = input.chainId === "99901" ? elysiumChain : input.chainId === "999" ? hyperEvm : input.chainId === "8453" ? base : appChain;
     const targetChainHex = `0x${targetChain.id.toString(16)}`;
     const targetNetworkName = targetChain.name;
     if (
@@ -3293,18 +3295,19 @@ function PrivyWalletBridge({
       if(!current.authenticated||current.privyUserId!==sessionSubject||current.account?.toLowerCase()!==account.toLowerCase())throw new Error("The wallet session changed");};
     const validate=()=>input.schemaVersion===EVM_SWAP_SCHEMA?validateEvmCustomSwapPreparation(input,expected):validateEvmFeeClaimPreparation(input,expected);
     validate();
-    if(input.request.chainId!==999)throw new Error("Unsupported trade chain");
-    const provider=await getWalletProviderOnChain({wallet:connectedWallet,chainId:999,networkName:"HyperEVM",assertCurrentSession});
-    return runWithBrowserWalletRequestLock({sessionSubject,account,chainId:"999",requestSubject:input.preparationDigest,assertCurrentSession,execute:async()=>{
+    if(input.request.chainId!==999&&input.request.chainId!==99901)throw new Error("Unsupported trade chain");
+    const chain=input.request.chainId===99901?elysiumChain:hyperEvm;
+    const provider=await getWalletProviderOnChain({wallet:connectedWallet,chainId:chain.id,networkName:chain.name,assertCurrentSession});
+    return runWithBrowserWalletRequestLock({sessionSubject,account,chainId:String(chain.id),requestSubject:input.preparationDigest,assertCurrentSession,execute:async()=>{
       const checked=validate();assertCurrentSession();
       const tx=checked.transaction;
-      const fees = await readHyperEvmWalletFees({account,request:payload=>provider.request(payload)});
+      const fees = await readEvmCustomWalletFees({chainId:chain.id as 999|99901,account,request:payload=>provider.request(payload)});
       assertCurrentSession();validate();
       if(connectedWallet.walletClientType==="privy"||connectedWallet.walletClientType==="privy-v2"){
-        const result=await sendPrivyTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gasLimit),chainId:999,maxFeePerGas:BigInt(fees.maxFeePerGas),maxPriorityFeePerGas:0n},{address:account,uiOptions:{description:!("kind" in tx)?"Claim accrued creator fees":tx.kind==="swap"?"Swap on HyperEVM":"Approve the exact trade amount",buttonText:!("kind" in tx)?"Claim fees":tx.kind==="swap"?"Swap":"Approve",successHeader:"Transaction submitted"}});
+        const result=await sendPrivyTransaction({to:tx.to,data:tx.data,value:BigInt(tx.value),gasLimit:BigInt(tx.gasLimit),chainId:chain.id,maxFeePerGas:BigInt(fees.maxFeePerGas),maxPriorityFeePerGas:0n},{address:account,uiOptions:{description:!("kind" in tx)?"Claim accrued creator fees":tx.kind==="swap"?`Swap on ${chain.name}`:"Approve the exact trade amount",buttonText:!("kind" in tx)?"Claim fees":tx.kind==="swap"?"Swap":"Approve",successHeader:"Transaction submitted"}});
         return parseSubmittedTransactionHash(result.hash);
       }
-      await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:"0x3e7",networkName:"HyperEVM",request:method=>provider.request({method})});
+      await assertExternalWalletAuthorityCurrent({expectedAccount:account,expectedChainId:`0x${chain.id.toString(16)}`,networkName:chain.name,request:method=>provider.request({method})});
       assertCurrentSession();validate();
       return parseSubmittedTransactionHash(await provider.request({method:"eth_sendTransaction",params:[{from:account,to:tx.to,data:tx.data,value:`0x${BigInt(tx.value).toString(16)}`,gas:`0x${BigInt(tx.gasLimit).toString(16)}`,...fees}]}));
     }});
@@ -3324,14 +3327,14 @@ function PrivyWalletBridge({
   const recoverGeneralGraphWalletAction = useCallback(async (input: GeneralGraphWalletRecovery): Promise<Hex> => {
     if (!connectedWallet || !wallet || !user?.id || input.attempt.controller !== wallet.account.toLowerCase()) throw new Error("Connect the original launch wallet before recovery.");
     const sessionSubject = user.id, controller = wallet.account, expected = input.attempt.chainId;
-    if (!["1", "8453", "999"].includes(expected)) throw new Error("The recovery network is invalid.");
+    if (!["1", "8453", "999", "99901"].includes(expected)) throw new Error("The recovery network is invalid.");
     const assertCurrent = () => {
       const current = walletRequestSessionRef.current;
       if (!current.authenticated || current.privyUserId !== sessionSubject || current.account?.toLowerCase() !== controller.toLowerCase()) throw new Error("The wallet session changed.");
       input.assertCurrent();
     };
     assertCurrent();
-    const chain = expected === "999" ? hyperEvm : expected === "8453" ? base : mainnet;
+    const chain = expected === "99901" ? elysiumChain : expected === "999" ? hyperEvm : expected === "8453" ? base : mainnet;
     const provider = await getWalletProviderOnChain({ wallet: connectedWallet, chainId: chain.id, networkName: chain.name, assertCurrentSession: assertCurrent });
     assertCurrent();
     // Same exclusive key as runWithBrowserWalletRequestLock. Recovery reads do
