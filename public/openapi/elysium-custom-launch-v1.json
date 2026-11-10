@@ -1778,13 +1778,13 @@
                 "const": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4"
               },
               "routerRuntimeCodeHash": {
-                "const": "0x46b8df86a30338c9ad41b19c96194970fcc3ea3d2f4062f2353a6ae90fcccbdc"
+                "const": "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7"
               },
               "permitAuthority": {
                 "const": "0x8B134A7F24C8a97B999dcce9D10Eb2966c260209"
               },
               "permitAuthorityRuntimeCodeHash": {
-                "const": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c"
+                "const": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000"
               },
               "graphFactory": {
                 "const": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e"
@@ -1796,13 +1796,13 @@
                 "const": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1"
               },
               "poolManagerRuntimeCodeHash": {
-                "const": "0x7846a5013818d482274dd4895ff7a7190967ec6a4936fa071f3fbd48a7d2d5be"
+                "const": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1"
               },
               "fundingToken": {
-                "const": "0x5555555555555555555555555555555555555555"
+                "const": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81"
               },
               "fundingTokenRuntimeCodeHash": {
-                "const": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04"
+                "const": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
               },
               "graphPolicy": {
                 "const": {
@@ -2039,15 +2039,15 @@
               "productionLaunchAuthorized": true,
               "chainId": "99901",
               "router": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
-              "routerRuntimeCodeHash": "0x46b8df86a30338c9ad41b19c96194970fcc3ea3d2f4062f2353a6ae90fcccbdc",
+              "routerRuntimeCodeHash": "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7",
               "permitAuthority": "0x8B134A7F24C8a97B999dcce9D10Eb2966c260209",
-              "permitAuthorityRuntimeCodeHash": "0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+              "permitAuthorityRuntimeCodeHash": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000",
               "graphFactory": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e",
               "graphFactoryRuntimeCodeHash": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8",
               "poolManager": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1",
-              "poolManagerRuntimeCodeHash": "0x7846a5013818d482274dd4895ff7a7190967ec6a4936fa071f3fbd48a7d2d5be",
-              "fundingToken": "0x5555555555555555555555555555555555555555",
-              "fundingTokenRuntimeCodeHash": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04",
+              "poolManagerRuntimeCodeHash": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1",
+              "fundingToken": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81",
+              "fundingTokenRuntimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
               "graphPolicy": {
                 "minimumTargets": 3,
                 "maximumTargets": 16,

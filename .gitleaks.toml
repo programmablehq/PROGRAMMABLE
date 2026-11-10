@@ -2,6 +2,28 @@
 useDefault = true
 
 [[allowlists]]
+description = "Elysium discovery names only its exact public WHYPE address and runtime commitment"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''^packages/launch/src/elysium-profile-v1\.json$''',
+  '''^public/openapi/elysium-custom-launch-v1\.json$''',
+]
+regexes = [
+  '''^\s*"fundingToken": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81",\s*$''',
+  '''^\s*"fundingTokenRuntimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",\s*$''',
+]
+
+[[allowlists]]
+description = "Historical Elysium API draft retained the exact public HyperEVM WHYPE commitment"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^public/openapi/elysium-custom-launch-v1\.json$''']
+regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04",\s*$''']
+
+[[allowlists]]
 description = "HyperEVM acceptance names its exact public onchain canary token"
 targetRules = ["generic-api-key"]
 condition = "AND"
