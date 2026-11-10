@@ -1,0 +1,11 @@
+{
+  "requestId": "16165de7-38e2-49b0-81d4-ef71732f0655",
+  "transactionHash": "0x9744a048853c356753ca3c47b57effd6ce83b4f21686a888b44f1c3322bea0e7",
+  "sourceCommit": "7cdef7c2b7bb2214d02ca02a63501a85bd722a1f",
+  "previousStatus": "failed",
+  "status": "submitted",
+  "triggerDefinitionRestored": true,
+  "originalFunctionSha256": "sha256:ba577b401ccea965328220a07fdc88be440643c05182e6e3d45833e258db2d3a",
+  "additionalTransactionsSent": false,
+  "at": "2026-11-10T11:15:27.462Z"
+}

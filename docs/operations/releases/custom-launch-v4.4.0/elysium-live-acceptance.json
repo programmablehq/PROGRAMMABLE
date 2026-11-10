@@ -1,0 +1,95 @@
+{
+  "schemaVersion": "programmable.elysium-live-acceptance.v1",
+  "status": "passed",
+  "chainId": "99901",
+  "releaseId": "sha256:cafa8313d8707e573233004ee1e7884d9df620ed07c4297ecc269694d0c16f90",
+  "executionReleaseId": "sha256:647e567e8fa95699786b712ad7f9a0c627b7e1dc51a18908109920199d9c067d",
+  "requestId": "16165de7-38e2-49b0-81d4-ef71732f0655",
+  "launchId": "16165de7-38e2-49b0-81d4-ef71732f0655",
+  "token": "0xf700C08385A817E716A40Fb7932A7649347c83dA",
+  "artifactHash": "sha256:9a069321c0668809a6c26c3d94688d790cc011ebfd7ac1b915543c1e5fd7f2d0",
+  "launchTransactionHash": "0x9744a048853c356753ca3c47b57effd6ce83b4f21686a888b44f1c3322bea0e7",
+  "buyTransactionHash": "0xf71635aa598ce1b31a6c8d5ed9a6479e98d36c96267a8bdf162c5b68be5062bc",
+  "sellTransactionHash": "0xaceb112af517212f977d74af83be32ea9816306b5b2baab37e49983128844568",
+  "openingBuyTransactionHash": "0xa0948be5002b1fc9eb5f3ccdd0b070dd2d6468c5d08fe9caee33b191bf2da228",
+  "platformFeesVerified": true,
+  "openingTaxVerified": true,
+  "sourcesVerified": true,
+  "treasury": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+  "claims": [
+    {
+      "label": "elysium-live-opening-tax-claim",
+      "vault": "0xBdA60B94629D02f0bf37c1cF03049421Ecd5836e",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "65333300000000",
+      "transactionHash": "0x3ad714cfdf0452507223337956b385590698a5a431fee4f9bcf399a917c1df4d",
+      "blockNumber": "3936169",
+      "blockHash": "0x49e156c8ebd03845ca04a82442ce9ffc8e47b78efdde28cefdd4e51158fc1797"
+    },
+    {
+      "label": "elysium-live-platform-fee-claim",
+      "vault": "0x064D1571F80475fE1b7c31F055e065f6005285e6",
+      "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+      "amount": "1298000100000",
+      "transactionHash": "0x0ac3c894c81c1c9b0ec18b89b875a7ec0bd9fa01d92d35d4315b7a33ee80d1d4",
+      "blockNumber": "3936256",
+      "blockHash": "0x0ce4db530197c420c6702d45deac52758a5186e103ef3386ab577bb9ce29d071"
+    }
+  ],
+  "openingFdvUsd": "15833",
+  "sourceVerification": {
+    "schemaVersion": "programmable.source-verification-status.v1",
+    "status": "exact_match",
+    "components": [
+      {
+        "targetId": "hook",
+        "address": "0x7fb20d12cd077c1e36f8c3af9dcf2959933620cc",
+        "status": "exact_match",
+        "provider": "blockscout"
+      },
+      {
+        "targetId": "initializer",
+        "address": "0x6d0745e3eeb25c06b8f61640e92917e6e765867c",
+        "status": "exact_match",
+        "provider": "blockscout"
+      },
+      {
+        "targetId": "token",
+        "address": "0xf700c08385a817e716a40fb7932a7649347c83da",
+        "status": "exact_match",
+        "provider": "blockscout"
+      }
+    ],
+    "updatedAt": "2026-11-10T11:17:04.009Z"
+  },
+  "finalizedCheckpoint": {
+    "schemaVersion": "programmable.elysium-finalized-checkpoint-quorum.v1",
+    "chainId": "99901",
+    "blockNumber": "3960542",
+    "blockHash": "0xbc27e226d5abf59c89138802f42344af65afa90163baa4edc486e1a5c153d1b6",
+    "blockTimestamp": "1794308984",
+    "providers": [
+      {
+        "providerId": "alchemy",
+        "trustDomain": "alchemy.com",
+        "finalizedBlockNumber": "3960542",
+        "finalizedBlockHash": "0xbc27e226d5abf59c89138802f42344af65afa90163baa4edc486e1a5c153d1b6"
+      },
+      {
+        "providerId": "kinetiq",
+        "trustDomain": "kinetiq.xyz",
+        "finalizedBlockNumber": "3960542",
+        "finalizedBlockHash": "0xbc27e226d5abf59c89138802f42344af65afa90163baa4edc486e1a5c153d1b6"
+      }
+    ]
+  },
+  "evidence": {
+    "fundedLifecycle": "sha256:ddd1447266db1c770c274d4835772606df27afd498c0d7fe40ef450d63d035da",
+    "finalizedResource": "sha256:68f6280cfcd01ff8bae2307440571fcb4bb56985410bd70ac664cc446a931e5b",
+    "finalizedTransactions": "sha256:ee586743037f3b25e14521af5ed074d3a17e9630f2cf27d4fbb181995a1e2129",
+    "exactFork": "sha256:993a3c78ed951bebc95938f1c04742156f097190788b97bc62f515114a678ed3",
+    "runtimeContinuation": "sha256:3971b750e2401e7b465bebb1e9b1fd020a69ab63332a60e94d7502353c7ca212",
+    "observationRecovery": "sha256:ed36d32e6210547f7aef247e4352558eca793747bfa0ecddebcc1130c66d3645"
+  },
+  "checkedAt": "2026-11-10T11:37:19.073Z"
+}

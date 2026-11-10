@@ -25,6 +25,14 @@ paths = ['''^public/openapi/elysium-custom-launch-v1\.json$''']
 regexes = ['''^\s*"fundingTokenRuntimeCodeHash": "0xe2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04",\s*$''']
 
 [[allowlists]]
+description = "Elysium acceptance names its exact public onchain canary token"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/operations/releases/custom-launch-v4\.4\.0/elysium-live-acceptance\.json$''']
+regexes = ['''^\s*"token": "0xf700C08385A817E716A40Fb7932A7649347c83dA",\s*$''']
+
+[[allowlists]]
 description = "HyperEVM acceptance names its exact public onchain canary token"
 targetRules = ["generic-api-key"]
 condition = "AND"

@@ -493,10 +493,11 @@ for (const path of [
   assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
 });
 
-for (const [path, prefix, credentialPrefix] of [
-  ["docs/operations/releases/custom-launch-v4.3.0/hyperevm-live-acceptance.json", '"token":', '"apiKey":'],
-  ["tests/explore-public-visibility.test.ts", "const tokenAddress =", "const apiKey ="],
-]) test(`HyperEVM public token exception is limited to its exact field and path in ${path}`, t => {
+for (const [chain, path, prefix, credentialPrefix] of [
+  ["HyperEVM", "docs/operations/releases/custom-launch-v4.3.0/hyperevm-live-acceptance.json", '"token":', '"apiKey":'],
+  ["HyperEVM", "tests/explore-public-visibility.test.ts", "const tokenAddress =", "const apiKey ="],
+  ["Elysium", "docs/operations/releases/custom-launch-v4.4.0/elysium-live-acceptance.json", '"token":', '"apiKey":'],
+]) test(`${chain} public token exception is limited to its exact field and path in ${path}`, t => {
   const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
   const line = source.split("\n").find(value => value.trimStart().startsWith(prefix));
   assert.ok(line);
