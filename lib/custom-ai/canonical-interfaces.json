@@ -5,7 +5,7 @@
       {
         "source": "src/elysium-custom-v1/ElysiumProtectedNativeInitializerV1.sol",
         "contract": "ElysiumProtectedNativeInitializerV1",
-        "sourceSha256": "ec4464e45510a815521cc70370ef777381e9d1cface24830d7beb46fde96f91a",
+        "sourceSha256": "784d8232fb081cb604669edfcb015b00122db6760928f1f68e17364ec7f42d00",
         "constructor": "address,address,address,bytes32",
         "functions": [
           "function MAX_FEED_AGE() view returns (uint256)",
@@ -64,7 +64,7 @@
       {
         "source": "src/elysium-custom-v1/ElysiumProtectedNative30HookV1.sol",
         "contract": "ElysiumProtectedNative30HookV1",
-        "sourceSha256": "e9c2325dc63d7be1761961f615900b8528e6cd2b8bdad6e5d0f4eae40d71e677",
+        "sourceSha256": "6036726cba4fc9c02ab9e6d59fc71fc931aec8e943aabde3c92c8e9475512c4f",
         "constructor": "address,(address,uint24,int24,uint160,address,address,uint16,uint16,address,uint24),address,address,bytes32,address[6]",
         "functions": [
           "function CANONICAL_POOL_MANAGER() view returns (address)",
@@ -138,7 +138,7 @@
       {
         "source": "src/elysium-custom-v1/ElysiumLaunchProtectionModuleV1.sol",
         "contract": "ElysiumLaunchProtectionModuleV1",
-        "sourceSha256": "060a43dcf03f12594713f8e5620a3128622ceb02355182ad949c12157be99806",
+        "sourceSha256": "a0b31d2001b412f05fb0ee3e4c641ccc226f1f77021386327665124b60f309e6",
         "constructor": "address,address,address,address,bytes32,uint16,address[6]",
         "functions": [
           "function DECAY_SECONDS() view returns (uint256)",

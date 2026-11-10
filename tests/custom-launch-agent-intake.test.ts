@@ -90,6 +90,7 @@ describe("chain-first Custom Launch intake", () => {
       { chainId: 4663, caip2: "eip155:4663", name: "Robinhood Chain Mainnet", apiVersion: "4" },
       { chainId: 8453, caip2: "eip155:8453", name: "Base", apiVersion: "4" },
       { chainId: 999, caip2: "eip155:999", name: "HyperEVM", apiVersion: "4" },
+      { chainId: 99901, caip2: "eip155:99901", name: "Elysium", apiVersion: "4" },
     ]);
     for (const choice of selection.choices) {
       expect(document.chains).toContainEqual(expect.objectContaining({

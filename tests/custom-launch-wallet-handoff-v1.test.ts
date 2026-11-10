@@ -7,6 +7,8 @@ import { describe, expect, it } from "vitest";
 import {
   CUSTOM_LAUNCH_MAINNET_ROUTER_V1,
   CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1,
+  assertCustomLaunchWalletActionV1,
+  customLaunchChainForRouterV1,
   prepareCustomLaunchWalletActionForAuthorizationSchema,
   prepareCustomLaunchWalletActionV1,
 } from "../lib/custom-launch/wallet-handoff-v1";
@@ -15,6 +17,8 @@ import {
   prepareCustomLaunchWalletActionV2,
 } from "../lib/custom-launch/wallet-handoff-v2";
 import { CANONICAL_LAUNCH_STAMP_V1 } from "../lib/tokens";
+import { BASE_CUSTOM_ROOTS_V1 } from "../lib/custom-launch/base-release-v1";
+import { ELYSIUM_CUSTOM_ROOTS_V1 } from "../lib/custom-launch/elysium-release-v1";
 
 const CONTROLLER = "0x1111111111111111111111111111111111111111" as const;
 const OTHER = "0x2222222222222222222222222222222222222222" as const;
@@ -66,6 +70,19 @@ function calldata(input: Readonly<{
   ]);
   return `${CUSTOM_LAUNCH_WALLET_TRANSACTION_SELECTOR_V1}${encoded.slice(2)}`;
 }
+
+it("binds shared Base and Elysium router addresses to the explicit encoded chain", () => {
+  const router = BASE_CUSTOM_ROOTS_V1.router;
+  expect(router).toBe(ELYSIUM_CUSTOM_ROOTS_V1.router);
+  expect(customLaunchChainForRouterV1(router)).toBeUndefined();
+  for (const chainId of ["8453", "99901"] as const) {
+    const action = { chainId, from: CONTROLLER, to: router, valueWei: VALUE_WEI,
+      value: "0x11", data: calldata({ chainId: BigInt(chainId), router }) };
+    expect(assertCustomLaunchWalletActionV1(action, CONTROLLER).chainId).toBe(chainId);
+    expect(() => assertCustomLaunchWalletActionV1({ ...action,
+      chainId: chainId === "8453" ? "99901" : "8453" }, CONTROLLER)).toThrow();
+  }
+});
 
 function output(input: Readonly<{
   schemaVersion?:

@@ -22,15 +22,20 @@ export const CUSTOM_LAUNCH_MAINNET_ROUTER_V1 =
   CANONICAL_LAUNCH_STAMP_V1.routerAddress;
 
 export const CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1 = "0xBE4bF6Ac8c6F012E1C8f25747A9fBccB2FDAC4C3" as const;
-export function customLaunchChainForRouterV1(value: unknown): "1" | "8453" | "999" | "99901" | undefined {
-  if (sameAddress(value, ELYSIUM_CUSTOM_ROOTS_V1.router)) return "99901";
-  if (sameAddress(value, HYPEREVM_CUSTOM_ROOTS_V1.router)) return "999";
-  if (sameAddress(value, BASE_CUSTOM_ROOTS_V1.router)) return "8453";
-  if (sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_V1) || sameAddress(value, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1)) return "1";
-  return undefined;
+export function customLaunchChainForRouterV1(value: unknown, expectedChainId?: unknown): "1" | "8453" | "999" | "99901" | undefined {
+  const matches = ([
+    ["1", CUSTOM_LAUNCH_MAINNET_ROUTER_V1], ["1", CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1],
+    ["8453", BASE_CUSTOM_ROOTS_V1.router], ["999", HYPEREVM_CUSTOM_ROOTS_V1.router],
+    ["99901", ELYSIUM_CUSTOM_ROOTS_V1.router],
+  ] as const).filter(([, router]) => sameAddress(value, router));
+  // CREATE deployments can share an address across chains. Never infer a
+  // network from that address when more than one configured chain matches.
+  return expectedChainId === undefined
+    ? matches.length === 1 ? matches[0]![0] : undefined
+    : matches.find(([chainId]) => chainId === expectedChainId)?.[0];
 }
 export function isCustomLaunchRouterV1(value: unknown): boolean {
-  return customLaunchChainForRouterV1(value) !== undefined;
+  return ["1", "8453", "999", "99901"].some(chainId => customLaunchChainForRouterV1(value, chainId) !== undefined);
 }
 export function customLaunchMaximumLifetimeSecondsV1(router: unknown): bigint {
   return (sameAddress(router, CUSTOM_LAUNCH_MAINNET_ROUTER_24H_V1) || sameAddress(router, BASE_CUSTOM_ROOTS_V1.router) || sameAddress(router, HYPEREVM_CUSTOM_ROOTS_V1.router) || sameAddress(router, ELYSIUM_CUSTOM_ROOTS_V1.router)) ? 86_400n : 3_600n;
@@ -143,7 +148,7 @@ export function prepareCustomLaunchWalletActionForAuthorizationSchema(
   const to = requiredAddress(transaction.to);
   if (
     !sameAddress(from, controller)
-    || customLaunchChainForRouterV1(to) !== "1"
+    || customLaunchChainForRouterV1(to, "1") !== "1"
     || !sameAddress(permit.router, to)
     || !sameAddress(permit.launchWallet, controller)
     || !sameAddress(unsignedTransaction.from, controller)
@@ -220,7 +225,7 @@ export function assertCustomLaunchWalletActionV1(
   const from = requiredAddress(action.from);
   const to = requiredAddress(action.to);
   const valueWei = canonicalUint256(action.valueWei);
-  const chainId = customLaunchChainForRouterV1(to);
+  const chainId = customLaunchChainForRouterV1(to, action.chainId);
   const call = decodeCanonicalCalldata(action.data);
   const decodedPermit: unknown = call.decoded[0];
   if (

@@ -49,13 +49,13 @@ describe("profile-selected Robinhood well-known discovery", () => {
         programmableTradeFeePolicyHash: "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
         rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm",
       },
-      cli: { sourceCandidateVersion: "4.3.0", publicationVerified: null,
-        releaseTag: "programmable-launch-v4.3.0", publishedReleaseAndArtifactVerificationRequired: true },
+      cli: { sourceCandidateVersion: "4.4.0", publicationVerified: null,
+        releaseTag: "programmable-launch-v4.4.0", publishedReleaseAndArtifactVerificationRequired: true },
     });
     expect(original.customLaunchApi.launchProtection).toMatchObject({
       policyVersion: "programmable.launch-protection.v1",
       statusUrl: "https://api.programmable.market/v1/launch-protection",
-      supportedChainIds: ["1", "4663", "8453", "999"], discoveryIsActivationEvidence: false,
+      supportedChainIds: ["1", "4663", "8453", "999", "99901"], discoveryIsActivationEvidence: false,
       minimumFdvUsd: "15000", maximumAdditionalTaxExemptWallets: 6,
     });
     expect(original.customLaunchApi.hyperevm).toMatchObject({
@@ -71,7 +71,8 @@ describe("profile-selected Robinhood well-known discovery", () => {
     historical.customLaunchApi.base.guide = "https://programmable.market/developers/base-custom-launch-api-v1.md";
     historical.customLaunchApi.intake = programmableAgentIntakeV1("4.0.0");
     delete historical.customLaunchApi.hyperevm;
-    historical.chains = historical.chains.filter((chain: { chainId: number }) => chain.chainId !== 999);
+    delete historical.customLaunchApi.elysium;
+    historical.chains = historical.chains.filter((chain: { chainId: number }) => chain.chainId !== 999 && chain.chainId !== 99901);
     historical.customLaunchApi.launchProtection.supportedChainIds = ["1", "4663", "8453"];
     historical.customLaunchApi.launchProtection.sourceCandidateVersion = "4.2.0";
     // Keep the frozen Robinhood proof and independently verify the additive HyperEVM surface.
