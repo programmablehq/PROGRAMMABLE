@@ -13,6 +13,8 @@ interface IQuotePermit2V1 {
 /// @dev Never deployed or submitted as a transaction. The actual transaction is
 /// separately simulated without overrides before it becomes wallet-signable.
 contract EvmCustomSwapQuoteV1 {
+    receive() external payable { }
+
     function quote(
         address inputToken,
         address outputToken,

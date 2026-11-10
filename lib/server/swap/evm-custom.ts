@@ -133,7 +133,7 @@ export async function readHyperEvmSwapCheckpoint(rpcs: readonly [Rpc,Rpc], chain
     timestamp: Hex;
   };
   if (!raw?.hash || quantity(raw.number) !== number || Date.now() / 1000 - Number(quantity(raw.timestamp)) > 120)
-    throw new EvmSwapError("HyperEVM data is temporarily stale.");
+    throw new EvmSwapError(`${EVM_CUSTOM_CHAINS[chainId].name} data is temporarily stale.`);
   return { number, hash: hex(raw.hash) };
 }
 async function call(rpcs: readonly [
