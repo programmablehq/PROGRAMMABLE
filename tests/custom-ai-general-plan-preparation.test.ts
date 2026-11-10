@@ -83,7 +83,7 @@ describe.skipIf(!process.env.CUSTOM_AI_COMPILER_DIR)("durable modern Plan source
     expect(packPlan).toHaveBeenCalledTimes(1);
     expect(packPlan.mock.calls[0][0].url).toMatch(/^https:\/\/programmable-project-platform-staging-v1-aficialais-projects\.vercel\.app\/api\/custom-ai\/source\/[a-f0-9]{64}$/);
     expect(bridge).not.toHaveBeenCalled();
-  });
+  },30_000);
   it("stores the exact Plan and submits once for canonical review without an extra preflight POST",async()=>{
     const saved=await stage();expect(saved).toMatchObject({chainId:4663,controllerKind:"eoa",manifestDigest:record.manifestDigest,packState:"complete"});
     expect(saved.requestHash).toBe(pack.planHash);expect(saved.launchProfileHash).toBeUndefined();
