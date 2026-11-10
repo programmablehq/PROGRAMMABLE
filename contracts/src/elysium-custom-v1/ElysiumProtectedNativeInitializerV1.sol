@@ -63,7 +63,7 @@ contract ElysiumProtectedNativeInitializerV1 is IUnlockCallback {
         address canonicalFeed = 0x65AF2809dd2d7E1974c34730E97Ce3ac95F46FDB;
         address canonicalManager = 0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1;
         if (
-            block.chainid != 99901 || address(feed_) != canonicalFeed || address(manager_) != canonicalManager
+            block.chainid != 99_901 || address(feed_) != canonicalFeed || address(manager_) != canonicalManager
                 || address(manager_).code.length == 0 || graphFactory_ == address(0) || address(feed_).code.length == 0
                 || address(feed_).codehash != expectedFeedCodeHash
         ) {

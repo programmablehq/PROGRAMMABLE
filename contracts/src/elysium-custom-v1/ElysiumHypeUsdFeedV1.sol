@@ -20,7 +20,7 @@ contract ElysiumHypeUsdFeedV1 {
     event PriceReceived(uint80 indexed roundId, int256 answer, uint256 sourceUpdatedAt);
 
     constructor(address parentRelay_) {
-        if (block.chainid != 99901 || parentRelay_ == address(0)) revert InvalidConfiguration();
+        if (block.chainid != 99_901 || parentRelay_ == address(0)) revert InvalidConfiguration();
         parentRelay = parentRelay_;
         unchecked {
             aliasedParentRelay = address(uint160(parentRelay_) + uint160(0x1111000000000000000000000000000000001111));

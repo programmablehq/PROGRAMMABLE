@@ -126,7 +126,7 @@ contract ElysiumProtectedNative30HookV1 is BaseHook {
         CHAIN_ID = block.chainid;
         CANONICAL_POOL_MANAGER = 0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1;
         if (
-            block.chainid != 99901 || address(manager) != CANONICAL_POOL_MANAGER || address(manager).code.length == 0
+            block.chainid != 99_901 || address(manager) != CANONICAL_POOL_MANAGER || address(manager).code.length == 0
                 || config.lpFee != 0 || config.tickSpacing != 60 || config.module != address(0)
                 || config.creatorBuyFeeBps > 1000 || config.creatorSellFeeBps > 1000 || config.token == address(0)
                 || config.initializer == address(0) || config.creatorFeeRecipient == address(0)

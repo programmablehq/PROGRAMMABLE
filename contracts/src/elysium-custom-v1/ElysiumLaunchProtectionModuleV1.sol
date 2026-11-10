@@ -48,7 +48,7 @@ contract ElysiumLaunchProtectionModuleV1 {
         if (
             kernel_ == address(0) || address(token_).code.length == 0 || developer_ == address(0)
                 || developer_ == address(token_) || developer_ == token_.poolManager() || router_.code.length == 0
-                || block.chainid != 99901 || router_ != canonicalRouter || router_.codehash != routerCodeHash_
+                || block.chainid != 99_901 || router_ != canonicalRouter || router_.codehash != routerCodeHash_
                 || creatorBuyFeeBps_ > 1000
         ) revert InvalidConfiguration();
         for (uint256 i; i < exemptWallets_.length; ++i) {

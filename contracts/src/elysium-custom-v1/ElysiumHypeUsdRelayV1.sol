@@ -10,8 +10,14 @@ interface IElysiumInboxV1 {
     function bridge() external view returns (address);
     function calculateRetryableSubmissionFee(uint256 dataLength, uint256 baseFee) external view returns (uint256);
     function createRetryableTicket(
-        address to, uint256 l2CallValue, uint256 maxSubmissionCost, address excessFeeRefundAddress,
-        address callValueRefundAddress, uint256 gasLimit, uint256 maxFeePerGas, bytes calldata data
+        address to,
+        uint256 l2CallValue,
+        uint256 maxSubmissionCost,
+        address excessFeeRefundAddress,
+        address callValueRefundAddress,
+        uint256 gasLimit,
+        uint256 maxFeePerGas,
+        bytes calldata data
     ) external payable returns (uint256);
 }
 
@@ -55,20 +61,26 @@ contract ElysiumHypeUsdRelayV1 {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) =
             IHyperEvmHypeUsdFeedV1(SOURCE_FEED).latestRoundData();
         if (
-            answer <= 0 || roundId == 0 || answeredInRound < roundId || updatedAt == 0
-                || updatedAt > block.timestamp || block.timestamp - updatedAt > MAX_FEED_AGE
+            answer <= 0 || roundId == 0 || answeredInRound < roundId || updatedAt == 0 || updatedAt > block.timestamp
+                || block.timestamp - updatedAt > MAX_FEED_AGE
         ) revert InvalidPrice();
         // Re-sending the current round is intentional: a failed or underpriced
         // retryable must never let a permissionless caller block later delivery.
         if (roundId < lastRelayedRound) revert RoundOutOfOrder();
-        if (gasLimit < 100_000 || gasLimit > 500_000 || maxFeePerGas == 0 || msg.value < quote(gasLimit, maxFeePerGas)) {
+        if (gasLimit < 100_000 || gasLimit > 500_000 || maxFeePerGas == 0 || msg.value < quote(gasLimit, maxFeePerGas))
+        {
             revert InsufficientDeliveryFee();
         }
         lastRelayedRound = roundId;
         lastSourceUpdatedAt = updatedAt;
-        ticketId = INBOX.createRetryableTicket{value: msg.value}(
-            destinationFeed, 0, INBOX.calculateRetryableSubmissionFee(100, 0) * 2,
-            msg.sender, msg.sender, gasLimit, maxFeePerGas,
+        ticketId = INBOX.createRetryableTicket{ value: msg.value }(
+            destinationFeed,
+            0,
+            INBOX.calculateRetryableSubmissionFee(100, 0) * 2,
+            msg.sender,
+            msg.sender,
+            gasLimit,
+            maxFeePerGas,
             abi.encodeWithSignature("receivePrice(uint80,int256,uint256)", roundId, answer, updatedAt)
         );
         lastTicketId = ticketId;

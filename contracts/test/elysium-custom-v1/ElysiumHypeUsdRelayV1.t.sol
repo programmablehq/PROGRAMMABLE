@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.26;
 
-import {Test} from "forge-std/Test.sol";
-import {ElysiumHypeUsdRelayV1, IHyperEvmHypeUsdFeedV1} from "../../src/elysium-custom-v1/ElysiumHypeUsdRelayV1.sol";
-import {ElysiumHypeUsdFeedV1} from "../../src/elysium-custom-v1/ElysiumHypeUsdFeedV1.sol";
+import { Test } from "forge-std/Test.sol";
+import { ElysiumHypeUsdRelayV1, IHyperEvmHypeUsdFeedV1 } from "../../src/elysium-custom-v1/ElysiumHypeUsdRelayV1.sol";
+import { ElysiumHypeUsdFeedV1 } from "../../src/elysium-custom-v1/ElysiumHypeUsdFeedV1.sol";
 
 contract CanonicalInboxFixture {
     address public constant bridge = 0x503D572157113fAaaD4DbeD2647Bb10b949216B6;
@@ -12,16 +12,31 @@ contract CanonicalInboxFixture {
     bytes public message;
     uint256 public ticket;
     bool public fail;
-    function setFail(bool value) external { fail = value; }
+
+    function setFail(bool value) external {
+        fail = value;
+    }
+
     function calculateRetryableSubmissionFee(uint256 length, uint256) external pure returns (uint256) {
         require(length == 100);
         return 1000;
     }
-    function createRetryableTicket(address to, uint256 value, uint256 submission, address excessRefund,
-        address callRefund, uint256 gasLimit, uint256 maxFee, bytes calldata data) external payable returns(uint256) {
+
+    function createRetryableTicket(
+        address to,
+        uint256 value,
+        uint256 submission,
+        address excessRefund,
+        address callRefund,
+        uint256 gasLimit,
+        uint256 maxFee,
+        bytes calldata data
+    ) external payable returns (uint256) {
         require(!fail && value == 0 && submission == 2000 && gasLimit >= 100_000);
         require(msg.value >= submission + gasLimit * maxFee && excessRefund == callRefund);
-        destination = to; refund = excessRefund; message = data;
+        destination = to;
+        refund = excessRefund;
+        message = data;
         return ++ticket;
     }
 }
@@ -36,7 +51,8 @@ contract ElysiumHypeUsdRelayTest is Test {
     function setUp() public {
         vm.warp(2_000_000);
         vm.chainId(999);
-        bytes memory code = vm.parseJsonBytes(vm.readFile("test/elysium-custom-v1/parent-feed-runtime.json"), ".runtime");
+        bytes memory code =
+            vm.parseJsonBytes(vm.readFile("test/elysium-custom-v1/parent-feed-runtime.json"), ".runtime");
         vm.etch(SOURCE, code);
         vm.mockCall(SOURCE, abi.encodeCall(IHyperEvmHypeUsdFeedV1.decimals, ()), abi.encode(uint8(18)));
         source(15, 33e18, block.timestamp - 60, 15);
@@ -45,7 +61,7 @@ contract ElysiumHypeUsdRelayTest is Test {
         inbox = CanonicalInboxFixture(INBOX);
         // The child has no dependency on parent deployment order, only its fixed address.
         address predicted = vm.computeCreateAddress(address(this), vm.getNonce(address(this)) + 1);
-        vm.chainId(99901);
+        vm.chainId(99_901);
         feed = new ElysiumHypeUsdFeedV1(predicted);
         vm.chainId(999);
         relay = new ElysiumHypeUsdRelayV1(address(feed));
@@ -54,30 +70,37 @@ contract ElysiumHypeUsdRelayTest is Test {
     }
 
     function source(uint80 round, int256 price, uint256 time, uint80 answered) private {
-        vm.mockCall(SOURCE, abi.encodeCall(IHyperEvmHypeUsdFeedV1.latestRoundData, ()),
-            abi.encode(round, price, time, time, answered));
+        vm.mockCall(
+            SOURCE,
+            abi.encodeCall(IHyperEvmHypeUsdFeedV1.latestRoundData, ()),
+            abi.encode(round, price, time, time, answered)
+        );
     }
 
-    function send() private { relay.relay{value: 150_000 * 1 gwei + 2000}(150_000, 1 gwei); }
+    function send() private {
+        relay.relay{ value: 150_000 * 1 gwei + 2000 }(150_000, 1 gwei);
+    }
 
     function testCanonicalDeliveryPreservesObservationAndRefundRecipient() public {
         send();
         assertEq(inbox.destination(), address(feed));
         assertEq(inbox.refund(), address(this));
         assertEq(relay.lastRelayedRound(), 15);
-        vm.chainId(99901);
+        vm.chainId(99_901);
         vm.warp(block.timestamp + 120);
         bytes memory message = inbox.message();
         vm.prank(feed.aliasedParentRelay());
         (bool ok,) = address(feed).call(message);
         assertTrue(ok);
         (uint80 round, int256 price,, uint256 time, uint80 answered) = feed.latestRoundData();
-        assertEq(round, 15); assertEq(answered, 15); assertEq(price, 33e18);
+        assertEq(round, 15);
+        assertEq(answered, 15);
+        assertEq(price, 33e18);
         assertEq(time, block.timestamp - 180);
     }
 
     function testOnlyCanonicalParentAliasCanSetPrice() public {
-        vm.chainId(99901);
+        vm.chainId(99_901);
         vm.expectRevert(ElysiumHypeUsdFeedV1.Unauthorized.selector);
         feed.receivePrice(15, 33e18, block.timestamp);
         vm.prank(address(relay));
@@ -93,7 +116,7 @@ contract ElysiumHypeUsdRelayTest is Test {
         send();
         assertEq(inbox.ticket(), 2);
         assertEq(inbox.message(), original);
-        vm.chainId(99901);
+        vm.chainId(99_901);
         vm.prank(feed.aliasedParentRelay());
         (bool ok,) = address(feed).call(original);
         assertTrue(ok);
@@ -104,17 +127,21 @@ contract ElysiumHypeUsdRelayTest is Test {
 
     function testStaleFutureAndIncompleteSourceRejected() public {
         source(15, 33e18, block.timestamp - 86_521, 15);
-        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector); send();
+        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector);
+        send();
         source(15, 33e18, block.timestamp + 1, 15);
-        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector); send();
+        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector);
+        send();
         source(15, 33e18, block.timestamp, 14);
-        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector); send();
+        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector);
+        send();
         source(15, 0, block.timestamp, 15);
-        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector); send();
+        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidPrice.selector);
+        send();
     }
 
     function testDelayedOrOutOfOrderChildMessageRejected() public {
-        vm.chainId(99901);
+        vm.chainId(99_901);
         vm.startPrank(feed.aliasedParentRelay());
         vm.expectRevert(ElysiumHypeUsdFeedV1.InvalidPrice.selector);
         feed.receivePrice(15, 33e18, block.timestamp - 86_521);
@@ -128,11 +155,13 @@ contract ElysiumHypeUsdRelayTest is Test {
 
     function testInboxFailureRollsBackRelayAndRuntimeChangeRejected() public {
         inbox.setFail(true);
-        vm.expectRevert(); send();
+        vm.expectRevert();
+        send();
         assertEq(relay.lastRelayedRound(), 0);
         inbox.setFail(false);
         send();
         vm.etch(SOURCE, hex"00");
-        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidConfiguration.selector); send();
+        vm.expectRevert(ElysiumHypeUsdRelayV1.InvalidConfiguration.selector);
+        send();
     }
 }
