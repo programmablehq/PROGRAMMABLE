@@ -66,7 +66,7 @@ async function readOne(identity: ElysiumMarketIdentity): Promise<RobinhoodCoinMa
   const priceUsd = Number(numerator * 10n ** BigInt(decimals) / denominator) / 1e18, fdvUsd = Number(numerator * supply / denominator) / 1e18;
   if (!Number.isFinite(priceUsd) || !Number.isFinite(fdvUsd) || priceUsd <= 0 || fdvUsd <= 0)
     throw Error("Invalid pool valuation");
-  return { poolId: identity.poolId, source: "uniswap-v4", valuationKind: "fdv", priceUsd, fdvUsd, marketCapUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPercent: null, quoteAsset: { address: NATIVE, symbol: "HYPE" }, blockNumber: b.number.toString(), blockHash: b.hash, observedAt: new Date(Number(b.timestamp) * 1000).toISOString(), sourceUrl: `https://elysiumscan.io/block/${b.number}` };
+  return { poolId: identity.poolId, source: "uniswap-v4", valuationKind: "fdv", priceUsd, fdvUsd, marketCapUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPercent: null, quoteAsset: { address: NATIVE, symbol: "HYPE" }, blockNumber: b.number.toString(), blockHash: b.hash, observedAt: new Date(Number(b.timestamp) * 1000).toISOString(), sourceUrl: `https://elysium.kinetiq.xyz/block/${b.number}` };
 }
 const cachedRead = unstable_cache(readOne, ["elysium-native-spot-v1"], { revalidate: 120 });
 /** At most ten missing native pools per read. No historical scan or invented volume. */

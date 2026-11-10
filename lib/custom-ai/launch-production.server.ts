@@ -17,7 +17,7 @@ const object = (value: unknown): ObjectValue => {
 };
 const same = (a: unknown, b: unknown) => canonicalBrowserJsonV2(a) === canonicalBrowserJsonV2(b);
 const unavailable = () => new CustomAIError("launch-context", "The launch network configuration could not be checked. Your saved design is kept.", 503);
-type ProtectionStatus = { required: boolean; protections: NonNullable<LaunchProductionContext["protections"]>; openingTaxRecipient: `0x${string}` };
+type ProtectionStatus = { required: boolean; supportedChains: readonly string[]; protections: NonNullable<LaunchProductionContext["protections"]>; openingTaxRecipient: `0x${string}` };
 export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus {
   try {
     const v = object(value);
@@ -29,14 +29,16 @@ export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus 
       openingTaxRecipient: "0xD88539d3c4C460136a733A3Fd60cf6BF269079da" };
     if (typeof v.required !== "boolean" || v.unsupportedLegacyLaunches !== (v.required ? "paused" : "unchanged")
       || Object.entries(expected).some(([key, expected]) => v[key] !== expected)
-      || !Array.isArray(v.supportedChains) || !same([...v.supportedChains].sort(), ["1","4663","8453","999","99901"])) throw Error();
-    return { required: v.required, openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
+      || !Array.isArray(v.supportedChains)
+      || ![ ["1","4663","8453","999"], ["1","4663","8453","999","99901"] ].some(chains => same([...v.supportedChains as string[]].sort(), chains))) throw Error();
+    return { required: v.required, supportedChains: v.supportedChains as string[], openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
       openingFeePpm: 990000, openingSeconds: 30, buyerLimitBps: 200, recipientLimitBps: 200,
       protectionSeconds: 300, maximumAdditionalTaxExemptWallets: 6, minimumFdvUsd: "15000" } };
   } catch { throw unavailable(); }
 }
 function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | undefined, legacy: LaunchProductionContext["protections"]) {
   if (!status) return { version: 1 as const, protections: legacy };
+  if (!status.supportedChains.includes(String(chainId))) throw unavailable();
   const required = status.required || chainId === 8453 || chainId === 999 || chainId === 99901;
   if (legacy && !same(legacy, status.protections)) throw unavailable();
   const pins=PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
