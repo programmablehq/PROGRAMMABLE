@@ -9,9 +9,10 @@ import type {PlatformLaunchDraft} from "@/lib/custom-ai/platform/launch-draft.se
 import {GeneralProjectPreview} from "../general-preview";
 import type {PlatformAPI,ProjectRevision} from "./types";
 import styles from "./workspace.module.css";
+import {builderChains} from "@/lib/custom-ai/execution-routing";
 type Review={draft:PlatformLaunchDraft;sourceId:string;intent:LaunchIntent;project:GeneralProjectView};
 export function ProjectContractLaunch({project,account,api,headers,enabled,onLaunchLocked,onPrompt}:{project:ProjectRevision;account:string;api:PlatformAPI;headers:AISessionHeaders;enabled:boolean;onLaunchLocked:(locked:boolean)=>void;onPrompt:(text:string)=>void}){
-  const [settings,setSettings]=useState<CoinSetup>(EMPTY_COIN_SETUP),[image,setImage]=useState<ImageReceipt>(),[review,setReview]=useState<Review>();
+  const [settings,setSettings]=useState<CoinSetup>(()=>{const chain=builderChains.find(item=>item.id===Number((project.document.architecture as {chainId?:number}|null)?.chainId));return chain?applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:chain.id}):EMPTY_COIN_SETUP;}),[image,setImage]=useState<ImageReceipt>(),[review,setReview]=useState<Review>();
   const [loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
   const current=useRef({settings,image}),base=useRef<PlatformLaunchDraft|null>(null);
   useLayoutEffect(()=>{current.current={settings,image};},[settings,image]);

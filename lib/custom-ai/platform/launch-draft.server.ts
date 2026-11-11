@@ -1,6 +1,6 @@
 import "server-only";
 import {getAddress} from "viem";
-import {EMPTY_COIN_SETUP,parseCoinSetupPatch,type CoinSetup} from "../coin-setup";
+import {EMPTY_COIN_SETUP,applyCoinSetupPatch,parseCoinSetupPatch,type CoinSetup} from "../coin-setup";
 import type {ImageReceipt} from "../studio";
 import type {AIPool,AIConnection} from "../store.server";
 import {projectTransaction} from "./transaction.server";
@@ -20,7 +20,7 @@ export function createPlatformLaunchDrafts(pool:AIPool){
   }
   function view(account:string,current:{revision:string;chainId:BuilderChainId},row?:Record<string,unknown>):PlatformLaunchDraft{
     return {revision:row?Number(row.revision):0,sourceRevision:row?String(row.source_revision):current.revision,account,
-      settings:row?row.settings as CoinSetup:{...EMPTY_COIN_SETUP,chainId:current.chainId},...(row?.image?{image:row.image as ImageReceipt}:{})};
+      settings:row?row.settings as CoinSetup:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:current.chainId}),...(row?.image?{image:row.image as ImageReceipt}:{})};
   }
   async function read(scope:ProjectScope,account:string){const wallet=accountKey(account);return projectTransaction(pool,scope,async db=>{
     const current=await source(db,scope),row=(await db.query("SELECT * FROM programmable_projects_v1.launch_drafts WHERE owner=$1 AND project_id=$2 AND account=$3",[scope.ownerId,scope.projectId,wallet])).rows[0];return view(wallet,current,row);

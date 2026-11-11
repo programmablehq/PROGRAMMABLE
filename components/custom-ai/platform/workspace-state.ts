@@ -2,7 +2,7 @@ import type {AIUsage} from "@/lib/custom-ai/types";
 import type {PlatformAPI,ProjectRevision,ProjectRun,ProjectRunState} from "./types";
 import {containsInlineCredential} from "@/lib/custom-ai/platform/secret-input";
 
-export type WorkStep={cursor:string;capabilityId:string;ok?:boolean};
+export type WorkStep={cursor:string;capabilityId:string;ok?:boolean;message?:string};
 export type WorkProgress={events:WorkStep[];activeStep?:{capabilityId:string;state:string}};
 export type MessageIntent={
   version:1;id:string;projectId:string;prompt:string;operation:ProjectRun["operation"];preview:boolean;
@@ -63,6 +63,9 @@ const activeLabels:Record<string,string>={
   "project.patch":"Updating your files", "project.dependencies":"Preparing dependencies", "project.check":"Checking your app",
   "sandbox.command":"Running in the sandbox", "contract.compile":"Compiling your contract", "contract.check":"Checking contract behavior",
   "contract.audit":"Reviewing the source", "contract.dependencies":"Preparing contract dependencies", "project.publish":"Building your preview",
+  "contract.verify":"Compiling and checking your contract",
+  "research.package":"Checking the current package release", "research.read":"Reading the official documentation",
+  "contract.context":"Reading the current chain profile", "contract.library":"Reading the contract library",
   "project.promote":"Confirming publication", "app.schedule":"Setting up the task", "event.record":"Saving the game connection",
   "event.identity":"Preparing the game connection", "repository.import":"Importing your files", "repository.deliver":"Exporting your project",
   "connector.read":"Reading the connected API", "connector.write":"Running the connected action",
@@ -71,6 +74,7 @@ const finishedLabels:Record<string,string>={
   "project.plan":"Requirements saved", "project.patch":"Files saved", "project.dependencies":"Dependencies saved",
   "project.check":"App checks recorded", "contract.compile":"Compilation recorded", "contract.check":"Contract checks recorded",
   "contract.audit":"Source review recorded", "project.publish":"Preview request saved", "project.promote":"Publication result recorded",
+  "contract.verify":"Compilation and behavior checks recorded",
   "app.schedule":"Task saved", "repository.import":"Files imported", "repository.deliver":"Export recorded",
   "event.record":"Game connection saved", "connector.read":"API response received", "connector.write":"Connected action recorded",
 };
@@ -81,7 +85,11 @@ export function workStatus(run:ProjectRun,progress?:WorkProgress){
   if(run.status==="retryable")return "Interrupted · progress saved";
   if(run.status==="cancelled")return "Stopped · progress saved";
   if(run.status==="failed")return run.summary==="run-budget"?"Work limit reached · progress saved":"Needs attention · progress saved";
-  return run.operation==="plan"?"Plan saved":run.operation==="test"?"Checks finished":"Work completed";
+  return run.operation==="plan"?"Ready":run.operation==="test"?"Checks finished":"Work completed";
+}
+export function workExplanation(progress?:WorkProgress){
+  if(progress?.activeStep?.capabilityId==="model.plan")return;
+  return progress?.events.findLast(step=>step.capabilityId==="model.plan"&&step.message)?.message;
 }
 export function completedWork(progress?:WorkProgress){return [...new Set((progress?.events??[]).filter(step=>step.ok!==false).map(step=>finishedLabels[step.capabilityId]).filter(Boolean))].slice(-4);}
 export function resultTab(project:ProjectRevision,operation:ProjectRun["operation"]):"project"|"runtime"|"files"{

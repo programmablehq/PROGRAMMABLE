@@ -14,6 +14,8 @@ export function productionRunStore() {
   return store ??= createRunStore(productionAIPool(), { allowance: configuredAIAllowance(), leaseMs: 60_000, capabilities: {
     "model.plan": { units: 1, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "project.read": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },
+    "research.package": { units: 1, effect: "read", operations: ["plan", "build", "test", "deploy"] },
+    "research.read": { units: 1, effect: "read", operations: ["plan", "build", "test", "deploy"] },
     "project.plan": { units: 1, effect: "write", operations: ["plan", "build"] },
     "project.patch": { units: 1, effect: "write", operations: ["build"] },
     "project.dependencies": { units: 1, effect: "write", operations: ["build"] },
@@ -24,6 +26,7 @@ export function productionRunStore() {
     "contract.dependencies": { units: 1, effect: "write", operations: ["build"] },
     "contract.compile": { units: 2, effect: "read", operations: ["build", "test"] },
     "contract.check": { units: 2, effect: "read", operations: ["build", "test"] },
+    "contract.verify": { units: 4, effect: "read", operations: ["build", "test"] },
     "contract.audit": { units: 2, effect: "read", operations: ["build", "test"] },
     "project.publish": { units: 5, effect: "write", operations: ["deploy"] },
     "project.releases": { units: 0, effect: "read", operations: ["plan", "build", "test", "deploy"] },

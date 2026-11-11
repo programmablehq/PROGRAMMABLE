@@ -8,18 +8,22 @@ If access changes while a page is open, save your current work and reload the pa
 
 ## Describe the result
 
-Start in **Describe your idea**. Your first message creates and names a project. In an existing project, use **Message your project** to describe a change and include the rules that must stay in place. You can use ordinary German or English. Enter sends; Shift + Enter adds a line. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.
+Start in **Describe your idea**, or choose **Custom hook**, **Web app** or **Contract + app**. Contract starters use the network selected beside them, including Elysium. A starter fills the composer without starting work. Your first message creates and names a project. In an existing project, use **Message your project** to describe a change and include the rules that must stay in place. You can use ordinary German or English. Enter sends; Shift + Enter adds a line. The saved requirement list and **Technical plan** show what the chat understood. Answer an open question before treating that requirement as settled.
 
 Choose a work mode before sending:
 
 | Mode | What it does |
 | --- | --- |
-| **Build & edit** | Changes the project and can run checks. |
-| **Discuss & plan** | Reads the project and records its requirements without editing source files. |
-| **Run checks** | Tests the saved source and records results for that version. |
-| **Publish & run** | Uses the publication and scheduled-task permissions already granted to the project. |
+| **Build** | Changes the project and can run checks. |
+| **Discuss** | Reads the project and records its requirements without editing source files. |
+| **Check** | Tests the saved source and records results for that version. |
+| **Publish** | Uses the publication and scheduled-task permissions already granted to the project. |
+
+New projects start in Build mode. Discuss keeps source unchanged; switching to a new project does not carry an old discussion-only mode into it.
 
 Work is saved as it runs. The chat shows the current action and completed steps; **Run details** expands usage and technical steps. Reloading reads the same saved run. **Retry saved message** recovers an interrupted first submission with the same project and request. **Stop** requests cancellation; wait for its saved result. A finished run and a verified project are separate states. Read the recorded checks and any remaining requirements in **Preview & run**.
+
+**Your work** can be collapsed to give the chat and results more room. The project overview links the saved requirements, files and next action. **Continue from here** prepares a continuation from the same project after an interruption; it does not silently repeat the original request.
 
 After successful work, the workspace opens the relevant requirements, files, app preview or contract review. On mobile, use **Chat** and **Result** to switch views. **Your work** opens the history.
 
@@ -43,9 +47,17 @@ Webhook receipt storage is limited to 5,000 events and 32 MB per account across 
 
 Before building a game receiver, the chat uses `event.identity` to derive its binding ID from the authenticated project and the public game configuration. Use that exact ID in the receiver constructor. This read-only step does not register or deploy a receiver: the deployed code, issuer configuration, player signatures and wallet actions still require their own verification. Ordinary source revisions retain the same ID; a different project, owner or game policy receives a different ID.
 
+## Current code and documentation
+
+The project agent can read current npm metadata with `research.package` and public HTTPS documentation with `research.read`. Reads return their source and retrieval time; documentation also includes a content hash and bounded pagination. They use no account credentials, reject private endpoints and do not follow redirects or execute page content. A registry release is reference data, not proof of compatibility. The project still needs an exact dependency lock and checks.
+
+Contract libraries remain pinned to the selected chain's current verified launch profile. A newer npm release does not replace those deployment bindings. Small editable source files and their hashes are supplied directly to the next project step. Saved source writes are not replayed as duplicate model decisions, and the latest canonical context and contract results remain available through longer work units.
+
 ## Check, preview and publish
 
 Generated code runs in an isolated development sandbox with bounded resources and network access denied by default. Reviewed connections supply external API access. The sandbox lasts for development work; published applications use a separate hosting runtime.
+
+`contract.verify` compiles the exact revision and runs its declared behavior checks in one tool step. It uses the same compiler, artifact binding and EVM checker as the individual tools. The independent `contract.audit` source review remains separate. A failed compilation or behavior check is reported as a failure, including in progress.
 
 Contract checks can create genuine game-event and wallet-link signatures with fixed local test actors. These checks use public test identities inside the networkless EVM; they never need your wallet key or the game service's signing key. Production receiver configuration keeps the actual service issuer. Local signature results do not authorize a wallet action or establish a deployed game effect.
 

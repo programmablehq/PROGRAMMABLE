@@ -8,6 +8,7 @@ import styles from "./workspace.module.css";
 type Edit={path:string;text:string;original:string;revision:string};
 export function ProjectFiles({project,api,onProject,onDirty,disabled=false}:{project:ProjectRevision;api:PlatformAPI;onProject:(project:ProjectRevision)=>void;onDirty:(dirty:boolean)=>void;disabled?:boolean}){
   const [edit,setEdit]=useState<Edit>(),[error,setError]=useState(""),[busy,setBusy]=useState(false);
+  const [query,setQuery]=useState("");
   const [newPath,setNewPath]=useState(""),[history,setHistory]=useState<RevisionItem[]>([]),[compared,setCompared]=useState<ProjectRevision>();
   const dirty=Boolean(edit&&(edit.text!==edit.original||!Object.hasOwn(project.document.files,edit.path)));
   function change(next:Edit|undefined){setEdit(next);onDirty(Boolean(next&&(next.text!==next.original||!Object.hasOwn(project.document.files,next.path))));}
@@ -24,10 +25,18 @@ export function ProjectFiles({project,api,onProject,onDirty,disabled=false}:{pro
     const data=base64?Uint8Array.from(atob(value),c=>c.charCodeAt(0)):value,url=URL.createObjectURL(new Blob([data],{type:mediaType}));
     const anchor=document.createElement("a");anchor.href=url;anchor.download=name.split("/").pop()??"project";anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
+  const architecture=project.document.architecture as {contractChecks?:{contracts?:{source?:string}[];constructorChildren?:{source?:string}[]}}|null;
+  const declarations=[architecture?.contractChecks?.contracts,architecture?.contractChecks?.constructorChildren].flatMap(items=>Array.isArray(items)?items:[]);
+  const entrypoints=new Set(declarations.flatMap(item=>typeof item?.source==="string"?[item.source]:[]));
+  const entries=Object.entries(project.document.files).filter(([path])=>!query.trim()||path.toLowerCase().includes(query.trim().toLowerCase())).sort(([a],[b])=>a.localeCompare(b));
+  const primary=entries.filter(([path])=>entrypoints.has(path)),other=entries.filter(([path])=>!entrypoints.has(path));
+  const fileButtons=(items:typeof entries)=><div className={styles.fileList} aria-label="Project files">{items.map(([path,file])=><button type="button" key={path} aria-current={edit?.path===path} onClick={()=>open(path)} disabled={busy}><File size={15} aria-hidden="true"/>{path}{typeof file!=="string"?" · download":""}</button>)}</div>;
   return <div className={styles.stack}>
     <div className={styles.row}><h2>Project files</h2><small>Version {project.ordinal}</small><button type="button" disabled={busy} onClick={()=>void task(async()=>{const bundle=await api("/export?"+new URLSearchParams({projectId:project.projectId,revisionId:project.revisionId}));download(`${project.document.title}.json`,JSON.stringify(bundle,null,2),"application/json");})}><Download size={16} aria-hidden="true"/>Export project</button></div>
     {error&&<p role="alert" className={styles.error}>{error}</p>}
-    <div className={styles.fileList} aria-label="Project files">{Object.entries(project.document.files).sort(([a],[b])=>a.localeCompare(b)).map(([path,file])=><button type="button" key={path} aria-current={edit?.path===path} onClick={()=>open(path)} disabled={busy}><File size={15} aria-hidden="true"/>{path}{typeof file!=="string"?" · download":""}</button>)}</div>
+    {Object.keys(project.document.files).length>0&&<label>Find a file<input type="search" value={query} maxLength={160} onChange={event=>setQuery(event.target.value)} placeholder="Search file paths"/></label>}
+    {primary.length>0&&!query.trim()?<><h3>Source entry points</h3>{fileButtons(primary)}{other.length>0&&<details><summary>Other files ({other.length})</summary>{fileButtons(other)}</details>}</>:fileButtons(entries)}
+    {query.trim()&&!entries.length&&<p className={styles.muted}>No matching files</p>}
     {!Object.keys(project.document.files).length&&<p className={styles.muted}>Describe your project in the chat to create its first files.</p>}
     <form className={styles.row} onSubmit={event=>{event.preventDefault();if(dirty){setError("Save or discard this edit first.");return;}if(Object.hasOwn(project.document.files,newPath)){open(newPath);return;}change({path:newPath,text:"",original:"",revision:project.revisionId});setNewPath("");}}><label>New file path<input value={newPath} onChange={event=>setNewPath(event.target.value)} required maxLength={512} placeholder="src/example.js"/></label><button type="submit" disabled={busy}>Add file</button></form>
     {edit&&<div className={styles.stack}><label>{edit.path}<textarea className={styles.source} value={edit.text} readOnly={disabled} spellCheck={false} onChange={event=>change({...edit,text:event.target.value})}/></label><div className={styles.row}><button type="button" className={styles.primary} disabled={busy||disabled||!dirty} onClick={()=>void save()}><Save size={16} aria-hidden="true"/>Save file</button><button type="button" disabled={busy} onClick={()=>change(undefined)}>Discard edit</button>{Object.hasOwn(project.document.files,edit.path)&&<button type="button" disabled={busy||disabled||dirty} onClick={()=>void save(true)}>Delete file</button>}{dirty&&<small>Unsaved edit · project switching is paused.</small>}</div></div>}

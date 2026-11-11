@@ -14,6 +14,7 @@ import {projectHash} from "./document";
 import {readLaunchBuildContext} from "../launch-production.server";
 import {applyPlanArchitectureUpdates} from "./plan-edits";
 import {builderChains,type BuilderChainId} from "../execution-routing";
+import {assertSavedCheckPlan} from "./check-plan-guard";
 
 const objectSchema = (properties: object, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const value = (input: JsonValue) => input as Record<string, JsonValue>;
@@ -64,6 +65,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
         if(!["contract","legacy-contract"].includes(String(architecture.kind))||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("contract-interface","Choose the contract kind and chain before its canonical interface.",409);
         architecture.contractChecks=completeCanonicalContractInterfaces(architecture.contractChecks,Number(architecture.chainId) as BuilderChainId,architecture.canonicalInterfaces);
       }
+      assertSavedCheckPlan(context.revision,interpreted.intent.requirements,architecture);
       if(["contract","legacy-contract"].includes(String(architecture.kind))&&!interpreted.intent.requirements.some(rule=>rule.open))platformContractBlueprint({projectId:context.projectId,requirementsHash:projectHash(interpreted.intent.requirements),document:{...context.revision.document,requirements:interpreted.intent.requirements,architecture}});
       return save(context, { title: data.title as string, requirements: interpreted.intent.requirements, architecture,
         removeRequirementIds: context.revision.document.requirements.filter(rule => !interpreted.intent.requirements.some(item => item.id === rule.id)).map(rule => rule.id) });
