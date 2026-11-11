@@ -13,6 +13,7 @@ import {platformContractBlueprint,completeCanonicalContractInterfaces,assertCano
 import {projectHash} from "./document";
 import {readLaunchBuildContext} from "../launch-production.server";
 import {applyPlanArchitectureUpdates} from "./plan-edits";
+import {projectRequirementScopes} from "./requirement-scopes";
 import {builderChains,type BuilderChainId} from "../execution-routing";
 import {assertSavedCheckPlan} from "./check-plan-guard";
 
@@ -84,7 +85,12 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       const architecture = context.revision.document.architecture;
       const contract = architecture && typeof architecture === "object" && !Array.isArray(architecture) && ["contract", "legacy-contract"].includes(String(architecture.kind));
       if(contract)platformContractBlueprint(context.revision);
-      if (!contract && !declaredProjectChecks(architecture, context.revision.document.requirements.map(rule => rule.id)).length) throw new ProjectError("project-check-plan", "Declare the required behavior checks in the project plan before implementing.", 409);
+      const applicationRules=projectRequirementScopes(context.revision.document).application;
+      if(applicationRules.length){
+        const covered=new Set(declaredProjectChecks(architecture,context.revision.document.requirements.map(rule=>rule.id)).filter(check=>check.kind==="behavior").flatMap(check=>check.requirementIds));
+        const missing=applicationRules.filter(id=>!covered.has(id));
+        if(missing.length)throw new ProjectError("project-check-plan",`Declare behavior checks for these application requirements before implementing: ${missing.join(", ")}. Workflow instructions such as opening a checked preview belong in architecture.workflow, not application behavior. Correct an already saved requirement only with explicit user support.`,409);
+      }
       return save(context, value(input) as ProjectPatch);
     },
   };

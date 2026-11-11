@@ -94,7 +94,7 @@ export function workExplanation(progress?:WorkProgress){
 export function completedWork(progress?:WorkProgress){return [...new Set((progress?.events??[]).filter(step=>step.ok!==false).map(step=>finishedLabels[step.capabilityId]).filter(Boolean))].slice(-4);}
 export function resultTab(project:ProjectRevision,operation:ProjectRun["operation"]):"project"|"runtime"|"files"{
   if(operation==="plan")return "project";
-  const kind=project.document.architecture&&typeof project.document.architecture==="object"&&!Array.isArray(project.document.architecture)?project.document.architecture.kind:undefined;
-  if(["application","contract","legacy-contract"].includes(String(kind)))return "runtime";
+  const plan=project.document.architecture&&typeof project.document.architecture==="object"&&!Array.isArray(project.document.architecture)?project.document.architecture:undefined;
+  if(plan?.application||["application","contract","legacy-contract"].includes(String(plan?.kind)))return "runtime";
   return Object.keys(project.document.files).length?"files":"project";
 }
