@@ -17,7 +17,7 @@ const schema = { type: "object", additionalProperties: false, properties: {
 export async function chooseProjectAction(context: AgentContext, signal: AbortSignal): Promise<AgentDecision> {
   if(containsInlineCredential(context.prompt))throw new ProjectError("project-secret","Remove the private credential from this message and use Connections.",422);
   const project = context.project;
-  const observations=projectModelObservations(context.steps);
+  const observations=projectModelObservations(context.steps,context.project);
   const requestFacts={evmAddresses:[...new Set(context.prompt.match(/\b0x[0-9a-fA-F]+\b/g)??[])].map(value=>({value,valid:isAddress(value)}))};
   const previous=context.steps.at(-1)?.result;
   const outputLimitRetry=previous&&typeof previous==="object"&&!Array.isArray(previous)&&previous.kind==="model-retry"&&previous.failure==="output-limit";

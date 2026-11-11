@@ -61,16 +61,15 @@
 .empty h2 { font-size:clamp(26px,2.7vw,36px); letter-spacing:-.025em; line-height:1.16; text-wrap:balance; }
 .empty p { color:var(--muted); line-height:1.6; }
 .eyebrow { color:var(--accent); font-size:13px; }
-.examples { display:grid; gap:8px; width:100%; margin-block:8px; }
-.workspace .examples button { justify-content:flex-start; text-align:start; padding:16px; background:#20241e; }
+.examples { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; width:100%; margin-block:8px; }
+.workspace .examples button { flex-direction:column; align-items:flex-start; justify-content:flex-start; text-align:start; padding:16px; background:#20241e; }
 .examples button > svg:first-child { flex:none; color:var(--accent); }
-.examples button > svg:last-child { margin-inline-start:auto; flex:none; color:var(--muted); }
+.examples button > svg:last-child { align-self:flex-end; margin-block-start:auto; flex:none; color:var(--muted); }
 .examples span { display:grid; gap:4px; }
 .examples strong { font-size:15px; font-weight:500; }
 .examples small { font-size:13px; line-height:1.4; }
 .workspace .starterNetwork { display:flex; flex-wrap:wrap; align-items:center; gap:12px; font-size:12px; }
 .starterNetwork select { font-size:13px; padding-block:8px; }
-.empty .startHint { font-size:12px; }
 .composer { flex:none; border-top:1px solid var(--line); padding:16px 20px max(16px,env(safe-area-inset-bottom)); display:grid; gap:8px; background:#1c1f19; }
 .composer textarea { min-height:80px; max-height:200px; width:100%; resize:vertical; }
 .composer footer { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -159,7 +158,9 @@
   .composer { padding-inline:16px; }
   .panel { padding:20px 16px; }
   .empty { padding-block:12px; gap:12px; }
-  .workspace .examples button { padding:12px; }
+  .examples { grid-template-columns:minmax(0,1fr); }
+  .workspace .examples button { flex-direction:row; align-items:center; padding:12px; }
+  .examples button > svg:last-child { align-self:center; margin-block-start:0; margin-inline-start:auto; }
   .examples small { font-size:12px; }
   .starterNetwork { width:100%; }
   .starterNetwork select { flex:1; }

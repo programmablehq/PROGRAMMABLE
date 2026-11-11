@@ -45,3 +45,12 @@ it("keeps the canonical context and exact custom file bytes without replaying so
  expect(files[0]).toMatchObject({path:"Hook.sol",content:file});expect(files[0].hash).toMatch(/^sha256:[a-f0-9]{64}$/);
  expect(files[1]).not.toHaveProperty("content");
 });
+
+it("does not repeat the opaque production binding after the complete plan is saved",()=>{
+ const project={document:{architecture:{production:{digest:"saved-exact-binding"},contractChecks:{steps:[]}}}} as unknown as AgentContext["project"];
+ const steps=[{id:"context",cursor:0,capability_id:"contract.context",input:{chainId:8453},state:"completed",result:{ok:true,value:{production:{chainId:8453,profileVersion:"current",opaque:"x".repeat(30000)},interfaces:{id:"pinned-source",contracts:[{source:"Hook.sol",contract:"Hook",sourceSha256:"source-hash",functions:["function value() view returns (uint256)"]}]},contractChecksInstructions:"x".repeat(20000)}}}];
+ const observed=projectModelObservations(steps as AgentContext["steps"],project);
+ expect(JSON.stringify(observed)).not.toContain('"opaque"');
+ expect(observed[0].result).toMatchObject({ok:true,value:{chainId:8453,interfaceContextId:"pinned-source",contracts:[{source:"Hook.sol",contract:"Hook",sourceSha256:"source-hash"}]}});
+ expect(JSON.stringify(observed).length).toBeLessThan(1000);
+});
