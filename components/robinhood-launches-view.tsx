@@ -19,6 +19,7 @@ import { launchPresentationDetails, type LaunchPresentationSource } from "@/lib/
 import { AnimatedMarketCap } from "@/components/animated-market-cap";
 import { ETHEREUM_EXPLORE_FILTERS, ETHEREUM_EXPLORE_MODES } from "@/lib/ethereum-explore";
 import { useRouteViewChain, type ViewChainId } from "@/components/view-chain";
+import { isViewChainId } from "@/lib/view-chain";
 import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/robinhood-coin-artwork";
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
@@ -197,7 +198,7 @@ export function readLaunchListResponse(value: unknown, chainId: ExploreScope, ac
     throw new Error("Invalid profile owner");
   }
   const validLaunch = (item: unknown) => chainId === "all"
-    ? isObject(item) && (item.chainId === 1 || item.chainId === 4663 || item.chainId === 8453 || item.chainId === 999) && isLaunch(item, item.chainId)
+    ? isObject(item) && isViewChainId(item.chainId) && isLaunch(item, item.chainId)
     : isLaunch(item, chainId);
   if (!isObject(value) || (chainId === "all" ? value.scope !== "all" : value.chainId !== chainId)
     || !["ready", "syncing", "stale", "partial", "unavailable"].includes(String(value.status))
@@ -205,7 +206,7 @@ export function readLaunchListResponse(value: unknown, chainId: ExploreScope, ac
     || value.items.length > 50 || !value.items.every(validLaunch) || !isObject(value.page)
     || !Array.isArray(value.presentations) || value.presentations.length > 50
     || !value.presentations.every((item) => isObject(item) && typeof item.tokenAddress === "string" && ADDRESS.test(item.tokenAddress)
-      && (chainId !== "all" || item.chainId === 1 || item.chainId === 4663 || item.chainId === 8453 || item.chainId === 999))) {
+      && (chainId !== "all" || isViewChainId(item.chainId)))) {
     throw new Error("Invalid launch response");
   }
   const page = value.page;
