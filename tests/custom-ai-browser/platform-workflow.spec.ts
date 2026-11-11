@@ -33,9 +33,10 @@ test("reviews and revokes a connection without exposing its private key",async({
 });
 test("supports keyboard tabs and a narrow mobile layout",async({page})=>{
   await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();
-  const projectTab=page.getByRole("tab",{name:"Project",exact:true});await projectTab.focus();await page.keyboard.press("ArrowRight");await expect(page.getByRole("tab",{name:"Files",exact:true})).toBeFocused();await expect(page.getByRole("tabpanel",{name:"Files",exact:true})).toBeVisible();
+  await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeFocused();
+  const projectTab=page.getByRole("tab",{name:"Project",exact:true});await projectTab.press("ArrowRight");await expect(page.getByRole("tab",{name:"Files",exact:true})).toBeFocused();await expect(page.getByRole("tabpanel",{name:"Files",exact:true})).toBeVisible();
   await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-desktop.png"),fullPage:true});
-  await page.setViewportSize({width:320,height:780});await page.getByRole("button",{name:"Result",exact:true}).click();await page.getByRole("tab",{name:"Files",exact:true}).focus();await page.keyboard.press("Home");await expect(projectTab).toBeFocused();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  await page.setViewportSize({width:320,height:780});await page.getByRole("button",{name:"Result",exact:true}).click();await page.getByRole("tab",{name:"Files",exact:true}).press("Home");await expect(projectTab).toBeFocused();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   await page.screenshot({path:join(process.env.PLATFORM_EVIDENCE_DIR??tmpdir(),"p11-mobile.png"),fullPage:true});
 });
 test("imports an OpenAPI document into the review and saves its actual actions",async({page})=>{
