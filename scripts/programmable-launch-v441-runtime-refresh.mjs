@@ -7,13 +7,13 @@ import { pathToFileURL } from "node:url";
 
 import { parseStrictJson } from "../packages/launch/src/canonical-json.mjs";
 import { decodeExactUtf8, sha256Digest } from "../packages/launch/src/io.mjs";
-import {createV440CaptureVerifier,RUNTIME_CAPTURE_AUTHORITY_PATH} from './programmable-launch-v440-capture-observer.mjs';
+import {createV441CaptureVerifier,RUNTIME_CAPTURE_AUTHORITY_PATH} from './programmable-launch-v441-capture-observer.mjs';
 
 // Authenticate the runtime capture from the completed Elysium backend promotion.
 // This signed capture is never treated as a current observation.
 // Fresh verification remains mandatory and does not itself activate the backend.
-export const RUNTIME_CAPTURE_PATH = "release/robinhood-chain-4663/v4.4.0/backend-promotion-input.public.json";
-export const RUNTIME_ATTESTATION_PATH = "release/robinhood-chain-4663/v4.4.0/backend-promotion-input.attestation.json";
+export const RUNTIME_CAPTURE_PATH = "release/robinhood-chain-4663/v4.4.1/backend-promotion-input.public.json";
+export const RUNTIME_ATTESTATION_PATH = "release/robinhood-chain-4663/v4.4.1/backend-promotion-input.attestation.json";
 const MAXIMUM_BYTES = 16 * 1024 * 1024;
 const SHA256 = /^sha256:[0-9a-f]{64}$/u;
 
@@ -58,7 +58,7 @@ export async function verifyRuntimePromotionReadiness(argv, {
   if (!runFinalizer || !freshVerifyBackend) {
     const authority=parseStrictJson(decodeExactUtf8(boundBytes(root,RUNTIME_CAPTURE_AUTHORITY_PATH),'runtime observer binding'),
       {maximumBytes:32768,maximumDepth:8});
-    const verifier=createV440CaptureVerifier(authority);
+    const verifier=createV441CaptureVerifier(authority);
     runFinalizer ??= verifier.runFinalizer;
     freshVerifyBackend ??= verifier.freshVerifyBackend;
   }
