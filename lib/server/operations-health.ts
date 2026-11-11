@@ -2,6 +2,7 @@ import "server-only";
 
 import { readEthereumIndexHealth } from "./ethereum-explore";
 import { readHyperEvmExploreCatalog } from "./hyperevm-explore";
+import { readElysiumExploreCatalog } from "./elysium-explore";
 import { readBaseExploreCatalog } from "./base-explore";
 import { readRobinhoodExploreCatalog } from "./robinhood-index/read";
 
@@ -14,6 +15,7 @@ type Readers = {
   robinhood: () => Promise<IndexObservation>;
   base: () => Promise<IndexObservation>;
   hyperevm?: () => Promise<IndexObservation>;
+  elysium?: () => Promise<IndexObservation>;
 };
 
 async function boundedObservation(read: Readers["ethereum"]): Promise<IndexObservation> {
@@ -33,11 +35,12 @@ async function boundedObservation(read: Readers["ethereum"]): Promise<IndexObser
 }
 
 async function observe(readers: Readers) {
-  const [ethereum, robinhood, base, hyperevm] = await Promise.all([
+  const [ethereum, robinhood, base, hyperevm, elysium] = await Promise.all([
     boundedObservation(readers.ethereum), boundedObservation(readers.robinhood), boundedObservation(readers.base),
     readers.hyperevm ? boundedObservation(readers.hyperevm) : Promise.resolve(null),
+    readers.elysium ? boundedObservation(readers.elysium) : Promise.resolve(null),
   ]);
-  const observations = [ethereum, robinhood, base, ...(hyperevm?[hyperevm]:[])];
+  const observations = [ethereum, robinhood, base, ...(hyperevm?[hyperevm]:[]), ...(elysium?[elysium]:[])];
   const status = observations.every(index => index.status === "ready") ? "ready" as const
     : observations.every(index => index.status === "unavailable") ? "unavailable" as const
       : "degraded" as const;
@@ -54,6 +57,7 @@ async function observe(readers: Readers) {
       { chainId: 8453, status: base.status, updatedAt: base.updatedAt,
         catalogUrl: "https://programmable.market/api/explore/base" },
       ...(hyperevm ? [{ chainId:999,status:hyperevm.status,updatedAt:hyperevm.updatedAt,catalogUrl:"https://programmable.market/api/explore/hyperevm" }] : []),
+      ...(elysium ? [{ chainId:99901,status:elysium.status,updatedAt:elysium.updatedAt,catalogUrl:"https://programmable.market/api/explore/elysium" }] : []),
     ],
     // Catalog availability is evidence about a read path, not a provider-wide probe.
     providers: [{ name: "codex" as const,
@@ -67,6 +71,7 @@ async function observe(readers: Readers) {
       { chainId: 8453, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness",
         capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
       ...(hyperevm ? [{ chainId:999,readinessUrl:"https://api.programmable.market/v4/chains/999/readiness",capabilitiesUrl:"https://api.programmable.market/v4/chains/999/capabilities" }] : []),
+      ...(elysium ? [{ chainId:99901,readinessUrl:"https://api.programmable.market/v4/chains/99901/readiness",capabilitiesUrl:"https://api.programmable.market/v4/chains/99901/capabilities" }] : []),
     ],
   };
 }
@@ -90,7 +95,8 @@ function retainLastKnownGoodIndexes(
 }
 
 export function createOperationsHealthReader(readers: Readers = {
-  ethereum: readEthereumIndexHealth, robinhood: readRobinhoodExploreCatalog, base: readBaseExploreCatalog, hyperevm: readHyperEvmExploreCatalog,
+  ethereum: readEthereumIndexHealth, robinhood: readRobinhoodExploreCatalog, base: readBaseExploreCatalog,
+  hyperevm: readHyperEvmExploreCatalog, elysium: readElysiumExploreCatalog,
 }) {
   let cached: { expiresAt: number; value: Awaited<ReturnType<typeof observe>> } | undefined;
   let inFlight: Promise<Awaited<ReturnType<typeof observe>>> | undefined;
