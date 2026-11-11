@@ -5,6 +5,7 @@ import type {ClaudeInput} from "../lib/custom-ai/claude.server";
 import type {LaunchIntent} from "../lib/custom-ai/launch-intent";
 import type {Draft} from "../lib/custom-ai/types";
 import {modelDesignContext} from "../lib/custom-ai/planning-context";
+import {applyCoinSetupPatch,EMPTY_COIN_SETUP} from "../lib/custom-ai/coin-setup";
 const answer={reply:"The ten minute phase ends before the weather rule starts.",action:"answer",memory:"Existing design is unchanged.",intentRequirements:[],requirements:[],feeChecks:[],setupPatch:{},lookups:[],program:null,eventRule:null,composable:null,ruleEdits:[]};
 const checked:Draft={source:"EXACT_PRIVATE_SOURCE_"+"x".repeat(20000),sourceHash:"a".repeat(64),compiled:true,diagnostics:[],hookSummary:"Ten minute fee schedule",verification:{status:"passed",sourceHash:"a".repeat(64),requirements:["Fall from 10% to 1% over ten minutes","No transfer tax"],checks:[{afterSeconds:0,buy:true,totalFeeBps:1000},{afterSeconds:600,buy:true,totalFeeBps:100}],cases:8}};
 async function question(text:string,draft:Draft|undefined=checked){
@@ -13,6 +14,23 @@ async function question(text:string,draft:Draft|undefined=checked){
  return {call,compile,reply,input:call.mock.calls[0][0]};
 }
 describe("Custom AI context budget",()=>{
+ it("supplies every custom-launch network to a read-only availability question without starting a build",async()=>{
+  const call=vi.fn(async(_input:ClaudeInput)=>({text:JSON.stringify(answer),inputTokens:0,outputTokens:0}));
+  const compile=vi.fn();
+  const reply=await runCustomAI({id:"network-question-00001",intent:"chat",coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:99901}),messages:[{role:"user",content:"Quick question only; do not build, compile, create a launch, or send transactions. Which chains currently support custom contract launches on Programmable? Please include each chain ID and explicitly state whether Elysium is supported."}]},undefined,{call,compile});
+  const prefix="Launch networks [id,name,native,feeCore]: ";
+  const line=call.mock.calls[0][0].system.split("\n").find(line=>line.startsWith(prefix));
+  expect(line).toBeDefined();
+  expect(JSON.parse(line!.slice(prefix.length))).toEqual([
+   [1,"Ethereum","ETH",true],
+   [4663,"Robinhood","ETH",true],
+   [8453,"Base","ETH",false],
+   [999,"HyperEVM","HYPE",false],
+   [99901,"Elysium","HYPE",false],
+  ]);
+  expect(reply.change).toBe("unchanged");expect(reply.draft).toBeUndefined();
+  expect(call).toHaveBeenCalledOnce();expect(compile).not.toHaveBeenCalled();
+ });
  it("reports the recorded build checks without sending source or treating them as a launch",()=>{
   const current=modelDesignContext({draft:checked},false).currentDraft;
   expect(current).toMatchObject({compiled:true,verification:"passed",sourceIncluded:false});
