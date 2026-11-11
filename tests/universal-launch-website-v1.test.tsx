@@ -169,7 +169,7 @@ describe("historical launch continuation", () => {
   it.each(["originalManifestDigest", "currentManifestDigest", "replanUrl"] as const)("rejects continuation guidance with a changed %s", field => {
     const value = retired();
     const wrong = field === "replanUrl" ? "/v4/chains/4663/custom-launch-plans/another:replan"
-      : field === "currentManifestDigest" ? value.manifestDigest : `sha256:${"cc".repeat(32)}`;
+      : field === "currentManifestDigest" ? "not-a-manifest-digest" : `sha256:${"cc".repeat(32)}`;
     expect(() => readLaunchPlanResourceV1({ ...value, continuation: { ...value.continuation, [field]: wrong } })).toThrow(/continuation notice/);
   });
   it("stops a fresh wallet handoff before provider access when continuation requires replanning", async () => {
@@ -177,6 +177,17 @@ describe("historical launch continuation", () => {
     await expect(prepareUniversalLaunchWalletV1(rpc, controller, { sourceVersion: "custom_launch_plan_v1", action: "review",
       reviewedResource: value, loadFreshResource: async () => value, loadFreshCapabilities: async () => capabilitiesFixture(value) }, now)).rejects.toThrow(/updated plan/);
     expect(rpc.request).not.toHaveBeenCalled();
+  });
+  it("shows same-manifest runtime recovery without permitting a wallet action", async () => {
+    const original = retired();
+    const value = { ...original, continuation: { ...original.continuation!, currentManifestDigest: original.manifestDigest } };
+    const before = JSON.stringify(value), rpc = provider();
+    expect(readLaunchPlanResourceV1(value)).toBe(value);
+    expect(launchFlowStateV1(value)).toMatchObject({ title: "Team action: refresh preparation", terminal: false });
+    await expect(prepareUniversalLaunchWalletV1(rpc, controller, { sourceVersion: "custom_launch_plan_v1", action: "review",
+      reviewedResource: value, loadFreshResource: async () => value, loadFreshCapabilities: async () => capabilitiesFixture(value) }, now)).rejects.toThrow(/updated plan/);
+    expect(rpc.request).not.toHaveBeenCalled();
+    expect(JSON.stringify(value)).toBe(before);
   });
   it("keeps exact known-hash recovery and terminal indexing ahead of a stale replan notice", () => {
     const value = retired(); const step = value.steps[0]; const before = JSON.stringify(value);
