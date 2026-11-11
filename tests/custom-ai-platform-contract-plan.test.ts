@@ -45,6 +45,16 @@ describe("platform contract build plan",()=>{
   const project=platformContract(revision(source));expect(project.compiler).toEqual(empty.compiler);expect(project.entrypoints).toEqual(empty.entrypoints);
   expect(platformContractBlueprint(revision(source)).id).toBe(empty.id);
  });
+ it.each([1,4663,8453,999,99901])("keeps the selected supported chain through the contract blueprint and source (%i)",chainId=>{
+  const current=revision({"Counter.sol":"pragma solidity 0.8.26; contract Counter { uint public value; function increment() external { value++; } }"});
+  (current.document.architecture as {chainId:number}).chainId=chainId;
+  expect(platformContractBlueprint(current).chainId).toBe(chainId);
+  expect(platformContract(current).chainId).toBe(chainId);
+ });
+ it("rejects an unknown network before accepting a contract plan",()=>{
+  const current=revision();(current.document.architecture as {chainId:number}).chainId=12345;
+  expect(()=>platformContractBlueprint(current)).toThrow(/Choose the contract chain/);
+ });
  it("rejects missing or incomplete checks instead of compiling an unplanned source",()=>{
   expect(()=>platformContractBlueprint(revision({},null))).toThrow();
   expect(()=>platformContractBlueprint(revision({},{...declared,steps:[]}))).toThrow();

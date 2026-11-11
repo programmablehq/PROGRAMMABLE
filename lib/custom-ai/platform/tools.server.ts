@@ -13,6 +13,7 @@ import {platformContractBlueprint,completeCanonicalContractInterfaces,assertCano
 import {projectHash} from "./document";
 import {readLaunchBuildContext} from "../launch-production.server";
 import {applyPlanArchitectureUpdates} from "./plan-edits";
+import {builderChains,type BuilderChainId} from "../execution-routing";
 
 const objectSchema = (properties: object, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const value = (input: JsonValue) => input as Record<string, JsonValue>;
@@ -56,12 +57,12 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       if(architecture.checks!==undefined)declaredProjectChecks(architecture,interpreted.intent.requirements.map(rule=>rule.id));
       assertCanonicalReferenceChanges(context.revision,interpreted.intent.requirements,architecture);
       if(architecture.useCanonicalProduction===true){
-        if(!["contract","legacy-contract"].includes(String(architecture.kind))||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain before binding its launch profile.",409);
-        architecture.production=json(await readLaunchBuildContext(Number(architecture.chainId) as 1|4663,context.signal));
+        if(!["contract","legacy-contract"].includes(String(architecture.kind))||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain before binding its launch profile.",409);
+        architecture.production=json(await readLaunchBuildContext(Number(architecture.chainId) as BuilderChainId,context.signal));
       }
       if(architecture.contractChecks!==undefined&&(architecture.useCanonicalProduction===true||architecture.canonicalInterfaces!==undefined)){
-        if(!["contract","legacy-contract"].includes(String(architecture.kind))||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("contract-interface","Choose the contract kind and chain before its canonical interface.",409);
-        architecture.contractChecks=completeCanonicalContractInterfaces(architecture.contractChecks,Number(architecture.chainId) as 1|4663,architecture.canonicalInterfaces);
+        if(!["contract","legacy-contract"].includes(String(architecture.kind))||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("contract-interface","Choose the contract kind and chain before its canonical interface.",409);
+        architecture.contractChecks=completeCanonicalContractInterfaces(architecture.contractChecks,Number(architecture.chainId) as BuilderChainId,architecture.canonicalInterfaces);
       }
       if(["contract","legacy-contract"].includes(String(architecture.kind))&&!interpreted.intent.requirements.some(rule=>rule.open))platformContractBlueprint({projectId:context.projectId,requirementsHash:projectHash(interpreted.intent.requirements),document:{...context.revision.document,requirements:interpreted.intent.requirements,architecture}});
       return save(context, { title: data.title as string, requirements: interpreted.intent.requirements, architecture,

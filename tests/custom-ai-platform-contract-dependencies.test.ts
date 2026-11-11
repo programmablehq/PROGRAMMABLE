@@ -25,3 +25,12 @@ it("copies exact pinned sources once and preserves the user's edited dependency"
  for(const [path,source] of Object.entries(catalog))if(path!==edited)expect(saved.document.files[path]).toBe(source.content);
  await tool!.reconcile!(context,{});expect((await projects.readProject(scope)).revisionId).toBe(saved.revisionId);
 });
+
+it("exposes each supported chain and serves Elysium's own pinned library",async()=>{
+ const tools=contractProjectTools({} as never,{} as never,{} as never),context=tools.find(tool=>tool.id==="contract.context")!,library=tools.find(tool=>tool.id==="contract.library")!;
+ for(const tool of [context,library])expect((tool.schema as {properties:{chainId:{enum:number[]}}}).properties.chainId.enum).toEqual([1,4663,8453,999,99901]);
+ const catalog=canonicalGeneralSourceCatalog(undefined,99901),path=Object.keys(catalog).find(path=>path.includes("Elysium")&&path.endsWith(".sol"))!;
+ expect(path).toBeDefined();
+ const result=await library.execute({} as never,{chainId:99901,paths:[path]}) as {files:Record<string,string>};
+ expect(result.files[path]).toBe(catalog[path].content);
+});

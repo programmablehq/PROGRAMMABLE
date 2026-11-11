@@ -150,8 +150,8 @@ type DiscoveryDependencies = { fetch: typeof fetch; now: () => number };
 function createLaunchDiscovery(dependencies: DiscoveryDependencies, project: typeof projectLaunchProductionContext) {
   const cache = new Map<BuilderChainId, { until: number; value?: LaunchProductionContext; pending?: Promise<LaunchProductionContext> }>();
   let policyCache: { until: number; value?: unknown; pending?: Promise<unknown> } | undefined;
-  async function readJson(path: string, maximumBytes: number) {
-    const response = await dependencies.fetch(`${ORIGIN}${path}`, { method: "GET", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(TIMEOUT), headers: { accept: "application/json" } });
+  async function readJson(path: string, maximumBytes: number, timeout = TIMEOUT) {
+    const response = await dependencies.fetch(`${ORIGIN}${path}`, { method: "GET", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(timeout), headers: { accept: "application/json" } });
     if (!response.ok || response.redirected || !/^application\/json(?:;|$)/iu.test(response.headers.get("content-type") ?? "")
       || Number(response.headers.get("content-length") ?? 0) > maximumBytes || !response.body) {
       await response.body?.cancel().catch(() => undefined); throw unavailable();
@@ -183,7 +183,8 @@ function createLaunchDiscovery(dependencies: DiscoveryDependencies, project: typ
     policyCache = { until: 0, pending }; return pending;
   }
   async function load(chainId: BuilderChainId, fresh: boolean) {
-    const [capabilities, policy] = await Promise.all([readJson(builderChain(chainId).capabilitiesPath, MAX_BYTES), readPolicy(fresh)]);
+    // A cold Elysium response includes the API's bounded 20-second live check.
+    const [capabilities, policy] = await Promise.all([readJson(builderChain(chainId).capabilitiesPath, MAX_BYTES, chainId === 99901 ? 25_000 : TIMEOUT), readPolicy(fresh)]);
     return project(capabilities, chainId, policy);
   }
   return async function read(chainId: BuilderChainId, signal?: AbortSignal, options: { fresh?: boolean } = {}) {
