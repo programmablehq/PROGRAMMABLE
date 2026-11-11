@@ -124,6 +124,7 @@ test("Base discovery allows only its exact public WETH runtime commitment", t =>
   const paths = [
     "packages/launch/src/base-profile-v1.json",
     "docs/operations/releases/custom-launch-v4.2.0/cli-release-binding.json",
+    "docs/operations/releases/custom-launch-v4.4.1/cli-release-binding.json",
     "public/openapi/base-custom-launch-v1.json",
   ];
   const digest = JSON.parse(readFileSync(new URL("../../packages/launch/src/base-profile-v1.json", import.meta.url))).fundingTokenRuntimeCodeHash;
@@ -140,6 +141,7 @@ test("HyperEVM discovery allows only its exact public WHYPE runtime commitment",
   const paths = [
     "packages/launch/src/hyperevm-profile-v1.json",
     "docs/operations/releases/custom-launch-v4.3.0/cli-release-binding.json",
+    "docs/operations/releases/custom-launch-v4.4.1/cli-release-binding.json",
     "public/openapi/hyperevm-custom-launch-v1.json",
   ];
   const digest = JSON.parse(readFileSync(new URL("../../packages/launch/src/hyperevm-profile-v1.json", import.meta.url))).fundingTokenRuntimeCodeHash;
@@ -152,8 +154,9 @@ test("HyperEVM discovery allows only its exact public WHYPE runtime commitment",
   }
 });
 
-test("Elysium discovery permits only exact public funding bindings on its two paths", t => {
-  const paths = ["packages/launch/src/elysium-profile-v1.json", "public/openapi/elysium-custom-launch-v1.json"];
+test("Elysium discovery permits only exact public funding bindings at declared paths", t => {
+  const paths = ["packages/launch/src/elysium-profile-v1.json", "public/openapi/elysium-custom-launch-v1.json",
+    "docs/operations/releases/custom-launch-v4.4.1/cli-release-binding.json"];
   const profile = JSON.parse(readFileSync(new URL("../../packages/launch/src/elysium-profile-v1.json", import.meta.url)));
   for (const field of ["fundingToken", "fundingTokenRuntimeCodeHash"]) {
     const value = profile[field], line = `  "${field}": "${value}",`;

@@ -4,11 +4,15 @@ import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import test from 'node:test';
+import {gunzipSync} from 'node:zlib';
+import {createHash} from 'node:crypto';
 import Ajv2020 from 'ajv/dist/2020.js';
 import * as client from '../programmable-launch-v440-release-binding.mjs';
 import {releaseBindingTools} from '../programmable-launch-release-assets.mjs';
 import {V4_RELEASE_BINDING_PATH as API_BINDING_PATH} from '../programmable-launch-v41-release-binding.mjs';
-const sourceRoot=fileURLToPath(new URL('../../',import.meta.url));
+const snapshot=readFileSync(new URL('./fixtures/programmable-launch-v440-source.json.gz',import.meta.url));
+assert.equal(createHash('sha256').update(snapshot).digest('hex'),'07c7019ef07c70bb414422ed6c6082a6e06aab183ab8ceca747e0155da7b33ad');
+const frozenSource=JSON.parse(gunzipSync(snapshot));
 const acceptance='docs/operations/releases/custom-launch-v4.4.0/elysium-live-acceptance.json';
 function fixture(t) {
  const root=mkdtempSync(join(tmpdir(),'launch-v440-source-test-'));
@@ -19,7 +23,7 @@ function fixture(t) {
   const file=join(root,relative);mkdirSync(dirname(file),{recursive:true});
   // Candidate source-binding tests exercise hashes only. This explicit fixture
   // is never written into the repository or accepted as live release evidence.
-  writeFileSync(file,relative===acceptance?JSON.stringify({fixtureOnly:true}):readFileSync(join(sourceRoot,relative)));
+  writeFileSync(file,relative===acceptance?JSON.stringify({fixtureOnly:true}):Buffer.from(frozenSource[relative],'base64'));
  }
  const binding=client.createV440ClientReleaseBinding({repositoryRoot:root});
  writeFileSync(join(root,client.V4_RELEASE_BINDING_PATH),JSON.stringify(binding));
