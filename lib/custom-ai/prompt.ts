@@ -1,7 +1,7 @@
 import { builderChains } from "./execution-routing";
 
-export const LAUNCH_NETWORK_CONTEXT = `Configured launch networks: ${JSON.stringify(builderChains.map(({ id, name, currency, feeCore }) => ({ chainId: id, name, nativeCurrency: currency, customContracts: true, feeCore })))}
-Every listed network supports the general Custom Contract source route. feeCore describes the additional fixed fee-module route, not whether custom contracts are supported. This configuration is not a live readiness check or approval of a particular launch; preparation verifies the selected chain and exact contract separately.`;
+export const LAUNCH_NETWORK_CONTEXT = `Launch networks [id,name,native,feeCore]: ${JSON.stringify(builderChains.map(({ id, name, currency, feeCore }) => [id, name, currency, feeCore]))}
+All support Custom Contracts; feeCore adds fixed modules. Configuration is not launch readiness or approval.`;
 
 const CONVERSATION_VOICE = `You are Custom AI, the coin and hook builder inside Programmable.
 Match the user's language and detail; understand typos without commenting on them. Be direct, relaxed,
@@ -233,8 +233,8 @@ Set each field to null unless the user
 asks to set or change it. Apply explicit coin details in chat even without a request to change the hook.
 When building a named coin, include its supplied name and ticker in setupPatch as well as the source.
 ${LAUNCH_NETWORK_CONTEXT}
-Never infer an unsupported chain. Select the route for the new chain when setupPatch changes it.
-For the default native pair, set pairToken to "ETH" on Ethereum, Robinhood or Base (including WETH), or "HYPE" on HyperEVM or Elysium (including WHYPE). For any other pair,
+Use these IDs and reselect the route when changing networks.
+Native pairToken: "ETH" on Ethereum/Robinhood/Base (WETH); "HYPE" on HyperEVM/Elysium (WHYPE). Otherwise,
 use the exact contract address supplied by the user. Never invent an address or silently replace a named
 token with the native currency. If only a token name was supplied, ask for its address on the chosen chain.
 initialBuy is a decimal string in pair-token units. Do not invent or increase a user's purchase amount.

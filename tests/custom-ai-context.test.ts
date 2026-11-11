@@ -18,14 +18,15 @@ describe("Custom AI context budget",()=>{
   const call=vi.fn(async(_input:ClaudeInput)=>({text:JSON.stringify(answer),inputTokens:0,outputTokens:0}));
   const compile=vi.fn();
   const reply=await runCustomAI({id:"network-question-00001",intent:"chat",coin:applyCoinSetupPatch(EMPTY_COIN_SETUP,{chainId:99901}),messages:[{role:"user",content:"Quick question only; do not build, compile, create a launch, or send transactions. Which chains currently support custom contract launches on Programmable? Please include each chain ID and explicitly state whether Elysium is supported."}]},undefined,{call,compile});
-  const line=call.mock.calls[0][0].system.split("\n").find(line=>line.startsWith("Configured launch networks: "));
+  const prefix="Launch networks [id,name,native,feeCore]: ";
+  const line=call.mock.calls[0][0].system.split("\n").find(line=>line.startsWith(prefix));
   expect(line).toBeDefined();
-  expect(JSON.parse(line!.slice("Configured launch networks: ".length))).toEqual([
-   {chainId:1,name:"Ethereum",nativeCurrency:"ETH",customContracts:true,feeCore:true},
-   {chainId:4663,name:"Robinhood",nativeCurrency:"ETH",customContracts:true,feeCore:true},
-   {chainId:8453,name:"Base",nativeCurrency:"ETH",customContracts:true,feeCore:false},
-   {chainId:999,name:"HyperEVM",nativeCurrency:"HYPE",customContracts:true,feeCore:false},
-   {chainId:99901,name:"Elysium",nativeCurrency:"HYPE",customContracts:true,feeCore:false},
+  expect(JSON.parse(line!.slice(prefix.length))).toEqual([
+   [1,"Ethereum","ETH",true],
+   [4663,"Robinhood","ETH",true],
+   [8453,"Base","ETH",false],
+   [999,"HyperEVM","HYPE",false],
+   [99901,"Elysium","HYPE",false],
   ]);
   expect(reply.change).toBe("unchanged");expect(reply.draft).toBeUndefined();
   expect(call).toHaveBeenCalledOnce();expect(compile).not.toHaveBeenCalled();
