@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import captured from "./fixtures/custom-ai-launch-discovery.json";
+import elysiumDiscovery from "./fixtures/custom-ai-elysium-discovery.json";
+import elysiumProfile from "../packages/launch/src/elysium-profile-v1.json";
 import protection from "./fixtures/custom-ai-launch-protection.json";
 import { createLaunchBuildDiscovery, createLaunchProductionDiscovery, projectLaunchBuildContext, projectLaunchProductionContext, projectLaunchProtectionStatus } from "../lib/custom-ai/launch-production.server";
 import { checkedLaunchProductionContext, PROTECTED_COMPONENT_ROLES } from "../lib/custom-ai/launch-production";
@@ -13,6 +15,7 @@ import {uniswapRoutingContext} from "../lib/custom-ai/uniswap-routing";
 const fixture = (chain: BuilderChainId): Record<string, unknown> => structuredClone(captured.chains[String(chain) as keyof typeof captured.chains]) as Record<string, unknown>;
 const json = (value: unknown) => Response.json(value);
 const chains = [1, 4663, 8453, 999] as const;
+const elysium = { ...elysiumDiscovery, profile: elysiumProfile };
 const policyUrl = (url: string | URL | Request) => String(url).endsWith("/v1/launch-protection");
 const v1Ids = { 1: "sha256:f9b6319a321b79f0bc76f0ff64e9a415ece9a98aecde0f0c80654953417f5b3b",
   4663: "sha256:170110ef449361c88e8af5126750c093beebfc03700726f1a2c16291ab697f73",
@@ -63,6 +66,30 @@ describe("selected production context for general source generation", () => {
 });
 
 describe("bounded shared chain discovery", () => {
+  it.each([99901, 1] as const)("waits for a cold Elysium profile while retaining the ordinary deadline (%i)", async chainId => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("Timed out", "TimeoutError")), ms);
+      return controller.signal;
+    });
+    try {
+      const fetcher = vi.fn((url: string | URL | Request, init?: RequestInit) => {
+        if (policyUrl(url)) return Promise.resolve(json({ ...protection, supportedChains: ["1", "4663", "8453", "999", "99901"] }));
+        return new Promise<Response>((resolve, reject) => {
+          const timer = setTimeout(() => resolve(json(chainId === 99901 ? elysium : fixture(chainId))), 6000);
+          init?.signal?.addEventListener("abort", () => { clearTimeout(timer); reject(init.signal?.reason); }, { once: true });
+        });
+      });
+      const read = createLaunchBuildDiscovery({ fetch: fetcher as typeof fetch, now: () => Date.now() });
+      const outcome = Promise.allSettled([read(chainId)]);
+      await vi.advanceTimersByTimeAsync(6000);
+      const [result] = await outcome;
+      expect(result.status).toBe(chainId === 99901 ? "fulfilled" : "rejected");
+      if (result.status === "fulfilled") expect(result.value).toMatchObject({ chainId: 99901, route: "graph-v3", protections: { minimumFdvUsd: "15000" } });
+      else expect(result.reason).toMatchObject({ code: "launch-context" });
+    } finally { timeout.mockRestore(); vi.clearAllTimers(); vi.useRealTimers(); }
+  });
   it("shares simultaneous reads, caches only four fixed chains, clones results and refreshes once", async () => {
     let time = 1000;
     const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {

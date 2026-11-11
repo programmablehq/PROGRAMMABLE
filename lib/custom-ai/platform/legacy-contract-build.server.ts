@@ -5,6 +5,7 @@ import {bindGeneralCheckBlueprint,generalCheckLogicalRules} from "../check-bluep
 import { checkGeneralScenarios } from "../behavior-checks.server";
 import { canonicalGeneralSourceCatalog,canonicalInterfaceContext } from "../canonical-dependencies.server";
 import {readLaunchBuildContext} from "../launch-production.server";
+import {builderChains,type BuilderChainId} from "../execution-routing";
 import {platformContract as contract,platformContractBlueprint} from "./contract-plan.server";
 import type { createArtifactStore } from "./artifacts.server";
 import type { createProjectChecks } from "./builds.server";
@@ -26,15 +27,15 @@ export function contractProjectTools(artifacts: ReturnType<typeof createArtifact
   dependencies.reconcile=async(context,input)=>{const receipt=await projects.readPatchReceipt(context,context.stepId);return receipt?{revisionId:receipt.revisionId}:dependencies.execute(context,input);};
   return [
     dependencies,
-    {id:"contract.context",version:"1",description:"Read the current canonical coin-launch configuration and independent contract-check declaration format. In project.plan save kind:'contract', chainId, useCanonicalProduction:true and contractChecks before source. The server binds the actual production context; do not copy its opaque hashes. Auxiliary contracts may omit production and deployment.",schema:{type:"object",additionalProperties:false,properties:{chainId:{enum:[1,4663]}},required:["chainId"]},execute:async(context,input)=>{
-      const production=await readLaunchBuildContext((input as {chainId:1|4663}).chainId,context.signal);
-      return JSON.parse(JSON.stringify({production,interfaces:canonicalInterfaceContext((input as {chainId:1|4663}).chainId),contractChecksInstructions:generalCheckLogicalRules,
+    {id:"contract.context",version:"1",description:"Read the current canonical coin-launch configuration and independent contract-check declaration format. Supports Ethereum (1), Robinhood (4663), Base (8453), HyperEVM (999) and Elysium (99901). In project.plan save kind:'contract', chainId, useCanonicalProduction:true and contractChecks before source. The server binds the actual production context; do not copy its opaque hashes. Auxiliary contracts may omit production and deployment.",schema:{type:"object",additionalProperties:false,properties:{chainId:{enum:builderChains.map(chain=>chain.id)}},required:["chainId"]},execute:async(context,input)=>{
+      const production=await readLaunchBuildContext((input as {chainId:BuilderChainId}).chainId,context.signal);
+      return JSON.parse(JSON.stringify({production,interfaces:canonicalInterfaceContext((input as {chainId:BuilderChainId}).chainId),contractChecksInstructions:generalCheckLogicalRules,
         declarationFormat:"For project.plan, architecture.contractChecks is the expanded logical JSON object with contracts, allowedCalls, steps, and optional world/deployment/constructorChildren/compilerProfile. Do not use compact-v1 encoding here. With useCanonicalProduction:true, contracts/constructorChildren matching an exact canonical source and contract receive the complete source-verified ABI from the server; send functions:[] for those known pairs. Custom contracts need the complete human-readable ABI (for example 'function value() view returns (uint256)'). For renamed or extended canonical contracts, declare architecture.canonicalInterfaces:[{entryId,source,contract}] before source generation; the server adds the referenced inherited ABI while preserving custom functions and every behavior expectation. surfaceRequirements accepts ONLY IDs whose requirement kind is constraint; behavior and decision IDs need observable steps. steps[].signature contains only the canonical selector signature (for example 'value()'), never the word function, parameter names, mutability or returns. Keep deployment input/target/binding references distinct from local fixture/account/contract references. Define observable expected outcomes before source."})) as JsonValue;
     }},
-    { id: "contract.library", version: "1", description: "Read available pinned contract library source files. Empty paths lists names; selected paths return source for project.patch. Set chainId to 1 or 4663.",
-      schema: { type: "object", additionalProperties: false, properties: { chainId: { enum: [1,4663] }, paths: { type: "array", maxItems: 20, items: { type: "string" } } }, required: ["chainId","paths"] },
+    { id: "contract.library", version: "1", description: "Read available pinned contract library source files for the selected supported launch chain. Empty paths lists names; selected paths return source for project.patch.",
+      schema: { type: "object", additionalProperties: false, properties: { chainId: { enum: builderChains.map(chain=>chain.id) }, paths: { type: "array", maxItems: 20, items: { type: "string" } } }, required: ["chainId","paths"] },
       execute: async (_context, input) => {
-        const data = input as {chainId:1|4663;paths:string[]}, catalog = canonicalGeneralSourceCatalog(undefined,data.chainId);
+        const data = input as {chainId:BuilderChainId;paths:string[]}, catalog = canonicalGeneralSourceCatalog(undefined,data.chainId);
         let size=0;const files:Record<string,JsonValue>={};
         for(const path of data.paths){if(!Object.hasOwn(catalog,path))throw new ProjectError("contract-library","Choose a listed contract library.");size+=catalog[path].content.length;
           if(size>120000)throw new ProjectError("contract-library","Read fewer libraries at a time.",413);files[path]=catalog[path].content;}

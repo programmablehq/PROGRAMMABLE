@@ -8,12 +8,13 @@ import {ProjectError,type ProjectRevision,type JsonValue} from "./types";
 import {projectRequirementScopes} from "./requirement-scopes";
 import {redactInlineCredentials} from "./secret-input";
 import {canonicalInterfaceContext} from "../canonical-dependencies.server";
+import {builderChains,type BuilderChainId} from "../execution-routing";
 
 type ContractRevision=Pick<ProjectRevision,"document"|"projectId"|"requirementsHash">;
 /** ABI facts come from the pinned source catalog before implementation, never
  * from the model's proposed code or a failed behavior check. Expectations stay
  * exactly as declared; only known canonical source/contract pairs are completed. */
-export function completeCanonicalContractInterfaces(input:JsonValue,chainId:1|4663,references?:JsonValue):JsonValue{
+export function completeCanonicalContractInterfaces(input:JsonValue,chainId:BuilderChainId,references?:JsonValue):JsonValue{
   if(!input||typeof input!=="object"||Array.isArray(input))return input;
   const value=structuredClone(input),known=canonicalInterfaceContext(chainId).contracts;
   for(const field of ["contracts","constructorChildren"]){
@@ -116,8 +117,8 @@ export function platformContractIntent(project:ContractRevision):LaunchIntent {
  * Source files are deliberately not part of its input. */
 export function platformContractBlueprint(project:ContractRevision){
   const architecture=project.document.architecture;
-  if(!architecture||typeof architecture!=="object"||Array.isArray(architecture)||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain and declare contractChecks before writing source.",409);
-  try{return createGeneralCheckBlueprint(architecture.contractChecks,platformContractIntent(project),Number(architecture.chainId) as 1|4663,"cancun",
+  if(!architecture||typeof architecture!=="object"||Array.isArray(architecture)||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("contract-plan","Choose the contract chain and declare contractChecks before writing source.",409);
+  try{return createGeneralCheckBlueprint(architecture.contractChecks,platformContractIntent(project),Number(architecture.chainId) as BuilderChainId,"cancun",
     architecture.production as unknown as LaunchProductionContext|undefined,architecture.compiler as unknown as ContractProject["compiler"]|undefined);
   }catch(error){
     if(error instanceof ProjectError)throw error;

@@ -6,6 +6,7 @@ import type {AIPool,AIConnection} from "../store.server";
 import {projectTransaction} from "./transaction.server";
 import {ProjectError,type ProjectScope} from "./types";
 import {canonicalProjectJSON} from "./document";
+import {builderChains,type BuilderChainId} from "../execution-routing";
 
 export type PlatformLaunchDraft={revision:number;sourceRevision:string;account:string;settings:CoinSetup;image?:ImageReceipt};
 const accountKey=(value:string)=>{try{return getAddress(value).toLowerCase();}catch{throw new ProjectError("launch-wallet","Choose a linked launch wallet.");}};
@@ -14,10 +15,10 @@ export function createPlatformLaunchDrafts(pool:AIPool){
     const row=(await db.query(`SELECT p.current_revision,r.document FROM programmable_projects_v1.projects p JOIN programmable_projects_v1.revisions r ON r.owner=p.owner AND r.project_id=p.id AND r.id=p.current_revision WHERE p.owner=$1 AND p.id=$2${lock?" FOR UPDATE OF p":""}`,[scope.ownerId,scope.projectId])).rows[0];
     if(!row)throw new ProjectError("project-missing","This project was not found.",404);
     const architecture=(row.document as {architecture?:{chainId?:number}}).architecture;
-    if(!architecture||![1,4663].includes(Number(architecture.chainId)))throw new ProjectError("launch-contract","Choose a saved contract project first.",409);
-    return {revision:String(row.current_revision),chainId:Number(architecture.chainId) as 1|4663};
+    if(!architecture||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("launch-contract","Choose a saved contract project first.",409);
+    return {revision:String(row.current_revision),chainId:Number(architecture.chainId) as BuilderChainId};
   }
-  function view(account:string,current:{revision:string;chainId:1|4663},row?:Record<string,unknown>):PlatformLaunchDraft{
+  function view(account:string,current:{revision:string;chainId:BuilderChainId},row?:Record<string,unknown>):PlatformLaunchDraft{
     return {revision:row?Number(row.revision):0,sourceRevision:row?String(row.source_revision):current.revision,account,
       settings:row?row.settings as CoinSetup:{...EMPTY_COIN_SETUP,chainId:current.chainId},...(row?.image?{image:row.image as ImageReceipt}:{})};
   }
