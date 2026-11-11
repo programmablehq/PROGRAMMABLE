@@ -87,7 +87,10 @@ export function workStatus(run:ProjectRun,progress?:WorkProgress){
   if(run.status==="failed")return run.summary==="run-budget"?"Work limit reached · progress saved":"Needs attention · progress saved";
   return run.operation==="plan"?"Ready":run.operation==="test"?"Checks finished":"Work completed";
 }
-export function workExplanation(progress?:WorkProgress){return progress?.events.findLast(step=>step.capabilityId==="model.plan"&&step.message)?.message;}
+export function workExplanation(progress?:WorkProgress){
+  if(progress?.activeStep?.capabilityId==="model.plan")return;
+  return progress?.events.findLast(step=>step.capabilityId==="model.plan"&&step.message)?.message;
+}
 export function completedWork(progress?:WorkProgress){return [...new Set((progress?.events??[]).filter(step=>step.ok!==false).map(step=>finishedLabels[step.capabilityId]).filter(Boolean))].slice(-4);}
 export function resultTab(project:ProjectRevision,operation:ProjectRun["operation"]):"project"|"runtime"|"files"{
   if(operation==="plan")return "project";
