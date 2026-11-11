@@ -1,6 +1,7 @@
 import type { Hex } from "viem";
 import { errorIsExplicitWalletRejection } from "@/lib/wallet-request-lock";
 import { readLaunchPlanResourceV1, type UniversalLaunchWalletReviewV1 } from "./wallet-handoff-plan-v1";
+import { checkedLaunchSendResolutionV1, launchSendAttemptHashV1, type LaunchSendResolutionV1 } from "./launch-send-resolution-v1";
 
 const PREFIX = "programmable:custom-launch-send:v1";
 const EVENT = "programmable:custom-launch-send-change";
@@ -88,6 +89,22 @@ export function finalizeLaunchSendV1(attempt: LaunchSendAttemptV1, step: { trans
   if (saved && saved.binding === attempt.binding && saved.transactionHash === attempt.transactionHash) {
     store.removeItem(key(attempt.controller)); notify();
   }
+}
+
+/** Archive a failed/replaced attempt only after a bound, independently finalized
+ * resolution. Call under the account/network Web Lock. Never labels it launched. */
+export function archiveResolvedLaunchSendV1(attempt: LaunchSendAttemptV1, value: unknown, store: StorageLike = storage()): LaunchSendResolutionV1 {
+  const proof = checkedLaunchSendResolutionV1(attempt, value);
+  const saved = parseLaunchSendAttemptV1(readLaunchSendJournalV1(attempt.controller, store), attempt.controller);
+  if (!saved || launchSendAttemptHashV1(saved) !== proof.attemptHash) throw new Error("The saved wallet attempt changed during recovery.");
+  const archiveKey = `${key(attempt.controller)}:resolved:${proof.attemptHash}`;
+  const archive = JSON.stringify({ attempt: saved, resolution: proof });
+  store.setItem(archiveKey, archive);
+  if (store.getItem(archiveKey) !== archive) throw new Error("The resolved wallet attempt could not be saved.");
+  store.removeItem(key(attempt.controller));
+  if (store.getItem(key(attempt.controller)) !== null) throw new Error("The resolved wallet attempt could not be released.");
+  notify();
+  return proof;
 }
 
 export function subscribeLaunchSendV1(callback: () => void): () => void {

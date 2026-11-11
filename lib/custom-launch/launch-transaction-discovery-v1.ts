@@ -9,9 +9,9 @@ const quantity = (value: unknown): bigint => {
   return BigInt(value);
 };
 
-/** Read-only discovery. An absent/replaced transaction never releases the send lock. */
-export async function discoverUniversalLaunchTransactionV1(provider: LaunchWalletProviderV1, attempt: LaunchSendAttemptV1,
-  resource: unknown, signal?: AbortSignal): Promise<Hex | null> {
+/** Locate the nonce-consuming transaction without deciding its launch outcome. */
+export async function findUniversalLaunchNonceTransactionV1(provider: LaunchWalletProviderV1, attempt: LaunchSendAttemptV1,
+  signal?: AbortSignal): Promise<Hex | null> {
   let reads = 0;
   const request: LaunchWalletProviderV1["request"] = async input => {
     signal?.throwIfAborted();
@@ -55,8 +55,14 @@ export async function discoverUniversalLaunchTransactionV1(provider: LaunchWalle
     && quantity(transaction.nonce) === nonce);
   // Delegation authorizations can also consume a nonce without this launch being sent.
   if (matches.length !== 1 || !projectionObject(matches[0]) || !projectionHash(matches[0].hash)) return null;
-  const hash = await recoverUniversalLaunchTransactionV1({ request }, attempt, matches[0].hash, resource);
   const canonical = await request({ method: "eth_getBlockByNumber", params: [toHex(upper), false] });
   if (!projectionObject(canonical) || canonical.hash !== block.hash) return null;
-  return hash;
+  return matches[0].hash;
+}
+
+/** Recovery still requires the original call. A replacement alone never releases a lock. */
+export async function discoverUniversalLaunchTransactionV1(provider: LaunchWalletProviderV1, attempt: LaunchSendAttemptV1,
+  resource: unknown, signal?: AbortSignal): Promise<Hex | null> {
+  const hash = await findUniversalLaunchNonceTransactionV1(provider, attempt, signal);
+  return hash ? recoverUniversalLaunchTransactionV1(provider, attempt, hash, resource) : null;
 }

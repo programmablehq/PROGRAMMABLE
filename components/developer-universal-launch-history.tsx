@@ -6,7 +6,10 @@ import { settleSequentially } from "@/lib/settle-sequentially";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type Hex } from "viem";
-import { parseLaunchSendAttemptV1, readLaunchSendJournalV1, reconcileFinalizedLaunchSendV1 } from "@/lib/custom-launch/launch-send-journal-v1";
+import { archiveResolvedLaunchSendV1, parseLaunchSendAttemptV1, readLaunchSendJournalV1, reconcileFinalizedLaunchSendV1 } from "@/lib/custom-launch/launch-send-journal-v1";
+import { checkedLaunchSendResolutionV1 } from "@/lib/custom-launch/launch-send-resolution-v1";
+import { withGeneralWalletJournalLock } from "@/lib/custom-ai/general-wallet-execution";
+import { releaseFinalizedBrowserWalletRequest } from "@/lib/wallet-request-lock";
 import { projectionObject } from "@/lib/custom-launch/launch-projection-v1";
 import { multiRoleOriginalTransactionHintV3 } from "@/lib/custom-launch/multi-role-finality-version-v3";
 import { readLaunchPlanResourceV1, type UniversalLaunchSource, type UniversalLaunchWalletInputV1, type UniversalLaunchWalletReviewV1 } from "@/lib/custom-launch/wallet-handoff-plan-v1";
@@ -65,7 +68,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     const query = new URLSearchParams({ walletAddress: account, source });
     if (cursor) query.set("cursor", cursor);
     const response = await fetch(`/api/developer/custom-launch-plans${id ? `/${encodeURIComponent(id)}` : ""}${suffix}?${query}`, {
-      ...init, cache: "no-store", redirect: "error", signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+      ...init, cache: "no-store", redirect: "error", signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(suffix === "/resolve-send" ? 55000 : 15000)]) : AbortSignal.timeout(15000),
       headers: { Accept: "application/json", Authorization: `Bearer ${access}`,
         ...(identityToken ? { "X-Privy-Identity-Token": identityToken } : {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
     });
@@ -124,9 +127,20 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
     const attempt = parseLaunchSendAttemptV1(readLaunchSendJournalV1(account), account);
     if (!attempt || attempt.sourceVersion !== "custom_launch_plan_v1") return;
     const loaded = entries.find(entry => entry.sourceVersion === attempt.sourceVersion && entry.resource.planId === attempt.launchId);
-    if (loaded) { reconcileFinalizedLaunchSendV1(attempt, loaded.resource); return; }
-    const prior = parseEntries(await request(attempt.sourceVersion, attempt.launchId, { signal }), account).entries[0];
-    if (!signal.aborted && prior) reconcileFinalizedLaunchSendV1(attempt, prior.resource);
+    const prior = loaded ?? parseEntries(await request(attempt.sourceVersion, attempt.launchId, { signal }), account).entries[0];
+    if (signal.aborted || !prior || reconcileFinalizedLaunchSendV1(attempt, prior.resource)) return;
+    const response=await request(attempt.sourceVersion,attempt.launchId,{method:"POST",body:JSON.stringify({attempt}),signal},"/resolve-send");
+    if(signal.aborted||!projectionObject(response)||!response.resolution)return;
+    const proof=checkedLaunchSendResolutionV1(attempt,response.resolution);
+    await withGeneralWalletJournalLock(account,"4663",async()=>{
+      signal.throwIfAborted();
+      const current=parseLaunchSendAttemptV1(readLaunchSendJournalV1(account),account);
+      if(!current||JSON.stringify(current)!==JSON.stringify(attempt))return;
+      await releaseFinalizedBrowserWalletRequest({account,chainId:"4663",requestSubject:JSON.stringify(["custom-launch-plan-wallet-v1",attempt.binding]),assertCurrentSession:()=>signal.throwIfAborted()});
+      signal.throwIfAborted();
+      archiveResolvedLaunchSendV1(attempt,proof);
+      setLaunchUpdate(proof.outcome==="failed"?"The previous transaction failed and is now confirmed. Prepare your approved launch again.":"The previous transaction was replaced and is now confirmed. Prepare your approved launch again.");
+    });
   }
   useEffect(() => {
     const controller = new AbortController();
