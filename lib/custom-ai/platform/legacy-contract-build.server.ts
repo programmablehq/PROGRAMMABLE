@@ -25,7 +25,7 @@ export function contractProjectTools(artifacts: ReturnType<typeof createArtifact
     return {revisionId:revision.revisionId,added:fileChanges.length,files:fileChanges.map(file=>file.path)};
   }};
   dependencies.reconcile=async(context,input)=>{const receipt=await projects.readPatchReceipt(context,context.stepId);return receipt?{revisionId:receipt.revisionId}:dependencies.execute(context,input);};
-  return [
+  const tools:ProjectTool[]=[
     dependencies,
     {id:"contract.context",version:"1",description:"Read the current canonical coin-launch configuration and independent contract-check declaration format. Supports Ethereum (1), Robinhood (4663), Base (8453), HyperEVM (999) and Elysium (99901). In project.plan save kind:'contract', chainId, useCanonicalProduction:true and contractChecks before source. The server binds the actual production context; do not copy its opaque hashes. Auxiliary contracts may omit production and deployment.",schema:{type:"object",additionalProperties:false,properties:{chainId:{enum:builderChains.map(chain=>chain.id)}},required:["chainId"]},execute:async(context,input)=>{
       const production=await readLaunchBuildContext((input as {chainId:BuilderChainId}).chainId,context.signal);
@@ -71,4 +71,11 @@ export function contractProjectTools(artifacts: ReturnType<typeof createArtifact
       await checks.record(ref,{requirementIds:[],passed:audit.status==="passed",commandHash:audit.hash,result});return result;
     }},
   ];
+  tools.push({id:"contract.verify",version:"1",description:"Compile the exact saved contract and, if compilation succeeds, run its declared EVM behavior checks in one work step. Uses the same compiler, artifact binding and independent scenario checker as contract.compile plus contract.check. Returns exact failures for repairs. The separate contract.audit source review is still required; this does not approve or launch anything.",schema:{type:"object",additionalProperties:false,properties:{}},execute:async(context)=>{
+    const compilation=await tools.find(tool=>tool.id==="contract.compile")!.execute(context,{}) as {compiled:boolean;artifactId:string;[key:string]:JsonValue};
+    if(!compilation.compiled)return {...compilation,passed:false};
+    const scenarios=await tools.find(tool=>tool.id==="contract.check")!.execute(context,{artifactId:compilation.artifactId});
+    return {...compilation,...scenarios as Record<string,JsonValue>,launchReady:false};
+  }});
+  return tools;
 }

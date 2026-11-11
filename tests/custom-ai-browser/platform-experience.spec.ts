@@ -15,7 +15,20 @@ test("starts from the first message, names the project and opens its saved resul
  await expect(page.getByRole("tab",{name:"Files",exact:true})).toHaveAttribute("aria-selected","true");
  expect(creations).toHaveLength(1);expect(titles).toEqual(["Shared counter for our game"]);
  await expect(page.getByRole("button",{name:"index.js",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Your work",exact:true}).click();
  await expect(page.getByRole("button",{name:/Shared counter.*Project/})).toBeVisible();
+});
+
+test("uses the selected network for a hook starter and resets a new project to build mode",async({page})=>{
+ await page.goto(origin);
+ await page.getByRole("combobox",{name:"Network for contract starters",exact:true}).selectOption("99901");
+ await page.getByRole("button",{name:/^Custom hook/}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toHaveValue("Build a custom hook on Elysium. ");
+ await page.getByRole("combobox",{name:"Work mode",exact:true}).selectOption("plan");
+ await page.getByRole("button",{name:"New project",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeEnabled();
+ await expect(page.getByRole("combobox",{name:"Work mode",exact:true})).toHaveValue("build");
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toHaveValue("");
 });
 
 test("recovers a lost first-project response with the same project after reload",async({page,request})=>{

@@ -9,6 +9,7 @@ import type { RunSnapshot, RunStatus } from "./protocol.generated";
 import { PROJECT_PROTOCOL_HASH } from "./protocol.generated";
 import { projectDate } from "./time";
 import {containsInlineCredential,redactCredentialData,redactInlineCredentials} from "./secret-input";
+import {projectStepProgress} from "./progress";
 
 type Operation = "plan" | "build" | "test" | "deploy";
 type Capability = { units: number; effect: "read" | "write"; operations: Operation[] };
@@ -147,10 +148,10 @@ export function createRunStore(pool: AIPool, options: RunOptions, now: () => num
     if (!/^(?:0|[1-9][0-9]?)$/.test(afterCursor) || Number(afterCursor) > 24) throw invalid();
     return projectTransaction(pool, scope, async db => {
       const run = await row(db, scope, runId);
-      const steps = (await db.query("SELECT id,cursor,capability_id,state,CASE WHEN result->'ok'='true'::jsonb THEN true WHEN result->'ok'='false'::jsonb THEN false END AS ok FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND ((state='completed' AND cursor>=$4) OR state IN ('dispatching','unknown')) ORDER BY cursor",
+      const steps = (await db.query("SELECT id,cursor,capability_id,state,jsonb_build_object('ok',result->'ok','message',result->'message','kind',result->'kind','value',jsonb_build_object('passed',result->'value'->'passed','compiled',result->'value'->'compiled','status',result->'value'->'status')) AS progress FROM programmable_projects_v1.run_steps WHERE owner=$1 AND project_id=$2 AND run_id=$3 AND ((state='completed' AND cursor>=$4) OR state IN ('dispatching','unknown')) ORDER BY cursor",
         [scope.ownerId, scope.projectId, runId, Number(afterCursor)])).rows;
       const activeStep=steps.findLast(step=>step.state!=="completed");
-      return { run: view(run), events: steps.filter(step=>step.state==="completed").map(step => ({ cursor: String(Number(step.cursor) + 1), stepId: String(step.id), capabilityId: String(step.capability_id), state: "completed" as const,...(typeof step.ok==="boolean"?{ok:step.ok}:{}) })),
+      return { run: view(run), events: steps.filter(step=>step.state==="completed").map(step => ({ cursor: String(Number(step.cursor) + 1), stepId: String(step.id), capabilityId: String(step.capability_id), state: "completed" as const,...projectStepProgress(String(step.capability_id),step.progress) })),
         ...(activeStep?{activeStep:{capabilityId:String(activeStep.capability_id),state:String(activeStep.state)}}:{}) };
     });
   }

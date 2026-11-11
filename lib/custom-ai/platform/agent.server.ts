@@ -74,7 +74,7 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
       if(!pending&&["project.patch","project.dependencies","contract.dependencies"].includes(capabilityId)){
         const failures=new Map<string,number>();
         steps.forEach((step,index)=>{
-          if(!["project.check","contract.check","contract.compile","contract.audit"].includes(step.capability_id)||step.state!=="completed")return;
+          if(!["project.check","contract.check","contract.compile","contract.verify","contract.audit"].includes(step.capability_id)||step.state!=="completed")return;
           const result=step.result as {ok?:boolean;value?:{passed?:boolean;compiled?:boolean;status?:string}};
           if(result?.ok===false||result?.value?.passed===false||result?.value?.compiled===false||result?.value?.status==="changes_required"){
             if(!failures.has(step.capability_id))failures.set(step.capability_id,index);
