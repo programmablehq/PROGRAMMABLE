@@ -37,7 +37,7 @@ describe("website security headers", () => {
   it("keeps the website security policy separate from the GitBook application", async () => {
     const routes = await nextConfig.headers?.();
 
-    expect(routes).toHaveLength(1);
+    expect(routes).toHaveLength(2);
     expect(routes?.[0]?.source).toBe("/:path((?!docs(?:/|$)).*)");
 
     const headers = new Map(
@@ -80,6 +80,16 @@ describe("website security headers", () => {
   it("allows development evaluation only in the development policy", () => {
     expect(createContentSecurityPolicy(false)).not.toContain("'unsafe-eval'");
     expect(createContentSecurityPolicy(true)).toContain("'unsafe-eval'");
+  });
+
+  it("allows hosted app frames only in the project workspace without granting script access", async () => {
+    const routes = await nextConfig.headers?.();
+    expect(routes?.[1]?.source).toBe("/launch/custom-ai");
+    const scoped = routes?.[1]?.headers.find(header => header.key === "Content-Security-Policy")?.value ?? "";
+    expect(scoped.split("; ").find(directive => directive.startsWith("frame-src "))).toContain("https://*.vercel.app");
+    expect(scoped.split("; ").find(directive => directive.startsWith("script-src "))).not.toContain("vercel.app");
+    expect(scoped).toContain("frame-ancestors 'none'");
+    expect(createContentSecurityPolicy(false)).not.toContain("vercel.app");
   });
 
   it("limits the market embed to its exact frame host without adding script access", () => {

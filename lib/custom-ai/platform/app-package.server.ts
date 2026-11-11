@@ -42,11 +42,26 @@ fs.writeFileSync(path.join(root,'.programmable-bundle.json'),JSON.stringify(resu
 `;
 export const APP_PACKAGER_HASH=`sha256:${createHash("sha256").update(packageScript).digest("hex")}`;
 const packageHash=(files:Record<string,ProjectFile>)=>projectHash(Object.fromEntries(Object.entries(files).map(([path,file])=>[path,createHash("sha256").update(projectFileBytes(file)).digest("hex")])));
+function assertPublicAssets(files:Record<string,ProjectFile>){
+ const attribute=(tag:string,name:string)=>{const match=tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,"i"));return match?.[1]??match?.[2]??match?.[3];};
+ for(const[path,file]of Object.entries(files)){
+  if(!path.startsWith(".vercel/output/static/")||!path.endsWith(".html")||typeof file!=="string")continue;
+  const page=new URL(path.slice(".vercel/output/static".length),"https://app.invalid");
+  for(const match of file.matchAll(/<(script|link)\b[^>]*>/gi)){
+   const script=match[1].toLowerCase()==="script";
+   if(!script&&!/^(?:stylesheet|modulepreload|preload|icon)(?:\s|$)/i.test(attribute(match[0],"rel")??""))continue;
+   const reference=attribute(match[0],script?"src":"href");if(!reference||reference.startsWith("#"))continue;
+   const asset=new URL(reference.replaceAll("&amp;","&"),page);if(asset.origin!==page.origin)continue;
+   if(!Object.hasOwn(files,`.vercel/output/static${decodeURIComponent(asset.pathname)}`))throw new ProjectError("app-static-asset",`The public output is missing ${asset.pathname}, referenced by ${page.pathname}. Put every browser script and stylesheet in the declared outputDirectory before building a preview.`,409);
+  }
+ }
+}
 export function createAppPackageLoader(artifacts:ReturnType<typeof createArtifactStore>){
  return async(scope:ProjectScope,id:string):Promise<AppPackage>=>{
   const artifact=await artifacts.readArtifact(scope,id);
   const value=JSON.parse(Buffer.from(artifact.bytes).toString("utf8"));
   if(value.version!==1||value.packagerHash!==APP_PACKAGER_HASH||!value.files||packageHash(value.files)!==value.artifactHash)throw new ProjectError("release-artifact","The stored deployment package does not match its proof.",409);
+  assertPublicAssets(value.files);
   return {files:value.files,artifactHash:value.artifactHash,artifactId:id};
  };
 }
@@ -59,6 +74,7 @@ export function validateAppPackage(raw:unknown,revisionId:string):Record<string,
   const text=bytes.toString("utf8");files[path]=Buffer.from(text).equals(bytes)&&!text.includes("\0")?text:{encoding:"base64",content:encoded,mediaType:"application/octet-stream"};
  }
  const config=files[".vercel/output/config.json"];if(typeof config!=="string"||JSON.parse(config).version!==3)throw new ProjectError("app-package","Use Build Output API version 3.",409);
+ assertPublicAssets(files);
  for(const[path,file]of Object.entries(files))if(path.endsWith("/.vc-config.json")){
   const prefix=path.slice(0,-"/.vc-config.json".length),name=prefix.replace(".vercel/output/functions/","").replace(/\.func$/,"");
   if(!prefix.startsWith(".vercel/output/functions/")||!prefix.endsWith(".func")||!/^[A-Za-z0-9_/-]{1,128}$/.test(name)||typeof file!=="string")throw new ProjectError("app-package","Unsupported function package.",409);
