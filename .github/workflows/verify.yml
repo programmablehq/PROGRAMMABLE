@@ -355,7 +355,7 @@ jobs:
     name: Interface browser and build
     needs: scope
     if: needs.scope.outputs.interface == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       actions: read
@@ -386,14 +386,9 @@ jobs:
 
       - name: Install pinned Chromium for wallet interaction tests
         if: needs.scope.outputs.interface_reuse_run == '' && (needs.scope.outputs.interface_presentation_only != 'true' && (needs.scope.outputs.interface_wallet == 'true' || needs.scope.outputs.interface_migration == 'true'))
-        run: |
-          # Avoid the hosted runner's failing Azure mirror DNS. APT retains
-          # Ubuntu's existing archive signing keys and package verification.
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' 'https://security.ubuntu.com/ubuntu/' \
-              | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
-          fi
-          npx playwright install --with-deps chromium
+        # The hosted Ubuntu 24.04 image provides Chromium's native libraries.
+        # Playwright still validates them and runs the pinned browser tests.
+        run: npx --no-install playwright install chromium
 
       - name: Verify interface browser interactions and production build
         id: browser-verification
