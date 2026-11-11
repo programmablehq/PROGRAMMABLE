@@ -70,8 +70,9 @@ export function readLaunchPlanResourceV1(value: unknown): LaunchPlanRecordV1 {
       || continuation.schemaVersion !== "programmable.custom-launch-plan-continuation.v1" || continuation.status !== "replan_required"
       || continuation.originalManifestDigest !== resource.manifestDigest
       || typeof continuation.currentManifestDigest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(continuation.currentManifestDigest)
-      || continuation.currentManifestDigest === resource.manifestDigest
       || continuation.replanUrl !== `/v4/chains/4663/custom-launch-plans/${resource.planId}:replan`) return fail("The continuation notice does not match this launch.");
+    // Retired runtime releases and expired windows can require a successor
+    // without changing the protocol manifest. This notice never permits signing.
   }
   for (const step of resource.steps) {
     const row = record(step);
