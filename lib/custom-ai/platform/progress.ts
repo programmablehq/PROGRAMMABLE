@@ -4,7 +4,7 @@ type Data=Record<string,unknown>;
 const object=(value:unknown):value is Data=>Boolean(value&&typeof value==="object"&&!Array.isArray(value));
 /** Public progress contains plain, bounded explanations, never tool arguments,
  * source, provider traces, connection values or arbitrary result envelopes. */
-export function projectStepProgress(capability:string,result:unknown){
+export function projectStepProgress(capability:string,result:unknown):{ok?:boolean;message?:string}{
   if(!object(result))return {};
   if(capability==="model.plan")return typeof result.message==="string"&&result.kind==="tool"?{message:redactInlineCredentials(result.message).slice(0,600)}:{};
   if(typeof result.ok!=="boolean")return {};

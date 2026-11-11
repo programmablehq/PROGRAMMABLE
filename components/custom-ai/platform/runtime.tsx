@@ -38,7 +38,7 @@ export function ProjectRuntime({project,api,onPrompt,account,headers,generalLaun
     const labels:Record<string,string>={queued:"Queued",building:"Building",ready:"Preview ready",published:"Live",stopped:"Paused",failed:"Could not build",reconcile:release.control?"Confirming change":"Checking deployment"};
     return labels[release.state]??"Checking state";
   };
-  const app=(project.document.architecture as {application?:unknown}|null)?.application;
+  const app=Boolean((project.document.architecture as {application?:unknown}|null)?.application);
   const contract=["contract","legacy-contract"].includes(String((project.document.architecture as {kind?:string}|null)?.kind));
   useEffect(()=>{
     if(!autoPreviewRunId||!app||!assessment?.verified||loadedRevision!==project.revisionId||releases.some(release=>release.revisionId===project.revisionId&&release.state!=="failed"))return;
