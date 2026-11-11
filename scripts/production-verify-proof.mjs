@@ -524,7 +524,8 @@ function validateVerifyJobs(response, run) {
       ))
       || !Array.isArray(job.labels)
       || job.labels.length !== 1
-      || job.labels[0] !== "ubuntu-latest"
+      || job.labels[0] !== (job.name === "Interface browser and build"
+        ? "ubuntu-24.04" : "ubuntu-latest")
     ) {
       throw new Error("Production Verify contains a failed or mismatched job.");
     }
