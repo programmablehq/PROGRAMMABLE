@@ -59,6 +59,20 @@ describe("Explore request identity", () => {
     }, "all");
     expect(response.items).toEqual([row]);
   });
+
+  it("accepts indexed Elysium launches and their cards while rejecting unknown chains", () => {
+    const hex = (value: number, length: number) => `0x${value.toString(16).padStart(length, "0")}`;
+    const row = { chainId: 99901, launchId: "elysium-launch", category: "custom", mode: "custom",
+      tokenAddress: hex(21, 40), hookAddress: hex(22, 40), creator: hex(23, 40), transactionHash: hex(24, 64),
+      blockNumber: "100", launchedAt: "2026-11-11T00:00:00.000Z", name: "Elysium coin", symbol: "ELY", decimals: 18 };
+    const card = { chainId: 99901, tokenAddress: row.tokenAddress, imageUrl: null, description: null, links: [] };
+    const data = { scope: "all", status: "ready", updatedAt: row.launchedAt, items: [row], presentations: [card],
+      page: { number: 1, size: 10, totalItems: 1, totalPages: 1, hasMore: false } };
+    expect(readLaunchListResponse(data, "all").items).toEqual([row]);
+    expect(readLaunchListResponse(data, "all").presentations).toEqual([card]);
+    expect(() => readLaunchListResponse({ ...data, items: [{ ...row, chainId: 12345 }] }, "all")).toThrow();
+    expect(() => readLaunchListResponse({ ...data, presentations: [{ ...card, chainId: 12345 }] }, "all")).toThrow();
+  });
 });
 
 describe("Explore toolbar and loading structure", () => {
