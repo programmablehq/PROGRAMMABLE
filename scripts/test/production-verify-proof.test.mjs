@@ -100,7 +100,7 @@ function validApiFixtures() {
       runner_name: `GitHub Actions ${1_000_000 + index}`,
       runner_group_id: 0,
       runner_group_name: "GitHub Actions",
-      labels: ["ubuntu-latest"],
+      labels: [name === "Interface browser and build" ? "ubuntu-24.04" : "ubuntu-latest"],
     })),
     {
       id: 90_100,
@@ -739,6 +739,11 @@ test("resolver rejects missing, failed, skipped, unexpected, or self-hosted jobs
     (fixtures) => { fixtures.jobs.jobs[2].name = "Unexpected"; },
     (fixtures) => { fixtures.jobs.jobs[3].runner_name = "self-hosted"; },
     (fixtures) => { fixtures.jobs.jobs[4].labels = ["self-hosted"]; },
+    (fixtures) => { fixtures.jobs.jobs[0].labels = ["ubuntu-24.04"]; },
+    (fixtures) => {
+      fixtures.jobs.jobs.find(({ name }) => name === "Interface browser and build")
+        .labels = ["ubuntu-latest"];
+    },
     (fixtures) => { fixtures.jobs.jobs[5].runner_group_id = 1; },
     (fixtures) => { fixtures.jobs.jobs[5].runner_group_name = "Default"; },
   ];
