@@ -614,12 +614,13 @@ export function evaluateReadModelOperationsSourceContracts(
       healthRoute.includes('"Cache-Control": "no-store"') &&
       healthRoute.includes('"X-Programmable-Indexing-Status": health.status') &&
       typeof healthReader === "string" &&
-      importedSpecifiers(healthReader).every(specifier => ["server-only", "./ethereum-explore", "./robinhood-index/read", "./base-explore", "./hyperevm-explore"].includes(specifier)) &&
+      importedSpecifiers(healthReader).every(specifier => ["server-only", "./ethereum-explore", "./robinhood-index/read", "./base-explore", "./hyperevm-explore", "./elysium-explore"].includes(specifier)) &&
       !/(?:\bfetch\s*\(|\bprocess\.env\b|\bcreate(?:Public|Wallet)Client\b|\bimport\s*\()/u.test(healthReader) &&
       healthReader.includes("ethereum: readEthereumIndexHealth, robinhood: readRobinhoodExploreCatalog") &&
       source("lib/server/ethereum-explore.ts")?.includes("custom: readFinalizedRouterCustomIdentitySnapshotCoreV1") &&
       healthReader.includes("base: readBaseExploreCatalog") &&
       healthReader.includes("hyperevm: readHyperEvmExploreCatalog") &&
+      healthReader.includes("elysium: readElysiumExploreCatalog") &&
       healthReader.includes("const CACHE_TTL_MS = 15_000;") &&
       healthReader.includes("const READ_TIMEOUT_MS = 5_000;") &&
       healthReader.includes('schemaVersion: "programmable.operations-health.v2"') &&
@@ -628,6 +629,7 @@ export function evaluateReadModelOperationsSourceContracts(
       healthReader.includes("https://api.programmable.market/readyz") &&
       healthReader.includes("https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness") &&
       healthReader.includes("https://api.programmable.market/v4/chains/8453/readiness") &&
+      healthReader.includes("https://api.programmable.market/v4/chains/99901/readiness") &&
       healthReader.includes("https://api.programmable.market/v4/chains/999/readiness"),
     "health reuses bounded cached catalog observations, distinguishes unmeasured provider health and links separate Custom Launch API readiness",
   );
