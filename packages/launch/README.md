@@ -673,3 +673,7 @@ HyperEVM uses `chainId: "999"` (`eip155:999`) and native HYPE. Use the [HyperEVM
 Elysium uses `chainId: "99901"` (`eip155:99901`) and native HYPE. Read the [Elysium guide](https://programmable.market/developers/elysium-custom-launch-api-v1.md), `/v4/chains/99901/capabilities` and `/v4/chains/99901/readiness`. Require active public availability before submitting.
 
 `buildProtectedElysiumLaunchV1` builds the native-HYPE protected reference graph using Elysium's own PoolManager, Universal Router and authenticated HYPE/USD feed. It preserves the same opening FDV floor, opening tax, wallet limits and platform fee. The controller reviews and signs on Elysium directly; no HyperEVM large-block account setting is used.
+
+## Windows file output (4.4.1)
+
+CLI 4.4.1 fixes `EPERM` after writing `launch.json` on Windows so the pack receipt is written too. Temporary files are still synced before publication, and file write errors still fail the command. Launch request bytes, profiles and contract bindings are unchanged.

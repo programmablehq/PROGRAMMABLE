@@ -1,0 +1,31 @@
+name: Launch CLI Windows file I/O
+
+on:
+  pull_request:
+    paths:
+      - packages/launch/src/io.mjs
+      - packages/launch/src/canonical-json.mjs
+      - packages/launch/test/io.test.mjs
+      - .github/workflows/launch-cli-windows.yml
+  push:
+    branches: [production]
+    paths:
+      - packages/launch/src/io.mjs
+      - packages/launch/src/canonical-json.mjs
+      - packages/launch/test/io.test.mjs
+      - .github/workflows/launch-cli-windows.yml
+
+permissions:
+  contents: read
+
+jobs:
+  file-io:
+    name: Native Windows output and receipt
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.14.0
+      - run: node --test packages/launch/test/io.test.mjs

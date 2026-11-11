@@ -189,6 +189,9 @@ export async function atomicCreate(filePath, bytes, mode = 0o600) {
 }
 
 async function syncDirectory(directory) {
+  // Windows does not support syncing directories through Node's file handles.
+  // The temporary file is still synced before rename/link; file errors propagate.
+  if (process.platform === "win32") return;
   const handle = await open(directory, "r");
   try {
     await handle.sync();
