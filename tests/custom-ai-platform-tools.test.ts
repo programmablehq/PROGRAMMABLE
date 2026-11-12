@@ -32,6 +32,15 @@ beforeEach(async()=>{
 afterEach(async()=>{await db.close()});
 const planned={title:"Counter",requirements:[{id:"counter",text:"Increments counter",kind:"behavior",open:null,instruction:"counter"},{id:"private",text:"Isolates owners",kind:"constraint",open:null,instruction:"private"}],edits:[],architecture:{checks:[{id:"count",requirementIds:["counter","private"],command:"node --test counter.test.mjs",kind:"behavior"}]}};
 describe("guarded project tools",()=>{
+ it.each(["omitted","build-only"])("blocks source before every app requirement has behavior coverage: %s",async mode=>{
+   const plan=tools.find(tool=>tool.id==="project.plan")!,patch=tools.find(tool=>tool.id==="project.patch")!;
+   await plan.execute(context,{...planned,architecture:{application:{framework:"node",dataVersion:1},checks:[{...planned.architecture.checks[0],requirementIds:["counter"]},...(mode==="build-only"?[{id:"private-build",requirementIds:["private"],command:"node --check app.js",kind:"build"}]:[])]}});
+   context={...context,revision:await projects.readProject(scope),stepId:"uncovered-source"};
+   const before=context.revision.revisionId;
+   await expect(patch.execute(context,{fileChanges:[{operation:"write",path:"app.js",beforeHash:null,content:"export default {};"}]})).rejects.toMatchObject({code:"project-check-plan",message:expect.stringContaining("private")});
+   expect((await projects.readProject(scope)).revisionId).toBe(before);
+   expect((await projects.readProject(scope)).document.files).toEqual({});
+ });
  it("applies compact architecture updates through the full plan validator",async()=>{
    const plan=tools.find(tool=>tool.id==="project.plan")!;await plan.execute(context,planned);
    context={...context,revision:await projects.readProject(scope),stepId:"compact-plan"};
