@@ -106,7 +106,7 @@ export const programmablePublicOpenApi = {
         operationId: "getOperationsHealth",
         summary: "Read website launch indexing health",
         description:
-          "Reads the existing Ethereum, Robinhood and Base launch catalogs with a five-second bound and a shared 15-second observation cache. The overall status describes these website indexes only. Codex roles are reported with direct provider health not checked. Follow the separate Custom Launch API readiness and capabilities URLs for launch and simulator availability. Legacy Explore reset routes retain their own status.",
+          "Reads the existing Ethereum, Robinhood, Base, HyperEVM and Elysium launch catalogs with a five-second bound and a shared 15-second observation cache. The overall status describes these website indexes only. Codex roles are reported with direct provider health not checked. Follow the separate Custom Launch API readiness and capabilities URLs for launch and simulator availability. Legacy Explore reset routes retain their own status.",
         tags: ["Operations"],
         security: [],
         responses: {
@@ -1669,7 +1669,7 @@ export const programmablePublicOpenApi = {
       OperationsHealth: {
         type: "object",
         description:
-          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires all four indexes to be ready; unavailable requires all four to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
+          "Observed website catalog availability, separate from direct provider health and Custom Launch API readiness. Ready requires every included index to be ready; unavailable requires every included index to be unavailable; all other combinations are degraded. An empty current catalog is valid. checkedAt is the cached observation time and updatedAt is each catalog's source time.",
         required: ["schemaVersion", "scope", "status", "checkedAt", "indexes", "providers", "customLaunchReadiness"],
         properties: {
           schemaVersion: { const: "programmable.operations-health.v2" },
@@ -1677,12 +1677,13 @@ export const programmablePublicOpenApi = {
           status: { enum: ["ready", "degraded", "unavailable"] },
           checkedAt: { type: "string", format: "date-time" },
           indexes: {
-            type: "array", minItems: 3, maxItems: 4, items: false,
+            type: "array", minItems: 3, maxItems: 5, items: false,
             prefixItems: [
               { chainId: 1, catalogUrl: `${SITE_ORIGIN}/api/explore/ethereum`, statuses: ["ready", "partial", "stale", "unavailable"] },
               { chainId: 4663, catalogUrl: `${SITE_ORIGIN}/api/explore/robinhood`, statuses: ["ready", "syncing", "stale", "unavailable"] },
               { chainId: 8453, catalogUrl: `${SITE_ORIGIN}/api/explore/base`, statuses: ["ready", "stale", "unavailable"] },
               { chainId: 999, catalogUrl: `${SITE_ORIGIN}/api/explore/hyperevm`, statuses: ["ready", "stale", "unavailable"] },
+              { chainId: 99901, catalogUrl: `${SITE_ORIGIN}/api/explore/elysium`, statuses: ["ready", "stale", "unavailable"] },
             ].map(index => ({
               type: "object", required: ["chainId", "status", "updatedAt", "catalogUrl"], additionalProperties: false,
               properties: {
@@ -1703,12 +1704,13 @@ export const programmablePublicOpenApi = {
             },
           },
           customLaunchReadiness: {
-            type: "array", minItems: 3, maxItems: 4, items: false,
+            type: "array", minItems: 3, maxItems: 5, items: false,
             prefixItems: [
               { chainId: 1, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/readyz`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v3/capabilities` },
               { chainId: 4663, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-plans/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/4663/custom-launch-capabilities` },
               { chainId: 8453, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/8453/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/8453/capabilities` },
               { chainId: 999, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/999/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/999/capabilities` },
+              { chainId: 99901, readinessUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/99901/readiness`, capabilitiesUrl: `${CUSTOM_LAUNCH_API_ORIGIN}/v4/chains/99901/capabilities` },
             ].map(chain => ({
               type: "object", required: ["chainId", "readinessUrl", "capabilitiesUrl"], additionalProperties: false,
               properties: { chainId: { const: chain.chainId }, readinessUrl: { const: chain.readinessUrl }, capabilitiesUrl: { const: chain.capabilitiesUrl } },

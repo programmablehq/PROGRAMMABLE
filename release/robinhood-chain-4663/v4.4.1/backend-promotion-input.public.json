@@ -1,13 +1,13 @@
 {
   "schemaVersion": "programmable.robinhood-custom-launch.backend-promotion-public-input.v2",
-  "captureId": "74614b08fbd52b2282e026bd82ce328a662fb841cd434d2b11c5e4b0881e050b",
-  "observedAt": "2026-11-11T18:53:16Z",
+  "captureId": "cee10b4a344a25e03cc42b819e18297ab4560ba4148cbfccf51ce9a9cc3c4f2c",
+  "observedAt": "2026-11-12T01:58:08Z",
   "backendSource": {
     "repository": "programmablehq/programmable-open-hook-v2-internal",
     "sourceCommit": "f8566856982ad70231f9b5812164be911f4ae5ed",
     "sourceTree": "186742fb7ab20e93a3d8c7558dc16118f45e6e24"
   },
-  "backendPromotionInputDigest": "sha256:74614b08fbd52b2282e026bd82ce328a662fb841cd434d2b11c5e4b0881e050b",
+  "backendPromotionInputDigest": "sha256:cee10b4a344a25e03cc42b819e18297ab4560ba4148cbfccf51ce9a9cc3c4f2c",
   "readbackReceipts": {
     "readiness": {
       "kind": "readiness",
@@ -21,8 +21,8 @@
         "kind": "releases",
         "httpStatus": 200,
         "contentType": "application/json",
-        "requestSha256": "sha256:6744261773bbac845f0071fe4e7b4faf5ef89712e20c2f4b2aeaf6252691b1db",
-        "normalizedResponseSha256": "sha256:8475c18cecab98217aa9c63fee55dee972eab7d3e9f802afdb1ed0c018315bad"
+        "requestSha256": "sha256:0b1753afb9ada0cf747da88117fdf6a6968ac3e12738e00a8cad6766d08a35e3",
+        "normalizedResponseSha256": "sha256:250cbc04811175d644952d7087254b6c42dfaf26309e7e36c4541048c4621ca3"
       },
       {
         "kind": "app",
@@ -50,7 +50,7 @@
         "httpStatus": 200,
         "contentType": "application/json",
         "requestSha256": "sha256:14eb044aac1ae963dad30c5e83770e78b9ea5ffb3cdba177ef36f198797cfaae",
-        "normalizedResponseSha256": "sha256:d8b93b706de9b4517bda6e77a3499175d6bafc7360fdb4093080df6b10c9a9fd"
+        "normalizedResponseSha256": "sha256:58577a2a2f358421ac9f3b0aef0cf4d217eeedc9b5fb321be80a6df961d69afa"
       },
       {
         "kind": "machine:2",
@@ -64,10 +64,10 @@
         "httpStatus": 200,
         "contentType": "application/json",
         "requestSha256": "sha256:35fd3195579c98d04fbc9050d8f24072607b65fa63984179d20cccdaf79bdcf0",
-        "normalizedResponseSha256": "sha256:2972c97651aa528a84d7f20390382765b494b2d10508263340c2bceb3343cd22"
+        "normalizedResponseSha256": "sha256:ef0dae331081aadcaf57c4cf5cc070f52e14c1f8d12ebf52b5aa5c5b15fd9a32"
       }
     ],
-    "digest": "sha256:c9ea8a42c58943594073dd5e0df26ac3fe23f28ceab058b63d9850ba6cc5dbc9"
+    "digest": "sha256:ac3c6734c7b26b4fe8399abb570c686184b42964c46ee024597370e964a69553"
   },
   "runtimeReadiness": {
     "schemaVersion": "programmable.custom-launch-api-runtime-readiness-receipt.v4",
@@ -182,15 +182,15 @@
       }
     },
     "releaseIdentityDigest": "sha256:cccda65148a415255437d2faa816c5b745b0a80cd4609d9e11479ac13c7045c0",
-    "observedAt": "2026-11-11T18:53:16Z",
-    "authorizationDigest": "sha256:7a7d4345aa666026f66bcacb09e5ae8d814fbbaea0fbc5265e89904b517b4fc3"
+    "observedAt": "2026-11-12T01:58:08Z",
+    "authorizationDigest": "sha256:6d1ed5baffa60923fde486a982341539bc207ea0a4dddab76c2453b8a15d894b"
   },
   "flyControlPlane": {
     "schemaVersion": "programmable.custom-launch-api-fly-control-plane-receipt.v2",
     "app": "programmable-custom-launch-api",
     "appStatus": "deployed",
-    "releaseIdDigest": "sha256:b4baba44bb4f2b47bcdfaf3d91c48e1bdb3cbabe9222c19435420c93ab0aa089",
-    "releaseVersionDigest": "sha256:d71fd0203e16178c5f78f7731cb5248368f53b31f68a701975bbc43be5aa5542",
+    "releaseIdDigest": "sha256:b879ab4b6938fb003ea34ff286ac33b967e5b00270cfcb91d4e17063b8720be7",
+    "releaseVersionDigest": "sha256:7f84d12dacb5a261b66a17c176db045102bac9266d6b58453ef9a0478af74bdc",
     "imageTag": "main-f8566856982a",
     "imageIdentityDigest": "sha256:5767e3ecf6eb142f283222b5fca874234d76d6553093fe9a473f45ddd9e9b55e",
     "machines": [
@@ -207,10 +207,10 @@
         "region": "fra"
       }
     ],
-    "safeReadbacksDigest": "sha256:7e49cadd15cc76073f68e4b31fdbdf7f5b74c462a16b067698a98bba2bbe5d5c",
-    "releaseIdentityDigest": "sha256:83e186f502dda43a0cd3bc20aa2811f5fa03c9c798222f9515df5f1643c3e345",
-    "observedAt": "2026-11-11T18:53:16Z",
-    "authorizationDigest": "sha256:83da3718acbd724461b1c4f5faa1bb3ab65c192d904649eae80b63fdd7e328a5"
+    "safeReadbacksDigest": "sha256:91c7a090ab22c988dddf40620744b9c1d9251fc0e23addbb45c495c6e6ffa641",
+    "releaseIdentityDigest": "sha256:95779d43ce90aba1b57abdb6af549691d5cc66bcac87b03060509c98837d83c9",
+    "observedAt": "2026-11-12T01:58:08Z",
+    "authorizationDigest": "sha256:1fc1ede7f8bf37aa894d81a34fee4c58c2545d4920b74d47a6511249c01d48f4"
   },
-  "publicInputDigest": "sha256:659ff7156d94c5443e2e5b3508295b2ee6627ccf9cb2d5326a7fc4ef35768a7b"
+  "publicInputDigest": "sha256:b18137957ffb6ffd50311b6fad53e8d196dfa8f0fcf2f09c03ceb732e07409c3"
 }
