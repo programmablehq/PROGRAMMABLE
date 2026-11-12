@@ -68,7 +68,9 @@ describe("Classic catalog metadata RPC recovery", () => {
     const primary = client();
     const secondary = client();
     const results = await primary.multicall();
-    results[0] = { status: "failure", error: new TimeoutError({ url: "https://primary.example/private-key" }) };
+    results[0] = { status: "failure", error: new TimeoutError({
+      body: { method: "eth_call", params: [] }, url: "https://primary.example/private-key",
+    }) };
     primary.multicall.mockReset().mockResolvedValue(results);
     rpc.clients = [primary, secondary];
 
