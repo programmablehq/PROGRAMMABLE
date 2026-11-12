@@ -202,12 +202,13 @@ function exactHealthBody(body, nowMs) {
     || body.schemaVersion !== "programmable.operations-health.v2" || body.scope !== "website-launch-indexes"
     || typeof body.checkedAt !== "string" || !Number.isFinite(Date.parse(body.checkedAt))
     || Math.abs(nowMs - Date.parse(body.checkedAt)) > MAXIMUM_GENERATED_AT_SKEW_MS
-    || !Array.isArray(body.indexes) || body.indexes.length !== 4) return false;
+    || !Array.isArray(body.indexes) || body.indexes.length !== 5) return false;
   const indexes = [
     { chainId: 1, path: "ethereum", statuses: ["ready", "partial", "stale", "unavailable"] },
     { chainId: 4663, path: "robinhood", statuses: ["ready", "syncing", "stale", "unavailable"] },
     { chainId: 8453, path: "base", statuses: ["ready", "stale", "unavailable"] },
     { chainId: 999, path: "hyperevm", statuses: ["ready", "stale", "unavailable"] },
+    { chainId: 99901, path: "elysium", statuses: ["ready", "stale", "unavailable"] },
   ];
   if (!indexes.every((expected, index) => {
     const actual = body.indexes[index];
@@ -227,8 +228,9 @@ function exactHealthBody(body, nowMs) {
     { chainId: 4663, readiness: "/v4/chains/4663/custom-launch-plans/readiness", capabilities: "/v4/chains/4663/custom-launch-capabilities" },
     { chainId: 8453, readiness: "/v4/chains/8453/readiness", capabilities: "/v4/chains/8453/capabilities" },
     { chainId: 999, readiness: "/v4/chains/999/readiness", capabilities: "/v4/chains/999/capabilities" },
+    { chainId: 99901, readiness: "/v4/chains/99901/readiness", capabilities: "/v4/chains/99901/capabilities" },
   ];
-  return Array.isArray(body.customLaunchReadiness) && body.customLaunchReadiness.length === 4
+  return Array.isArray(body.customLaunchReadiness) && body.customLaunchReadiness.length === 5
     && readiness.every((expected, index) => {
       const actual = body.customLaunchReadiness[index];
       return exactObjectKeys(actual, ["chainId", "readinessUrl", "capabilitiesUrl"])
