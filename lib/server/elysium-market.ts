@@ -1,5 +1,6 @@
 import "server-only";
 import { boundedEvmFetch } from "@/lib/server/evm-bounded-fetch";
+import { isOperationalRpcFailoverEligible, OperationalRpcUnavailableError, withOperationalRpcFailover } from "@/lib/onchain/operational-rpc-failover.server";
 import { unstable_cache } from "next/cache";
 import { createPublicClient, http, encodeAbiParameters, keccak256, parseAbi, type Address, type Hex } from "viem";
 import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
@@ -19,22 +20,27 @@ export type ElysiumMarketIdentity = {
     hooks: string;
   };
 };
-let client: ReturnType<typeof createPublicClient> | undefined;
-const rpc = () => client ??= createPublicClient({ transport: http(process.env.ELYSIUM_RPC_PRIMARY_URL ?? "https://rpc.elysium.kinetiq.xyz", { timeout: 5000, retryCount: 0, fetchFn: boundedEvmFetch, batch: { batchSize: 48, wait: 5 } }) });
-let point: Promise<{
+type Client = ReturnType<typeof createPublicClient>;
+const clients = new Map<string, Client>();
+const rpc = (url: string) => {
+  let client = clients.get(url);
+  if (!client) { client = createPublicClient({ transport: http(url, { timeout: 5000, retryCount: 0, fetchFn: boundedEvmFetch, batch: { batchSize: 48, wait: 5 } }) }); clients.set(url, client); }
+  return client;
+};
+type Checkpoint = {
   number: bigint;
   hash: Hex;
   timestamp: bigint;
   price: bigint;
-}> | undefined, expires = 0;
-async function checkpoint() {
-  if (point && expires > Date.now())
-    return point;
-  if (!point && expires > Date.now())
-    throw Error("Market provider is cooling down");
-  expires = Date.now() + 10000;
-  point = (async () => {
-    const c = rpc();
+};
+const points = new Map<string, { value?: Promise<Checkpoint>; error?: Error; expires: number }>();
+async function checkpoint(c: Client, url: string) {
+  const previous = points.get(url);
+  if (previous && previous.expires > Date.now()) {
+    if (previous.value) return previous.value;
+    throw previous.error ?? new Error("Market checkpoint unavailable");
+  }
+  const point = (async () => {
     const [chain, b] = await Promise.all([c.getChainId(), c.getBlock()]);
     const now = BigInt(Math.floor(Date.now() / 1000));
     if (chain !== 99901 || b.number === null || !b.hash || b.timestamp > now + 10n || now - b.timestamp > 60n)
@@ -43,32 +49,42 @@ async function checkpoint() {
     if (!code || keccak256(code) !== VIEW_HASH || !feedCode || keccak256(feedCode) !== FEED_HASH || decimals !== 18 || round[1] <= 0n || round[3] === 0n || round[3] > b.timestamp || b.timestamp - round[3] > 86520n || round[4] < round[0])
       throw Error("HYPE price unavailable");
     return { number: b.number, hash: b.hash, timestamp: b.timestamp, price: round[1] };
-  })().catch(error => { point = undefined; expires = Date.now() + 15000; throw error; });
+  })().catch(error => {
+    points.set(url, { expires: Date.now() + 15000, error: isOperationalRpcFailoverEligible(error)
+      ? new OperationalRpcUnavailableError() : new Error("Market checkpoint unavailable") });
+    throw error;
+  });
+  points.set(url, { value: point, expires: Date.now() + 10000 });
   return point;
 }
 async function readOne(identity: ElysiumMarketIdentity): Promise<RobinhoodCoinMarket> {
-  const p = identity.poolKey, c = rpc(), b = await checkpoint(), token = identity.tokenAddress as Address;
-  const tokenIs0 = p.currency0.toLowerCase() === token.toLowerCase();
-  const quote = tokenIs0 ? p.currency1 : p.currency0;
-  if (quote.toLowerCase() !== NATIVE || (tokenIs0 ? p.currency0 : p.currency1).toLowerCase() !== token.toLowerCase())
-    throw Error("No native quote");
-  const id = keccak256(encodeAbiParameters([{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "int24" }, { type: "address" }], [p.currency0 as Address, p.currency1 as Address, p.fee, p.tickSpacing, p.hooks as Address]));
-  if (id.toLowerCase() !== identity.poolId.toLowerCase())
-    throw Error("Pool changed");
-  const [slot, liquidity, decimals, supply] = await Promise.all([
-    c.readContract({ address: VIEW, abi: STATE, functionName: "getSlot0", args: [id], blockNumber: b.number }), c.readContract({ address: VIEW, abi: STATE, functionName: "getLiquidity", args: [id], blockNumber: b.number }),
-    c.readContract({ address: token, abi: TOKEN, functionName: "decimals", blockNumber: b.number }), c.readContract({ address: token, abi: TOKEN, functionName: "totalSupply", blockNumber: b.number })
-  ]);
-  const square = slot[0] * slot[0], q = 1n << 192n;
-  if (!square || !liquidity || !supply || decimals > 36)
-    throw Error("Inactive pool");
-  const numerator = (tokenIs0 ? square : q) * b.price, denominator = (tokenIs0 ? q : square) * 10n ** 18n;
-  const priceUsd = Number(numerator * 10n ** BigInt(decimals) / denominator) / 1e18, fdvUsd = Number(numerator * supply / denominator) / 1e18;
-  if (!Number.isFinite(priceUsd) || !Number.isFinite(fdvUsd) || priceUsd <= 0 || fdvUsd <= 0)
-    throw Error("Invalid pool valuation");
-  return { poolId: identity.poolId, source: "uniswap-v4", valuationKind: "fdv", priceUsd, fdvUsd, marketCapUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPercent: null, quoteAsset: { address: NATIVE, symbol: "HYPE" }, blockNumber: b.number.toString(), blockHash: b.hash, observedAt: new Date(Number(b.timestamp) * 1000).toISOString(), sourceUrl: `https://elysium.kinetiq.xyz/block/${b.number}` };
+  return withOperationalRpcFailover({
+    rpcUrl: process.env.ELYSIUM_RPC_PRIMARY_URL ?? "https://rpc.elysium.kinetiq.xyz",
+    rpcUrlSecondary: process.env.ELYSIUM_RPC_SECONDARY_URL ?? "https://rpc.elysium.kinetiq.xyz",
+  }, async selected => {
+    const p = identity.poolKey, c = rpc(selected.rpcUrl), b = await checkpoint(c, selected.rpcUrl), token = identity.tokenAddress as Address;
+    const tokenIs0 = p.currency0.toLowerCase() === token.toLowerCase();
+    const quote = tokenIs0 ? p.currency1 : p.currency0;
+    if (quote.toLowerCase() !== NATIVE || (tokenIs0 ? p.currency0 : p.currency1).toLowerCase() !== token.toLowerCase())
+      throw Error("No native quote");
+    const id = keccak256(encodeAbiParameters([{ type: "address" }, { type: "address" }, { type: "uint24" }, { type: "int24" }, { type: "address" }], [p.currency0 as Address, p.currency1 as Address, p.fee, p.tickSpacing, p.hooks as Address]));
+    if (id.toLowerCase() !== identity.poolId.toLowerCase())
+      throw Error("Pool changed");
+    const [slot, liquidity, decimals, supply] = await Promise.all([
+      c.readContract({ address: VIEW, abi: STATE, functionName: "getSlot0", args: [id], blockNumber: b.number }), c.readContract({ address: VIEW, abi: STATE, functionName: "getLiquidity", args: [id], blockNumber: b.number }),
+      c.readContract({ address: token, abi: TOKEN, functionName: "decimals", blockNumber: b.number }), c.readContract({ address: token, abi: TOKEN, functionName: "totalSupply", blockNumber: b.number })
+    ]);
+    const square = slot[0] * slot[0], q = 1n << 192n;
+    if (!square || !liquidity || !supply || decimals > 36)
+      throw Error("Inactive pool");
+    const numerator = (tokenIs0 ? square : q) * b.price, denominator = (tokenIs0 ? q : square) * 10n ** 18n;
+    const priceUsd = Number(numerator * 10n ** BigInt(decimals) / denominator) / 1e18, fdvUsd = Number(numerator * supply / denominator) / 1e18;
+    if (!Number.isFinite(priceUsd) || !Number.isFinite(fdvUsd) || priceUsd <= 0 || fdvUsd <= 0)
+      throw Error("Invalid pool valuation");
+    return { poolId: identity.poolId, source: "uniswap-v4", valuationKind: "fdv", priceUsd, fdvUsd, marketCapUsd: null, liquidityUsd: null, volume24hUsd: null, change24hPercent: null, quoteAsset: { address: NATIVE, symbol: "HYPE" }, blockNumber: b.number.toString(), blockHash: b.hash, observedAt: new Date(Number(b.timestamp) * 1000).toISOString(), sourceUrl: `https://elysium.kinetiq.xyz/block/${b.number}` };
+  });
 }
-const cachedRead = unstable_cache(readOne, ["elysium-native-spot-v1"], { revalidate: 120 });
+const cachedRead = unstable_cache(readOne, ["elysium-native-spot-v2"], { revalidate: 120 });
 /** At most ten missing native pools per read. No historical scan or invented volume. */
 export async function enrichElysiumMarkets(tokens: readonly {
   tokenAddress: string;

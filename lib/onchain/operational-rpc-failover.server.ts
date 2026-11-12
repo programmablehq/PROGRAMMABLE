@@ -9,6 +9,8 @@ import {
 
 import type { MainnetRpcProviderId, OnchainDeployment } from "./types";
 
+type RpcEndpoints = Pick<OnchainDeployment, "rpcUrl" | "rpcUrlSecondary" | "rpcProviderIds">;
+
 const CAPACITY_MESSAGE =
   /(?:monthly[_\s-]*capacity[_\s-]*(?:exceeded|reached)|capacity[_\s-]*(?:exceeded|reached)|rate[_\s-]*limit(?:ed)?|too many requests|request timeout on the free plan,? please upgrade to (?:a )?paid plan)/iu;
 const ARCHIVE_LIMITATION_MESSAGE =
@@ -133,7 +135,7 @@ export function isOperationalRpcFailoverEligible(
   });
 }
 
-function singleRpcDeployment<Deployment extends OnchainDeployment>(
+function singleRpcDeployment<Deployment extends RpcEndpoints>(
   deployment: Deployment,
   rpcUrl: string,
 ): Deployment {
@@ -198,7 +200,7 @@ export function createOperationalRpcFailover(now = Date.now) {
   // errors, and never export endpoint keys in logs or status responses.
   const cooldowns = new Map<string, Cooldown>();
 
-  async function attempt<Deployment extends OnchainDeployment, Output>(
+  async function attempt<Deployment extends RpcEndpoints, Output>(
     deployment: Deployment,
     read: (deployment: Deployment) => Promise<Output>,
   ) {
@@ -236,7 +238,7 @@ export function createOperationalRpcFailover(now = Date.now) {
   }
 
   return async function withOperationalRpcFailover<
-    Deployment extends OnchainDeployment,
+    Deployment extends RpcEndpoints,
     Output,
   >(
     deployment: Deployment,
