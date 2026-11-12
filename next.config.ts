@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 import { GITBOOK_PROXY_ORIGIN, LEGACY_DOCUMENTATION } from "./lib/documentation";
 
-export function createContentSecurityPolicy(isDevelopment: boolean) {
+export function createContentSecurityPolicy(isDevelopment: boolean, appPreviews = false) {
   return [
     "default-src 'self'",
     "base-uri 'self'",
@@ -31,6 +31,7 @@ export function createContentSecurityPolicy(isDevelopment: boolean) {
     ].filter(Boolean).join(" "),
     [
       "frame-src 'self'",
+      appPreviews ? "https://*.vercel.app" : "",
       "https://dexscreener.com",
       "https://auth.privy.io",
       "https://*.privy.io",
@@ -41,7 +42,7 @@ export function createContentSecurityPolicy(isDevelopment: boolean) {
       "https://challenges.cloudflare.com",
       "https://hcaptcha.com",
       "https://*.hcaptcha.com",
-    ].join(" "),
+    ].filter(Boolean).join(" "),
     "worker-src 'self' blob:",
     "media-src 'self' blob: data: https:",
     "manifest-src 'self'",
@@ -115,6 +116,15 @@ const nextConfig: NextConfig = {
         // Website-only script restrictions must not block its scripts or search.
         source: "/:path((?!docs(?:/|$)).*)",
         headers: securityHeaders,
+      },
+      {
+        // Generated app previews use isolated Vercel origins and a sandboxed iframe.
+        // Keep this frame destination confined to the project workspace.
+        source: "/launch/custom-ai",
+        headers: [{
+          key: "Content-Security-Policy",
+          value: createContentSecurityPolicy(process.env.NODE_ENV === "development", true),
+        }],
       },
     ];
   },

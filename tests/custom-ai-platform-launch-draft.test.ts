@@ -28,6 +28,8 @@ it("rejects a changed source or foreign image without altering the saved launch 
 it.each([8453,999,99901])("saves launch details on the project's supported chain (%i)",async chainId=>{
  const current=await projects.applyProjectPatch({...scope,expectedRevisionId:revisionId,idempotencyKey:`chain-${chainId}`,patch:{architecture:{kind:"contract",chainId}}});
  const initial=await drafts.read(scope,account);expect(initial.settings.chainId).toBe(chainId);
+ expect(initial.settings.pairToken).toBe(chainId===8453?"ETH":"HYPE");
+ expect(initial.settings.initialBuy).toBe(chainId===8453?"0.01":"");
  const saved=await drafts.save(scope,{account,expectedRevision:0,sourceRevision:current.revisionId,settings:{name:"Counter",symbol:"CNT",chainId}});
  expect(saved.settings.chainId).toBe(chainId);
  await expect(drafts.save(scope,{account,expectedRevision:1,sourceRevision:current.revisionId,settings:{chainId:1}})).rejects.toMatchObject({code:"launch-chain"});

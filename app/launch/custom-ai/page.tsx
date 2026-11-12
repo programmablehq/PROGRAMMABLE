@@ -5,9 +5,7 @@ import {projectPlatformRollout} from "@/lib/custom-ai/platform/rollout.server";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "AI Chat · Programmable",
-  description: process.env.CUSTOM_AI_GENERAL_LAUNCH_ENABLED === "true"
-    ? "Build and review a custom hook, then prepare its launch on Ethereum, Robinhood, Base or HyperEVM."
-    : "Describe your coin's fee rules, review its hook and launch on Ethereum or Robinhood.",
+  description: "Build custom hooks, apps and connected projects. Keep your source, review the results and prepare a launch on a supported network.",
   alternates: { canonical: "/launch/custom-ai" } };
 
 export default function CustomAIPage() {

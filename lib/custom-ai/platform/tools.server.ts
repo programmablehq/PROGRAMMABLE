@@ -13,7 +13,9 @@ import {platformContractBlueprint,completeCanonicalContractInterfaces,assertCano
 import {projectHash} from "./document";
 import {readLaunchBuildContext} from "../launch-production.server";
 import {applyPlanArchitectureUpdates} from "./plan-edits";
+import {projectRequirementScopes} from "./requirement-scopes";
 import {builderChains,type BuilderChainId} from "../execution-routing";
+import {assertSavedCheckPlan} from "./check-plan-guard";
 
 const objectSchema = (properties: object, required = Object.keys(properties)) => ({ type: "object", properties, required, additionalProperties: false });
 const value = (input: JsonValue) => input as Record<string, JsonValue>;
@@ -64,6 +66,7 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
         if(!["contract","legacy-contract"].includes(String(architecture.kind))||!builderChains.some(chain=>chain.id===Number(architecture.chainId)))throw new ProjectError("contract-interface","Choose the contract kind and chain before its canonical interface.",409);
         architecture.contractChecks=completeCanonicalContractInterfaces(architecture.contractChecks,Number(architecture.chainId) as BuilderChainId,architecture.canonicalInterfaces);
       }
+      assertSavedCheckPlan(context.revision,interpreted.intent.requirements,architecture);
       if(["contract","legacy-contract"].includes(String(architecture.kind))&&!interpreted.intent.requirements.some(rule=>rule.open))platformContractBlueprint({projectId:context.projectId,requirementsHash:projectHash(interpreted.intent.requirements),document:{...context.revision.document,requirements:interpreted.intent.requirements,architecture}});
       return save(context, { title: data.title as string, requirements: interpreted.intent.requirements, architecture,
         removeRequirementIds: context.revision.document.requirements.filter(rule => !interpreted.intent.requirements.some(item => item.id === rule.id)).map(rule => rule.id) });
@@ -82,7 +85,12 @@ export function createProjectTools(projects: ReturnType<typeof createPlatformSto
       const architecture = context.revision.document.architecture;
       const contract = architecture && typeof architecture === "object" && !Array.isArray(architecture) && ["contract", "legacy-contract"].includes(String(architecture.kind));
       if(contract)platformContractBlueprint(context.revision);
-      if (!contract && !declaredProjectChecks(architecture, context.revision.document.requirements.map(rule => rule.id)).length) throw new ProjectError("project-check-plan", "Declare the required behavior checks in the project plan before implementing.", 409);
+      const applicationRules=projectRequirementScopes(context.revision.document).application;
+      if(applicationRules.length){
+        const covered=new Set(declaredProjectChecks(architecture,context.revision.document.requirements.map(rule=>rule.id)).filter(check=>check.kind==="behavior").flatMap(check=>check.requirementIds));
+        const missing=applicationRules.filter(id=>!covered.has(id));
+        if(missing.length)throw new ProjectError("project-check-plan",`Declare behavior checks for these application requirements before implementing: ${missing.join(", ")}. Workflow instructions such as opening a checked preview belong in architecture.workflow, not application behavior. Correct an already saved requirement only with explicit user support.`,409);
+      }
       return save(context, value(input) as ProjectPatch);
     },
   };

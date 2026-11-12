@@ -15,7 +15,20 @@ test("starts from the first message, names the project and opens its saved resul
  await expect(page.getByRole("tab",{name:"Files",exact:true})).toHaveAttribute("aria-selected","true");
  expect(creations).toHaveLength(1);expect(titles).toEqual(["Shared counter for our game"]);
  await expect(page.getByRole("button",{name:"index.js",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Your work",exact:true}).click();
  await expect(page.getByRole("button",{name:/Shared counter.*Project/})).toBeVisible();
+});
+
+test("uses the selected network for a hook starter and resets a new project to build mode",async({page})=>{
+ await page.goto(origin);
+ await page.getByRole("combobox",{name:"Network for contract starters",exact:true}).selectOption("99901");
+ await page.getByRole("button",{name:/^Custom hook/}).click();
+ await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toHaveValue("Build a custom hook on Elysium. ");
+ await page.getByRole("combobox",{name:"Work mode",exact:true}).selectOption("plan");
+ await page.getByRole("button",{name:"New project",exact:true}).click();
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeEnabled();
+ await expect(page.getByRole("combobox",{name:"Work mode",exact:true})).toHaveValue("build");
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toHaveValue("");
 });
 
 test("recovers a lost first-project response with the same project after reload",async({page,request})=>{
@@ -48,7 +61,7 @@ test("shows real work phases and keeps input credentials out of a new project",a
 
 test("queues only a checked current app preview and opens it without publishing",async({page})=>{
  let projectId="",revisionId="",release:Record<string,unknown>|undefined;const writes:Record<string,unknown>[]=[];
- await page.route(url=>url.pathname.endsWith("/platform/projects")&&url.searchParams.has("projectId"),async route=>{const r=await route.fetch(),body=await r.json();projectId=body.project.projectId;revisionId=body.project.revisionId;body.project.document.architecture={kind:"application",application:{framework:"static",outputDirectory:"public"}};await route.fulfill({json:body});});
+  await page.route(url=>url.pathname.endsWith("/platform/projects")&&url.searchParams.has("projectId"),async route=>{const r=await route.fetch(),body=await r.json();projectId=body.project.projectId;revisionId=body.project.revisionId;body.project.document.architecture={application:{framework:"static",outputDirectory:"public"}};await route.fulfill({json:body});});
  await page.route("**/api/custom-ai/platform/checks**",route=>route.fulfill({json:{level:"checked",verified:true,missingRequirementIds:[],evidence:[]}}));
  await page.route("**/api/custom-ai/platform/releases**",async route=>{
   if(route.request().method()==="POST"){const body=route.request().postDataJSON();writes.push(body);expect(body.mode).toBe("preview");expect(body.action).toBe("queue");release={id:"11111111-1111-4111-8111-111111111111",revisionId,state:"ready",mode:"preview",url:"https://checked-preview.vercel.app",errorCode:null,observedAt:new Date().toISOString()};return route.fulfill({status:202,json:{release}});}
