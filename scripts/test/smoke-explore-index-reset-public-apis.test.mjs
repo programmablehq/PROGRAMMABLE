@@ -136,6 +136,7 @@ function responseSpec(url, method) {
           { chainId: 4663, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/robinhood" },
           { chainId: 8453, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/base" },
           { chainId: 999, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/hyperevm" },
+          { chainId: 99901, status: "ready", updatedAt: NOW, catalogUrl: "https://programmable.market/api/explore/elysium" },
         ],
         providers: [{ name: "codex", roles: ["ethereum-and-robinhood-market-data"], health: "not-checked" }],
         customLaunchReadiness: [
@@ -146,6 +147,8 @@ function responseSpec(url, method) {
             capabilitiesUrl: "https://api.programmable.market/v4/chains/8453/capabilities" },
           { chainId: 999, readinessUrl: "https://api.programmable.market/v4/chains/999/readiness",
             capabilitiesUrl: "https://api.programmable.market/v4/chains/999/capabilities" },
+          { chainId: 99901, readinessUrl: "https://api.programmable.market/v4/chains/99901/readiness",
+            capabilitiesUrl: "https://api.programmable.market/v4/chains/99901/capabilities" },
         ],
       },
       headers: { ...RUNTIME_HEADERS, "x-programmable-indexing-status": "ready" },
@@ -450,12 +453,14 @@ test("smoke rejects retired operation, paused trigger, and health drift", async 
   }
 });
 
-test("smoke requires Base and HyperEVM catalog and readiness evidence with exact endpoints", async () => {
+test("smoke requires Base, HyperEVM and Elysium catalog and readiness evidence with exact endpoints", async () => {
   const mutations = [
     body => ({ ...body, indexes: body.indexes.slice(0, 2) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 2) }),
     body => ({ ...body, indexes: body.indexes.slice(0, 3) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 3) }),
+    body => ({ ...body, indexes: body.indexes.slice(0, 4) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.slice(0, 4) }),
     body => ({ ...body, indexes: body.indexes.map(index => index.chainId === 8453
       ? { ...index, catalogUrl: "https://programmable.market/api/explore/ethereum" } : index) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 8453
@@ -466,6 +471,12 @@ test("smoke requires Base and HyperEVM catalog and readiness evidence with exact
       ? { ...index, catalogUrl: "https://programmable.market/api/explore/base" } : index) }),
     body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 999
       ? { ...entry, readinessUrl: "https://api.programmable.market/v4/chains/8453/readiness" } : entry) }),
+    body => ({ ...body, indexes: body.indexes.map(index => index.chainId === 99901
+      ? { ...index, catalogUrl: "https://programmable.market/api/explore/hyperevm" } : index) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 99901
+      ? { ...entry, readinessUrl: "https://api.programmable.market/v4/chains/999/readiness" } : entry) }),
+    body => ({ ...body, customLaunchReadiness: body.customLaunchReadiness.map(entry => entry.chainId === 99901
+      ? { ...entry, capabilitiesUrl: "https://api.programmable.market/v4/chains/999/capabilities" } : entry) }),
   ];
   for (const mutate of mutations) {
     const fixture = resetFetch(({ spec, url }) => url.pathname === "/api/ops/health"
