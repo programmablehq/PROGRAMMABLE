@@ -96,7 +96,7 @@ async function withHydrationSlot<T>(read: () => Promise<T>): Promise<T> {
   try { return await read(); }
   finally { release(); }
 }
-const hydrate = unstable_cache(async (serialized: string) => {
+export const readClassicCatalogGroup = unstable_cache(async (serialized: string) => {
   const proofs = parseClassicLaunchLogs(JSON.parse(serialized) as ClassicRawLog[]);
   return withHydrationSlot(() => withClient(async client => {
     const blocks = [...new Set(proofs.map(proof=>proof.launchBlockNumber!))];
@@ -112,6 +112,11 @@ const hydrate = unstable_cache(async (serialized: string) => {
       ]) });
       return batch.map((proof,index)=>{
         const [name,symbol,decimals,extended,creator]=results.slice(index*5,index*5+5);
+        // Multicall captures transport failures as individual results. Keep the
+        // cause so the configured secondary can repeat the verified read.
+        for (const required of [name,symbol,decimals,creator]) {
+          if (required?.status === "failure") throw required.error;
+        }
         if (name?.status!=="success" || typeof name.result!=="string" || !name.result.trim()
           || hasUnsafeDisplayCharacters(name.result) || characterLength(name.result)>MAX_TOKEN_NAME_CHARACTERS
           || symbol?.status!=="success" || !isValidClassicDisplaySymbol(symbol.result)
@@ -139,7 +144,7 @@ const hydrate = unstable_cache(async (serialized: string) => {
     });
     return metadata;
   }));
-}, ["canonical-classic-hydration-v2",CLASSIC_CATALOG_RELEASE], {revalidate:300});
+}, ["canonical-classic-hydration-v3",CLASSIC_CATALOG_RELEASE], {revalidate:300});
 
 type Candidate = ClassicLaunchCandidate;
 
@@ -197,7 +202,7 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
   // Complete canonical getLogs groups already prove successful transaction events;
   // hydrate additionally checks each recorded block hash against the node's headers.
   const entries = await readClassicCatalogGroups(groups, group =>
-    hydrate(JSON.stringify(group))
+    readClassicCatalogGroup(JSON.stringify(group))
   );
   if (!entries.some(entry => entry.tokenAddress.toLowerCase() === CLASSIC_MAIN_TOKEN)) throw fail();
   await withClient(async client => {
