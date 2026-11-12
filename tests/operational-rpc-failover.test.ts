@@ -180,6 +180,22 @@ describe("operational RPC failover", () => {
     ]);
   });
 
+  it("retries the same historical block when the primary reports an unsupported block number", async () => {
+    const block = "0x30b57af";
+    const calls: { endpoint: string; block: string }[] = [];
+    const read = async (candidate: ReadyOnchainDeployment) => {
+      calls.push({ endpoint: candidate.rpcUrl, block });
+      if (candidate.rpcUrl === deployment.rpcUrl) throw rpcFailure("unsupported block number");
+      return { block, code: "0x6000" };
+    };
+
+    await expect(withOperationalRpcFailover(deployment, read)).resolves.toEqual({ block, code: "0x6000" });
+    expect(calls).toEqual([
+      { endpoint: deployment.rpcUrl, block },
+      { endpoint: deployment.rpcUrlSecondary, block },
+    ]);
+  });
+
   it("uses the fixed secondary after dRPC reports code 12 routing unavailability", async () => {
     const calls: string[] = [];
     const read = vi.fn(async (candidate: ReadyOnchainDeployment) => {

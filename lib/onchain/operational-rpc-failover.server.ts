@@ -9,10 +9,13 @@ import {
 
 import type { MainnetRpcProviderId, OnchainDeployment } from "./types";
 
+type RpcEndpoints = Pick<OnchainDeployment, "rpcUrl" | "rpcUrlSecondary" | "rpcProviderIds">;
+
 const CAPACITY_MESSAGE =
   /(?:monthly[_\s-]*capacity[_\s-]*(?:exceeded|reached)|capacity[_\s-]*(?:exceeded|reached)|rate[_\s-]*limit(?:ed)?|too many requests|request timeout on the free plan,? please upgrade to (?:a )?paid plan)/iu;
 const ARCHIVE_LIMITATION_MESSAGE =
   /archive requests require a personal token/iu;
+const HISTORICAL_BLOCK_UNAVAILABLE_MESSAGE = /^\s*unsupported block number\s*$/iu;
 const PROVIDER_ROUTING_UNAVAILABLE_MESSAGE =
   /can't route your request to suitable provider/iu;
 
@@ -81,10 +84,19 @@ function rpcProviderRoutingUnavailable(error: RpcRequestError) {
   );
 }
 
+function rpcHistoricalBlockUnavailable(error: RpcRequestError) {
+  return error.code === -32_000 && [
+    error.details,
+    typeof error.data === "string" ? error.data : undefined,
+    error.cause instanceof Error ? error.cause.message : undefined,
+  ].some(value => typeof value === "string" && HISTORICAL_BLOCK_UNAVAILABLE_MESSAGE.test(value));
+}
+
 /**
  * Provider failover is intentionally narrower than a generic retry. A
- * secondary RPC is eligible only when the primary transport is unavailable or
- * explicitly rejects capacity. Other failures stay on the primary path;
+ * secondary RPC is eligible when the primary transport is unavailable,
+ * rejects capacity, or cannot serve the requested historical block. Other
+ * failures stay on the primary path;
  * provider-independent integrity errors remain intact while endpoint-bearing
  * viem errors are redacted before they reach framework logging.
  */
@@ -115,6 +127,7 @@ export function isOperationalRpcFailoverEligible(
         candidate.code === -32_005 ||
         rpcCapacityMessage(candidate) ||
         rpcArchiveLimitationMessage(candidate) ||
+        rpcHistoricalBlockUnavailable(candidate) ||
         rpcProviderRoutingUnavailable(candidate)
       );
     }
@@ -122,7 +135,7 @@ export function isOperationalRpcFailoverEligible(
   });
 }
 
-function singleRpcDeployment<Deployment extends OnchainDeployment>(
+function singleRpcDeployment<Deployment extends RpcEndpoints>(
   deployment: Deployment,
   rpcUrl: string,
 ): Deployment {
@@ -187,7 +200,7 @@ export function createOperationalRpcFailover(now = Date.now) {
   // errors, and never export endpoint keys in logs or status responses.
   const cooldowns = new Map<string, Cooldown>();
 
-  async function attempt<Deployment extends OnchainDeployment, Output>(
+  async function attempt<Deployment extends RpcEndpoints, Output>(
     deployment: Deployment,
     read: (deployment: Deployment) => Promise<Output>,
   ) {
@@ -225,7 +238,7 @@ export function createOperationalRpcFailover(now = Date.now) {
   }
 
   return async function withOperationalRpcFailover<
-    Deployment extends OnchainDeployment,
+    Deployment extends RpcEndpoints,
     Output,
   >(
     deployment: Deployment,
