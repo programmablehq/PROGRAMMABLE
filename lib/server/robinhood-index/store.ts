@@ -36,7 +36,7 @@ export function indexStore(signal?: AbortSignal): IndexStore {
       }
       let text: string;
       try {
-        text = await readBoundedUtf8BodyV1(new Response(result.stream, { headers: result.headers }), MAX_BYTES,
+        text = await readBoundedUtf8BodyV1(new Response(result.stream, { headers: Array.from(result.headers.entries()) }), MAX_BYTES,
           { signal: deadline });
       } catch (error) {
         if (error instanceof BoundedBodyErrorV1 && error.code === "too-large") throw new Error("Robinhood index size exceeded");
