@@ -31,6 +31,23 @@ test("uses the selected network for a hook starter and resets a new project to b
  await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toHaveValue("");
 });
 
+for(const summary of ["provider-refused","incomplete"])test(`keeps editing available and distinguishes ${summary} from an unchanged continuation`,async({page,request})=>{
+ await request.post(origin+"/fixture/pause",{data:{paused:true}});
+ let starts=0;page.on("request",r=>{if(r.method()==="POST"&&r.url().endsWith("/platform/runs"))starts++;});
+ await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"),async route=>{
+  if(route.request().method()!=="GET")return route.continue();
+  const response=await route.fetch(),body=await response.json();
+  await route.fulfill({json:{...body,run:{...body.run,status:"failed",summary}}});
+ });
+ await page.goto(origin);await page.getByRole("textbox",{name:"Describe your idea",exact:true}).fill("Read the saved project");await page.getByRole("button",{name:"Send",exact:true}).click();
+ const input=page.getByRole("textbox",{name:"Message your project",exact:true}),continuation=page.getByRole("button",{name:"Continue from here",exact:true});
+ if(summary==="provider-refused"){
+  await expect(page.getByRole("region",{name:"Project chat"}).getByText(/AI provider declined/)).toBeVisible();
+  await expect(continuation).toHaveCount(0);
+ }else await expect(continuation).toBeVisible();
+ await expect(input).toBeEnabled();await input.fill("Explain the saved requirements instead");expect(starts).toBe(1);
+});
+
 test("recovers a lost first-project response with the same project after reload",async({page,request})=>{
  await request.post(origin+"/fixture/pause",{data:{paused:true}});
  const ids:string[]=[];let lose=true;

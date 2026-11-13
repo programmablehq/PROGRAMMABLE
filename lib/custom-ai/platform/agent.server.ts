@@ -129,7 +129,8 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
       return { run: await runs.finishStep(scope, grant.runId, leaseToken, { id: stepId, result, ...(begin.reconcile ? { reconciled: true } : {}) }) };
     } catch (error) {
       if (error instanceof ProjectError && error.code === "run-lease") throw error;
-      const code = error instanceof ProjectError || error instanceof CustomAIError ? error.code : "agent-provider";
+      const code = error instanceof ModelResponseError && error.failure === "refused" && !error.protocolViolation
+        ? "provider-refused" : error instanceof ProjectError || error instanceof CustomAIError ? error.code : "agent-provider";
       const retryable = ["provider_rate_limit", "provider_overloaded", "provider_cooldown", "connection", "provider_stream"].includes(code);
       return { run: await runs.failRun(scope, grant.runId, leaseToken, code, retryable) };
     } finally { if (monitor) clearInterval(monitor); }

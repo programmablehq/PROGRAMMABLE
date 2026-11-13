@@ -60,9 +60,20 @@ describe("durable project agent",()=>{
     expect(JSON.stringify(warning.mock.calls)).not.toContain("private-source-response");
   });
   it.each([false,true])("separates a provider refusal from an unsolicited tool protocol (%s)",async protocol=>{
+    vi.spyOn(console,"warn").mockImplementation(()=>{});
     const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("refused",{inputTokens:20,outputTokens:10},undefined,undefined,protocol));
     const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
-    expect((await agent.advance(grant,lease.token)).run.status).toBe(protocol?"running":"failed");
+    const first=(await agent.advance(grant,lease.token)).run;
+    expect(first.status).toBe(protocol?"running":"failed");
+    if(protocol){
+      expect((await agent.advance(grant,lease.token)).run).toMatchObject({status:"failed",summary:"incomplete",usedUnits:2});
+      expect(choose).toHaveBeenCalledTimes(2);
+    }else{
+      expect(first).toMatchObject({summary:"provider-refused",usedUnits:1});
+      expect(choose).toHaveBeenCalledOnce();
+    }
+    expect((await runs.readRun(scope,grant.runId)).summary).toBe(protocol?"incomplete":"provider-refused");
+    expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
   });
   it("returns a rejected provenance quote to the model without changing the project",async()=>{
     const {grant,lease}=await start();
