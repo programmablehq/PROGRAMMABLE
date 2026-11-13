@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const blob = vi.hoisted(() => ({ get: vi.fn(), head: vi.fn(), put: vi.fn() }));
 vi.mock("@vercel/blob", () => blob);
+vi.mock("server-only", () => ({}));
 import { indexStore } from "@/lib/server/robinhood-index/store";
 
 const etag = `"${"a".repeat(32)}"`;
@@ -45,5 +46,23 @@ describe("Robinhood index atomic reads", () => {
   it("keeps the body byte limit even without a declared size", async () => {
     blob.get.mockResolvedValue(response(" ".repeat(16 * 1024 * 1024 + 1)));
     await expect(indexStore().read()).rejects.toThrow("size exceeded");
+  });
+  it("aborts a stalled body without waiting for cancellation and fences subsequent writes", async () => {
+    const controller = new AbortController();
+    let reading!: () => void;
+    const started = new Promise<void>(resolve => { reading = resolve; });
+    blob.get.mockResolvedValue({ ...response(), stream: new ReadableStream({
+      pull() { reading(); return new Promise(() => {}); },
+      cancel: () => new Promise(() => {}),
+    }) });
+    const store = indexStore(controller.signal);
+    const pending = store.read();
+    const rejected = expect(pending).rejects.toThrow("aborted");
+    await started;
+    controller.abort(new Error("Job ended"));
+    await rejected;
+    await expect(store.write(snapshot as Parameters<typeof store.write>[0], etag)).rejects.toThrow("Job ended");
+    expect(blob.put).not.toHaveBeenCalled();
+    expect(blob.get.mock.calls[0][1].abortSignal.aborted).toBe(true);
   });
 });

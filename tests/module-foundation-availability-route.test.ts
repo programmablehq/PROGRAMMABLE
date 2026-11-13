@@ -75,6 +75,18 @@ it("retains the shorter default for callers without an explicit deadline", async
   expect(await result).toBe("TimeoutError");
 });
 
+it("closes a stalled authority body even when both its transport and cancellation ignore abort", async () => {
+  const stalled = new ReadableStream({
+    pull: () => new Promise(() => {}),
+    cancel: () => new Promise(() => {}),
+  });
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(stalled, { headers: { "content-type": "application/json" } })));
+  const response = GET(new Request("https://programmable.example/api/module-foundation"));
+  await vi.advanceTimersByTimeAsync(55_000);
+  expect((await response).status).toBe(200);
+  expect(await (await response).json()).toEqual(unavailableFoundation());
+});
+
 it("shares overlapping authority checks but performs a fresh check after they settle", async () => {
   const fetcher = vi.fn(() => new Promise<Response>(resolve => {
     setTimeout(() => resolve(Response.json(availableFixture())), 100);
