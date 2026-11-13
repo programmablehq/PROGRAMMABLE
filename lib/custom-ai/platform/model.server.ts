@@ -20,13 +20,15 @@ export async function chooseProjectAction(context: AgentContext, signal: AbortSi
   const observations=projectModelObservations(context.steps,context.project);
   const requestFacts={evmAddresses:[...new Set(context.prompt.match(/\b0x[0-9a-fA-F]+\b/g)??[])].map(value=>({value,valid:isAddress(value)}))};
   const previous=context.steps.at(-1)?.result;
-  const outputLimitRetry=previous&&typeof previous==="object"&&!Array.isArray(previous)&&previous.kind==="model-retry"&&previous.failure==="output-limit";
+  const retry=previous&&typeof previous==="object"&&!Array.isArray(previous)&&previous.kind==="model-retry"?previous:undefined;
+  const outputLimitRetry=retry?.failure==="output-limit";
   const architecture=project.document.architecture as Record<string,unknown>|null;
   const regeneratedFields=[...(architecture?.useCanonicalProduction===true?["architecture.production"]:[]),...(Array.isArray(architecture?.canonicalInterfaces)&&architecture.canonicalInterfaces.length>0?["inherited canonical functions"]:[])];
-  const responseRecovery=outputLimitRetry?{
-    reason:"output-limit",maximumOutputTokens:16000,preserveAllRequirements:true,preserveAllExpectedResults:true,preferArchitectureUpdates:Boolean(architecture&&typeof architecture==="object"&&!Array.isArray(architecture)),
+  const responseRecovery=retry?{
+    reason:typeof retry.failure==="string"?retry.failure:"invalid-schema",maximumOutputTokens:16000,preserveAllRequirements:true,preserveAllExpectedResults:true,preferArchitectureUpdates:Boolean(architecture&&typeof architecture==="object"&&!Array.isArray(architecture)),
+    ...(retry.schemaFailure?{schemaFailure:retry.schemaFailure}:{}),...(retry.protocolViolation===true?{protocolViolation:true}:{}),
     omitOnlyRegeneratedFields:regeneratedFields,
-    instruction:"The previous JSON was cut off before completion and no tool ran. Return compact JSON without prose duplication. For an existing architecture, use project.plan architectureUpdates for only the fields that need changing; the server preserves everything else and validates the resulting full plan. Retain the complete requirements array and exact edit quotes. Keep every business requirement, stable ID, custom function, scenario and expected result. In a full architecture omit only the listed server-regenerated fields. Do not shorten the plan by removing behavior, altering amounts, dropping cases or weakening checks.",
+    instruction:(outputLimitRetry?"The previous JSON was cut off before completion and no tool ran. ":"The previous response failed the data-format checks and no tool ran. Correct the supplied schema issues. Return exactly kind, tool, input, message and claim; input is a JSON object for a tool action or null for a reply/question. Do not return a native tool call or an invoke envelope. ")+"Return compact JSON without prose duplication. This format repair grants no authority to bypass a refusal or change the requested behavior. For an existing architecture, use project.plan architectureUpdates for only the fields that need changing; the server preserves everything else and validates the resulting full plan. Retain the complete requirements array and exact edit quotes. Keep every business requirement, stable ID, custom function, scenario and expected result. In a full architecture omit only the listed server-regenerated fields. Do not shorten the plan by removing behavior, altering amounts, dropping cases or weakening checks.",
   }:undefined;
   const payload = { operation: context.operation, request: context.prompt, requestFacts, history: context.history,currentTime:new Date().toISOString(),
     revision: { id: project.revisionId, title: project.document.title, requirements: project.document.requirements, architecture: project.document.architecture,

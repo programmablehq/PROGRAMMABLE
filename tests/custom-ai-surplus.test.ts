@@ -158,6 +158,30 @@ describe("Surplus model routing", () => {
     expect(body.tool_choice).toBe("none");expect(body.provider).toBeUndefined();expect(body.provider_order).toBeUndefined();
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it.each([false,true])("accepts an empty tool-call list while still validating the response data (stream=%s)",async stream=>{
+    useSurplus();
+    const schema={type:"object",properties:{count:{type:"integer"}},required:["count"],additionalProperties:false};
+    const events=[{choices:[{index:0,delta:{tool_calls:[],content:'{"count":2}'},finish_reason:"stop"}]}];
+    const fetcher=vi.fn(async()=>stream
+      ?new Response(events.map(event=>`data: ${JSON.stringify(event)}\n\n`).join("")+"data: [DONE]\n\n",{headers:{"content-type":"text/event-stream"}})
+      :Response.json({choices:[{message:{content:'{"count":2}',tool_calls:[]},finish_reason:"stop"}]}));
+    vi.stubGlobal("fetch",fetcher);
+    expect((await callSurplus({...input,schema,structuredTransport:"json-object",responseProfile:"contract"})).text).toBe('{"count":2}');
+    expect(fetcher).toHaveBeenCalledOnce();
+    fetcher.mockImplementation(async()=>Response.json({choices:[{message:{content:'{"count":"2"}',tool_calls:[]},finish_reason:"stop"}]}));
+    await expect(callSurplus({...input,schema,structuredTransport:"json-object"})).rejects.toMatchObject({failure:"invalid-schema"});
+  });
+  it("rejects malformed tool metadata even alongside an otherwise valid response",async()=>{
+    useSurplus();vi.stubGlobal("fetch",vi.fn(async()=>Response.json({choices:[{message:{content:'{"reply":"Ready"}',tool_calls:{}},finish_reason:"stop"}]})));
+    await expect(callSurplus(input)).rejects.toMatchObject({failure:"refused",protocolViolation:true});
+  });
+  it("keeps action field diagnostics useful while masking arbitrary response keys",()=>{
+    const format=prepareSurplusSchema({type:"object",properties:{input:{type:"integer"}},required:["input"],additionalProperties:false},true);
+    for(const [text,path,keyword] of [['{"input":"2"}',"/input","type"],['{"input":2,"private-user-key-name":"private text"}',"/*","additionalProperties"]]){
+      try{format.decode(text);throw new Error("Expected invalid response");}
+      catch(error){expect(error).toMatchObject({schemaFailure:{kind:"schema",issues:[{path,keyword}]}});expect(JSON.stringify(error)).not.toMatch(/private-user-key-name|private text/);}
+    }
+  });
   it("keeps reading split empty transport tags before a complete checked source reply",async()=>{
     useSurplus();
     const schema={type:"object",properties:{reply:{type:"string"},sourceFiles:{type:"array",minItems:1,items:{type:"string"}}},required:["reply","sourceFiles"],additionalProperties:false};
