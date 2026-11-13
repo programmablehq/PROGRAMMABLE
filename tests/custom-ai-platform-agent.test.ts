@@ -20,7 +20,7 @@ beforeEach(async () => {
   runs = createRunStore(pool, { allowance: {hourlyUnits:25,dailyUnits:100,globalDailyUnits:200,concurrent:1},leaseMs:60000,
     capabilities: {"model.plan":{units:1,effect:"read",operations:["plan","build"]},"project.patch":{units:1,effect:"write",operations:["build"]}} });
 });
-afterEach(async()=>{await db.close();});
+afterEach(async()=>{vi.restoreAllMocks();await db.close();});
 const start=async(operation:"plan"|"build"="build")=>{
   const run=await runs.startRun({...scope,revisionId,operation,prompt:"Create app.js",idempotencyKey:"build",budgetUnits:10});
   const lease=(await runs.claimRun(scope,run.runId,"worker-one"))!;
@@ -42,17 +42,22 @@ describe("durable project agent",()=>{
   });
   it("records and charges one bounded model-format retry before escalating the next decision",async()=>{
     const {grant,lease}=await start();
-    const choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValueOnce(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10})).mockResolvedValue({kind:"reply",tool:null,input:null,message:"Ready",claim:"discussed"});
+    const choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValueOnce(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10},undefined,{kind:"schema",issues:[{path:"/input",keyword:"type"}]})).mockResolvedValue({kind:"reply",tool:null,input:null,message:"Ready",claim:"discussed"});
     const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
     expect((await agent.advance(grant,lease.token)).run.status).toBe("running");
     expect((await agent.advance(grant,lease.token)).run.usedUnits).toBe(2);
     expect((await agent.advance(grant,lease.token)).run.status).toBe("succeeded");
-    expect(choose.mock.calls[1][0].steps.at(-1)?.result).toMatchObject({kind:"model-retry",failure:"invalid-schema"});
+    expect(choose.mock.calls[1][0].steps.at(-1)?.result).toMatchObject({kind:"model-retry",failure:"invalid-schema",schemaFailure:{kind:"schema",issues:[{path:"/input",keyword:"type"}]}});
+    expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
   });
   it("does not loop when both model-format attempts fail",async()=>{
-    const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10}));
+    const warning=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("invalid-schema",{inputTokens:20,outputTokens:10},"private-source-response",{kind:"json",issues:[]}));
     const agent=createProjectAgent({runs,projects,tools:[],choose,assess:async()=>({level:"discussed"})});
     await agent.advance(grant,lease.token);expect((await agent.advance(grant,lease.token)).run.status).toBe("failed");expect(choose).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledOnce();expect(warning.mock.calls[0][0]).toBe("custom-ai-project-model-response-rejected");
+    expect(JSON.parse(warning.mock.calls[0][1])).toEqual({failure:"invalid-schema",protocolViolation:false,schemaFailure:{kind:"json",issues:[]}});
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("private-source-response");
   });
   it.each([false,true])("separates a provider refusal from an unsolicited tool protocol (%s)",async protocol=>{
     const {grant,lease}=await start(),choose=vi.fn<Parameters<typeof createProjectAgent>[0]["choose"]>().mockRejectedValue(new ModelResponseError("refused",{inputTokens:20,outputTokens:10},undefined,undefined,protocol));

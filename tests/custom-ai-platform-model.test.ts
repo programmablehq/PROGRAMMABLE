@@ -46,6 +46,23 @@ it("keeps the canonical context and exact custom file bytes without replaying so
  expect(files[1]).not.toHaveProperty("content");
 });
 
+it.each(["invalid-schema","refused"])("gives a bounded %s retry the saved format failure without changing the project",async failure=>{
+ call.mockResolvedValue({text:JSON.stringify({kind:"reply",tool:null,input:null,message:"Ready",claim:"discussed"})});
+ const document=emptyProjectDocument();
+ const schemaFailure={kind:"schema",issues:[{path:"/input",keyword:"type"}]};
+ const retry={kind:"model-retry",failure,...(failure==="refused"?{protocolViolation:true}:{schemaFailure})};
+ const context={project:{revisionId:"saved-revision",document},prompt:"Continue from the saved project.",operation:"build",tools:[],history:[],steps:[{id:"retry",cursor:0,capability_id:"model.plan",input:{},state:"completed",result:retry}]} as unknown as AgentContext;
+ const before=structuredClone(document);
+ await chooseProjectAction(context,AbortSignal.timeout(1000));
+ const input=call.mock.calls.at(-1)![0],payload=JSON.parse(input.messages[0].content);
+ expect(input.model).toBe("audit");expect(input.maxTokens).toBe(16000);
+ expect(payload.responseRecovery).toMatchObject({reason:failure,preserveAllRequirements:true,preserveAllExpectedResults:true});
+ if(failure==="refused")expect(payload.responseRecovery.protocolViolation).toBe(true);
+ else expect(payload.responseRecovery.schemaFailure).toEqual(schemaFailure);
+ expect(payload.revision.requirements).toEqual(before.requirements);expect(payload.revision.architecture).toEqual(before.architecture);
+ expect(document).toEqual(before);
+});
+
 it("does not repeat the opaque production binding after the complete plan is saved",()=>{
  const project={document:{architecture:{production:{digest:"saved-exact-binding"},contractChecks:{steps:[]}}}} as unknown as AgentContext["project"];
  const steps=[{id:"context",cursor:0,capability_id:"contract.context",input:{chainId:8453},state:"completed",result:{ok:true,value:{production:{chainId:8453,profileVersion:"current",opaque:"x".repeat(30000)},interfaces:{id:"pinned-source",contracts:[{source:"Hook.sol",contract:"Hook",sourceSha256:"source-hash",functions:["function value() view returns (uint256)"]}]},contractChecksInstructions:"x".repeat(20000)}}}];

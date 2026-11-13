@@ -9,6 +9,7 @@ import { ModelResponseError, modelResponseLimits, reportedTokenCount } from "./m
 import { AI_CONFIG } from "./ai-config";
 
 const endpoint = "https://api.surplusintelligence.ai/v1";
+const hasToolCalls = (value: unknown) => value != null && (!Array.isArray(value) || value.length > 0);
 const unexpectedToolEnvelope = (text: string, complete = false) => {
   const content = stripEmptyToolEnvelopes(text);
   const call = /^\s*<invoke\s+name="([^"]+)"\s*>/u.exec(content);
@@ -115,7 +116,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
         const choices = event.choices as { index?: number; delta?: { content?: string; refusal?: string; tool_calls?: unknown }; finish_reason?: string }[] | undefined;
         const choice = choices?.find(item => item.index === 0) ?? choices?.[0];
         if (choice?.delta?.refusal) throw incomplete("refused");
-        if (choice?.delta?.tool_calls) throw incomplete("refused",true);
+        if (hasToolCalls(choice?.delta?.tool_calls)) throw incomplete("refused",true);
         if (typeof choice?.delta?.content === "string") text += choice.delta.content;
         if (unexpectedToolEnvelope(text)) throw incomplete("refused",true);
         if (text.length > limits.maximumCharacters) throw incomplete("response-too-large");
@@ -134,7 +135,7 @@ export async function callSurplus(input: ClaudeInput): Promise<ClaudeResult> {
     text = typeof choice?.message?.content === "string" ? choice.message.content : "";
     inputTokens = reportedTokenCount(value.usage?.prompt_tokens); outputTokens = reportedTokenCount(value.usage?.completion_tokens);
     if (choice?.message?.refusal) throw incomplete("refused");
-    if (choice?.message?.tool_calls) throw incomplete("refused",true);
+    if (hasToolCalls(choice?.message?.tool_calls)) throw incomplete("refused",true);
   }
   if (finish === "length" || finish === "max_tokens") throw incomplete("output-limit");
   if (finish !== "stop") throw incomplete("missing-end");

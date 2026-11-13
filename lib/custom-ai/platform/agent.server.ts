@@ -95,8 +95,18 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
           result = parseAgentDecision(chosen) as unknown as JsonValue;
         } catch(error) {
           const previous=steps.findLast(step=>step.capability_id==="model.plan");
-          if(!(error instanceof ModelResponseError)||!(["invalid-schema","output-limit","empty-response"].includes(error.failure)||error.protocolViolation)||modelRetry(previous?.result))throw error;
-          result={kind:"model-retry",failure:error.failure,message:"The provider returned an invalid decision format. Retry once with the configured escalation model; no tool was executed."};
+          if(!(error instanceof ModelResponseError)||!(["invalid-schema","output-limit","empty-response"].includes(error.failure)||error.protocolViolation)||modelRetry(previous?.result)){
+            if(error instanceof ModelResponseError)console.warn("custom-ai-project-model-response-rejected",JSON.stringify({
+              failure:error.failure,protocolViolation:error.protocolViolation===true,...(error.schemaFailure?{schemaFailure:error.schemaFailure}:{}),
+            }));
+            throw error;
+          }
+          result={kind:"model-retry",failure:error.failure,
+            ...(error.protocolViolation?{protocolViolation:true}:{}),
+            ...(error.schemaFailure?{schemaFailure:{kind:error.schemaFailure.kind,issues:error.schemaFailure.issues.map(issue=>({
+              path:issue.path,keyword:issue.keyword,...(issue.expected===undefined?{}:{expected:issue.expected}),
+            }))}}:{}),
+            message:"The provider returned an invalid decision format. Retry once with the configured escalation model; no tool was executed."};
         }
       } else {
         const registered = tools.get(capabilityId);
