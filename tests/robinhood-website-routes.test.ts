@@ -33,9 +33,27 @@ beforeEach(() => {
   vi.stubEnv("CRON_SECRET", "a".repeat(48));
 
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("Robinhood website HTTP boundaries", () => {
+  it("returns before the platform deadline and discards a source that settles after cancellation", async () => {
+    vi.useFakeTimers();
+    let finish!: (value: unknown) => void;
+    mocks.source.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const pending = update(new Request("https://website.invalid/api/ops/robinhood-index", {
+      headers: { authorization: `Bearer ${"a".repeat(48)}` },
+    }));
+    await vi.advanceTimersByTimeAsync(165_000);
+    const response = await pending;
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "index_update_unavailable" });
+    expect(mocks.source.mock.calls[0][1].aborted).toBe(true);
+    finish({});
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.sync).not.toHaveBeenCalled();
+    expect(mocks.projectionSource).not.toHaveBeenCalled();
+    expect(mocks.storeWrite).not.toHaveBeenCalled();
+  });
   it("returns an uncached failure when the saved index cannot be read", async () => {
     mocks.read.mockResolvedValue({ chainId: 4663, status: "unavailable", items: [] });
     const response = await list(new Request("https://website.invalid/api/explore/robinhood"));

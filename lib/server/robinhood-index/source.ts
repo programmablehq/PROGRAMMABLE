@@ -59,7 +59,8 @@ async function validateManifest(manifest: Record<string, unknown>) {
   requireMatch((await schemaValidator)(manifest));
 }
 
-export async function robinhoodSource(rpcUrl = process.env.ROBINHOOD_RPC_URL?.trim() || DEFAULT_RPC): Promise<IndexSource> {
+export async function robinhoodSource(rpcUrl = process.env.ROBINHOOD_RPC_URL?.trim() || DEFAULT_RPC, signal?: AbortSignal): Promise<IndexSource> {
+  signal?.throwIfAborted();
   const url = new URL(rpcUrl);
   requireMatch(url.protocol === "https:" && !url.username && !url.password);
   const discovery = asObject(JSON.parse(await developerText(DISCOVERY)));
@@ -82,10 +83,12 @@ export async function robinhoodSource(rpcUrl = process.env.ROBINHOOD_RPC_URL?.tr
   // No provider fallback cascade; a failed range resumes on the next scheduled run.
   let nextRequestAt = 0;
   const rpcFetch: typeof fetch = async (input, init) => {
+    signal?.throwIfAborted();
+    const requestSignal = signal ? AbortSignal.any([signal, ...(init?.signal ? [init.signal] : [])]) : init?.signal;
     const at = Math.max(Date.now(), nextRequestAt);
     nextRequestAt = at + 350;
-    await wait(Math.max(0, at - Date.now()), undefined, { signal: init?.signal ?? undefined });
-    return fetch(input, init);
+    await wait(Math.max(0, at - Date.now()), undefined, { signal: requestSignal ?? undefined });
+    return fetch(input, { ...init, signal: requestSignal });
   };
   const client = createPublicClient({ transport: http(rpcUrl, { fetchFn: rpcFetch, timeout: 8_000, retryCount: 0 }) });
   requireMatch(await client.getChainId() === 4663);

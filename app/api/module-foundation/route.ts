@@ -3,6 +3,7 @@ import type { Address } from "viem";
 import { type FoundationChainId } from "@/lib/module-foundation/chains";
 import { FOUNDATION_AVAILABILITY_SCHEMA_V4, unavailableFoundation } from "@/lib/module-foundation/availability";
 import { FoundationAvailabilityInputError, parseFoundationAvailabilityQuery, readFoundationAvailabilityResponse } from "@/lib/server/module-foundation/availability";
+import { withFoundationReadDeadline } from "@/lib/module-foundation/read-deadline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,7 +17,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   try {
     if (request.url.length > 2_048) throw new FoundationAvailabilityInputError("The lookup request is too long.");
     ({ token, chainId } = parseFoundationAvailabilityQuery(new URL(request.url).searchParams));
-    return NextResponse.json(await readFoundationAvailabilityResponse(fetch, 55_000, token, chainId), { headers });
+    // Include Ethereum verification and the owner catalog in the route budget,
+    // even when a dependency does not observe its transport's abort signal.
+    const value = await withFoundationReadDeadline(
+      () => readFoundationAvailabilityResponse(fetch, 55_000, token, chainId), 55_000, request.signal,
+    );
+    return NextResponse.json(value, { headers });
   } catch (error) {
     if (error instanceof FoundationAvailabilityInputError) return NextResponse.json({ ...unavailable(), reason: error.message }, { status: 400, headers });
     return NextResponse.json({ ...unavailable(), ...(token ? { token: token.toLowerCase() } : {}) }, { headers });
