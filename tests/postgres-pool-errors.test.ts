@@ -18,7 +18,7 @@ it("survives a checked-out socket disconnect and uses a new connection for the n
     socket.on("error", () => undefined);
     let buffer = Buffer.alloc(0), started = false;
     socket.on("data", chunk => {
-      buffer = Buffer.concat([buffer, chunk]);
+      buffer = Buffer.concat([buffer, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]);
       if (!started) {
         if (buffer.length < 4 || buffer.length < buffer.readInt32BE()) return;
         buffer = buffer.subarray(buffer.readInt32BE());
