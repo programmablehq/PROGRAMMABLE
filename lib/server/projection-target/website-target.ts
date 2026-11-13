@@ -2,6 +2,7 @@ import "server-only";
 
 import { X509Certificate } from "node:crypto";
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
+import { handlePostgresPoolErrors } from "../postgres-pool-errors";
 
 import {
   canonicalizeJson,
@@ -350,9 +351,7 @@ export function createProductionProjectionTargetPostgresPoolV1(
     allowExitOnIdle: true,
     application_name: "programmable-website-projection-target-v1",
   });
-  pool.on("error", () => {
-    // Route-level operations surface a bounded 503 without credential or URL data.
-  });
+  handlePostgresPoolErrors(pool);
   return new NodePostgresProjectionTargetPoolV1(pool, expectedRuntimeRole);
 }
 

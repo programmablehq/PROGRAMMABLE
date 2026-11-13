@@ -2,6 +2,7 @@ import { isBriefChat } from "./reply-mode";
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { Pool } from "pg";
+import { handlePostgresPoolErrors } from "../server/postgres-pool-errors";
 import { CHAT_PHASES, CustomAIError, type AIUsage, type ChatPhase, type ChatRequest, type ChatResult } from "./types";
 import type { ExecutionProfile } from "./ai-config";
 import { refundsProviderFailure } from "./provider-errors";
@@ -319,7 +320,7 @@ export function productionAIPool(): AIPool {
     rejectUnauthorized: true, servername: url.hostname,
     ...(process.env.CUSTOM_AI_DATABASE_CA ? { ca: process.env.CUSTOM_AI_DATABASE_CA } : {}),
   }, max: 4, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000, allowExitOnIdle: true });
-  pool.on("error", () => undefined);
+  handlePostgresPoolErrors(pool);
   productionPool = pool;
   return pool;
 }
