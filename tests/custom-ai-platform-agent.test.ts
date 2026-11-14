@@ -3,12 +3,13 @@ import { PGlite } from "@electric-sql/pglite";
 vi.mock("server-only", () => ({}));
 import { createPlatformStore } from "../lib/custom-ai/platform/project-store.server";
 import { createRunStore } from "../lib/custom-ai/platform/runs.server";
-import { createProjectAgent, type AgentDecision, type ProjectTool } from "../lib/custom-ai/platform/agent.server";
+import { createProjectAgent, type AgentDecision, type ProjectTool, type ToolContext } from "../lib/custom-ai/platform/agent.server";
 import { CUSTOM_AI_SCHEMA, type AIPool } from "../lib/custom-ai/store.server";
 import { PROJECT_PLATFORM_SCHEMA } from "../lib/custom-ai/platform/schema.generated";
 import type { WorkerGrantClaims } from "../lib/custom-ai/platform/protocol.generated";
 import {CustomAIError} from "../lib/custom-ai/types";
 import {ModelResponseError} from "../lib/custom-ai/model-response";
+import {ProjectError} from "../lib/custom-ai/platform/types";
 
 let db: PGlite, runs: ReturnType<typeof createRunStore>, projects: ReturnType<typeof createPlatformStore>, revisionId: string;
 const scope = { ownerId: "alice", projectId: "11111111-1111-4111-8111-111111111111" };
@@ -18,7 +19,7 @@ beforeEach(async () => {
     return {query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release}; } };
   projects = createPlatformStore(pool); revisionId = (await projects.createProject(scope)).revisionId;
   runs = createRunStore(pool, { allowance: {hourlyUnits:25,dailyUnits:100,globalDailyUnits:200,concurrent:1},leaseMs:60000,
-    capabilities: {"model.plan":{units:1,effect:"read",operations:["plan","build"]},"project.patch":{units:1,effect:"write",operations:["build"]}} });
+    capabilities: {"model.plan":{units:1,effect:"read",operations:["plan","build"]},"project.patch":{units:1,effect:"write",operations:["build"]},"project.plan":{units:1,effect:"write",operations:["plan","build"]}} });
 });
 afterEach(async()=>{vi.restoreAllMocks();await db.close();});
 const start=async(operation:"plan"|"build"="build")=>{
@@ -84,6 +85,48 @@ describe("durable project agent",()=>{
     expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
     await agent.advance(grant,lease.token);
     expect(choose.mock.calls[1][0].steps.at(-1)?.result).toMatchObject({ok:false,code:"intent"});
+  });
+  it.each(["project-requirements","project-check-target"])("stops before a third rejected plan change (%s) across worker advances",async code=>{
+    const {grant,lease}=await start();
+    const execute=vi.fn(async()=>{throw new ProjectError(code,"Keep the saved rules and checks.",409);});
+    const choose=vi.fn(async():Promise<AgentDecision>=>({kind:"tool",tool:"project.plan",input:{},message:"Update the plan",claim:"planned"}));
+    const agent=()=>createProjectAgent({runs,projects,tools:[{id:"project.plan",version:"1",description:"Plan",schema:{type:"object"},execute}],choose,assess:async()=>({level:"discussed"})});
+    for(let n=0;n<8;n++){if((await agent().advance(grant,lease.token)).run.status!=="running")break;}
+    expect(execute).toHaveBeenCalledTimes(2);expect(choose).toHaveBeenCalledTimes(3);
+    expect(await runs.readRun(scope,grant.runId)).toMatchObject({status:"waiting_user",usedUnits:5,summary:expect.stringContaining("two rejected attempts")});
+    expect((await projects.readProject(scope)).revisionId).toBe(revisionId);
+  });
+  it("allows a corrected plan after one saved-rule rejection",async()=>{
+    const {grant,lease}=await start();let attempts=0;
+    const execute=vi.fn(async(context:ToolContext)=>{
+      if(++attempts===1)throw new ProjectError("project-check-target","Keep the saved checks.",409);
+      const revision=await projects.applyProjectPatch({...scope,expectedRevisionId:context.revision.revisionId,idempotencyKey:context.stepId,
+        patch:{files:{"app.js":"export const corrected = true;"}},execution:{runId:grant.runId,leaseToken:lease.token}});
+      return {revisionId:revision.revisionId};
+    });
+    const choose=vi.fn(async():Promise<AgentDecision>=>execute.mock.calls.length<2?{kind:"tool",tool:"project.plan",input:{},message:"Correct the plan",claim:"planned"}:{kind:"reply",tool:null,input:null,message:"The correction is saved.",claim:"built"});
+    const agent=createProjectAgent({runs,projects,tools:[{id:"project.plan",version:"1",description:"Plan",schema:{type:"object"},execute}],choose,assess:async()=>({level:"built"})});
+    for(let n=0;n<8;n++){if((await agent.advance(grant,lease.token)).run.status!=="running")break;}
+    expect(execute).toHaveBeenCalledTimes(2);expect((await runs.readRun(scope,grant.runId)).status).toBe("succeeded");
+    expect((await projects.readProject(scope)).document.files["app.js"]).toContain("corrected");
+  });
+  it("allows source repair and resets rejected-plan attempts after actual saved revision progress",async()=>{
+    const {grant,lease}=await start();let next=0;
+    const plan=vi.fn(async()=>{throw new ProjectError("project-check-target","Keep the saved checks.",409);});
+    const patch=vi.fn(async(context:ToolContext)=>{
+      const revision=await projects.applyProjectPatch({...scope,expectedRevisionId:context.revision.revisionId,idempotencyKey:context.stepId,
+        patch:{files:{"app.js":"export const repaired = true;"}},execution:{runId:grant.runId,leaseToken:lease.token}});
+      return {revisionId:revision.revisionId};
+    });
+    const choose=async():Promise<AgentDecision>=>{
+      const tool=["project.plan","project.plan","project.patch","project.plan"][next++];
+      return tool?{kind:"tool",tool,input:{},message:"Work on the saved project",claim:"planned"}:{kind:"reply",tool:null,input:null,message:"The source repair is saved.",claim:"built"};
+    };
+    const tools:ProjectTool[]=[{id:"project.plan",version:"1",description:"Plan",schema:{type:"object"},execute:plan},{id:"project.patch",version:"1",description:"Repair source",schema:{type:"object"},execute:patch}];
+    const agent=createProjectAgent({runs,projects,tools,choose,assess:async()=>({level:"built"})});
+    for(let n=0;n<12;n++){if((await agent.advance(grant,lease.token)).run.status!=="running")break;}
+    expect(plan).toHaveBeenCalledTimes(3);expect(patch).toHaveBeenCalledOnce();
+    expect((await runs.readRun(scope,grant.runId)).status).toBe("succeeded");expect((await projects.readProject(scope)).document.files["app.js"]).toContain("repaired");
   });
   it("stops before a third automatic repair after failed behavior checks",async()=>{
     const pool:AIPool={connect:async()=>({query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release(){}})};

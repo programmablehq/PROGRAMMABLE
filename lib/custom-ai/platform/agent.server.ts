@@ -41,10 +41,14 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
     const controller = new AbortController();
     try {
       const work = await runs.readWork(scope, grant.runId, leaseToken), steps = work.steps as Step[];
-      let revisionId = work.run.revisionId;
+      let revisionId = work.run.revisionId, rejectedPlans = 0;
       for (const step of steps) if (step.state === "completed" && step.capability_id !== "model.plan" && step.result && typeof step.result === "object" && !Array.isArray(step.result)) {
         const result = step.result as Record<string, JsonValue>;
-        if (result.ok === true && result.value && typeof result.value === "object" && !Array.isArray(result.value) && typeof result.value.revisionId === "string") revisionId = result.value.revisionId;
+        if (result.ok === true && result.value && typeof result.value === "object" && !Array.isArray(result.value) && typeof result.value.revisionId === "string") {
+          if (result.value.revisionId !== revisionId) rejectedPlans = 0;
+          revisionId = result.value.revisionId;
+        } else if (step.capability_id === "project.plan" && result.ok === false && typeof result.code === "string"
+          && ["project-requirements", "project-check-target"].includes(result.code)) rejectedPlans += 1;
       }
       const revision = await projects.readRevision(scope, revisionId), signal = AbortSignal.any([controller.signal, AbortSignal.timeout(250000), ...(externalSignal ? [externalSignal] : [])]);
       let checking = false;
@@ -70,6 +74,8 @@ export function createProjectAgent(dependencies: { runs: ReturnType<typeof creat
         stepId = `step-${work.run.cursor}`; capabilityId = "model.plan";
         input = { revisionId, registryHash: projectHash(dependencies.tools.map(({ id, version, schema }) => ({ id, version, schema }))) };
       }
+      if (!pending && capabilityId === "project.plan" && rejectedPlans >= 2) return { run: await runs.finishRun(scope, grant.runId, leaseToken,
+        "I couldn't apply this plan change while preserving the saved rules and checks. I stopped after two rejected attempts; your saved work is kept. Review the rejected change before continuing.", "waiting_user") };
       if (Number(work.run.cursor) >= 23 && !pending) return { run: await runs.finishRun(scope, grant.runId, leaseToken, "This work unit reached its step limit. The project and completed checks are saved; continue from this revision.") };
       if(!pending&&["project.patch","project.dependencies","contract.dependencies"].includes(capabilityId)){
         const failures=new Map<string,number>();
