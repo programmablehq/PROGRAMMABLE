@@ -106,7 +106,7 @@ function failures(value) {
     "node scripts/programmable-launch-v4-release-binding.mjs verify-release-ready",
     "npm run release:custom-launch:v4:clean-room:test",
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1' || inputs.version == '4.4.2') && 'v4.1/' || '' }}programmable-backend-authorization.json",
     "startsWith(inputs.version, '4.')",
     'finalizer="contracts/scripts/finalize-robinhood-custom-launch-deployment.mjs"',
     'finalizer="contracts/scripts/finalize-robinhood-custom-launch-v41-deployment.mjs"',
@@ -253,7 +253,7 @@ function failures(value) {
   const freshLines = new Set(freshStep.split("\n").map(line => line.trim()));
   for (const requiredInput of [
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1' || inputs.version == '4.4.2') && 'v4.1/' || '' }}programmable-backend-authorization.json",
     'test -f "$PROGRAMMABLE_PRODUCTION_VERIFY_PROOF"',
     'test -f "$PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION"',
   ]) {
@@ -264,7 +264,7 @@ function failures(value) {
   const downloadLines = new Set(downloadStep.split("\n").map(line => line.trim()));
   for (const requiredInput of [
     "PROGRAMMABLE_PRODUCTION_VERIFY_PROOF: ${{ runner.temp }}/production-verify-proof/production-verify-proof.json",
-    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+    "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1' || inputs.version == '4.4.2') && 'v4.1/' || '' }}programmable-backend-authorization.json",
   ]) {
     if (!downloadLines.has(requiredInput)) missing.push(`download verification must receive ${requiredInput}`);
   }
@@ -443,7 +443,7 @@ test("release workflow contract mutations fail closed", () => {
     source.replace("node scripts/programmable-launch-v4-release-binding.mjs verify-release-ready", "echo unbound"),
     source.replace("npm run release:custom-launch:v4:clean-room:test", "echo skipped-clean-room-contract"),
     source.replaceAll(
-      "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1') && 'v4.1/' || '' }}programmable-backend-authorization.json",
+      "PROGRAMMABLE_ROBINHOOD_BACKEND_AUTHORIZATION: ${{ github.workspace }}/release/robinhood-chain-4663/${{ (inputs.version == '4.1.0' || inputs.version == '4.1.1' || inputs.version == '4.1.2' || inputs.version == '4.1.3' || inputs.version == '4.1.4' || inputs.version == '4.1.5' || inputs.version == '4.1.6' || inputs.version == '4.1.7' || inputs.version == '4.2.0' || inputs.version == '4.3.0' || inputs.version == '4.4.0' || inputs.version == '4.4.1' || inputs.version == '4.4.2') && 'v4.1/' || '' }}programmable-backend-authorization.json",
       "",
     ),
     source.replace("node scripts/programmable-launch-release-assets.mjs build", "echo fabricated"),
