@@ -15,6 +15,22 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { server.close(); await once(server, "close"); });
 
+for (const [chainId, name] of [["8453", "Base"], ["999", "HyperEVM"], ["99901", "Elysium"]]) {
+  test(`owned ${name} launches remain visible in the workspace and direct links`, async ({ page }) => {
+    await page.goto(origin + "?scenario=workspace-history");
+    const workspace = page.getByRole("region", { name: "Your launches" });
+    await expect(workspace.getByRole("status")).toHaveText("3 launches");
+    await workspace.getByRole("combobox", { name: "Chain" }).selectOption(chainId);
+    await expect(workspace.locator("li")).toHaveCount(1);
+    await expect(workspace.locator("li")).toContainText(name);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
+    await page.goto(`${origin}?scenario=workspace-history&launchId=${launchId}&chainId=${chainId}`);
+    await expect(page.getByRole("button", { name: "All launches", exact: false })).toBeVisible();
+    expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+  });
+}
+
 for (const width of [1440, 390]) test(`one visible signing action at ${width}px`, async ({ page }, info) => {
   await page.setViewportSize({ width, height: 900 });
   await page.goto(origin);

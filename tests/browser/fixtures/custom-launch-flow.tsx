@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { useState } from "react";
 import { DeveloperUniversalLaunchHistory } from "../../../components/developer-universal-launch-history";
+import { DeveloperLaunchWorkspace } from "../../../components/developer-launch-workspace";
 import { CustomLaunchCompletion } from "../../../components/custom-launch-completion";
 import { beginLaunchSendV1, rejectLaunchSendV1, rememberLaunchHashV1 } from "../../../lib/custom-launch/launch-send-journal-v1";
 import { discoverUniversalLaunchTransactionV1 } from "../../../lib/custom-launch/launch-transaction-discovery-v1";
@@ -87,6 +88,24 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
 
 window.fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
+  if (mode === "workspace-history") {
+    if (url.pathname.startsWith("/api/developer/custom-launch-plans")) return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches: [], nextCursor: null });
+    if (url.pathname.startsWith("/api/developer/custom-launches")) {
+      const chainId = url.searchParams.get("chainId") ?? "1";
+      const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
+      const resource = { schemaVersion: "programmable.custom-launch.v3", routeId: "custom-launch:create:v3", chainId,
+        launchId, requestId: launchId, ownerWallet: controller, onchainLaunchId: null, status: "pending_review",
+        requestHash: `sha256:${"55".repeat(32)}`, launchProfileVersion: "3.1.0", launchProfileHash: `sha256:${"66".repeat(32)}`,
+        launchIntentHash: `sha256:${"77".repeat(32)}`, projectMetadata: null, projectMetadataHash: null, fundingIntentHash: null,
+        liquidityIntent: { model: "external-concentrated-liquidity", declaredLaunchState: "liquidity_required", binding: "legacy-v3-default" },
+        createdAt: new Date(now * 1000).toISOString(), updatedAt: new Date(now * 1000).toISOString(), output: null, failure: null,
+        manualReview: { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: launchId, chainId, controller,
+          subjectHash: `sha256:${"ab".repeat(32)}`, state: "pending", revision: 1, submittedAt: new Date(now * 1000).toISOString(),
+          approvedAt: null, expiresAt: null, reason: null } };
+      return Response.json(url.pathname.endsWith(launchId) ? resource : { schemaVersion: "programmable.custom-launch-history.v1",
+        launches: chainId === "1" ? [] : [resource], nextCursor: null });
+    }
+  }
   if (url.pathname === "/api/launch-destination") return control.indexed ? Response.json({
     schemaVersion:"programmable.website-launch-destination.v1",status:"indexed",chainId:mode.endsWith("-1")?"1":"4663",
     launchId:`0x${"9".repeat(64)}`,controller,transactionHash:hash,tokenAddress:component,
@@ -172,4 +191,11 @@ createRoot(document.getElementById("root")!).render(<main className={`${styles.p
       reason: "Please clarify liquidity ownership before approval." } };
   }}>Fixture: request changes</button> : null}
   {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} />
+    : mode === "workspace-history" ? <DeveloperLaunchWorkspace account={controller}
+      initialLaunchId={new URLSearchParams(location.search).get("launchId")}
+      initialLaunchChainId={new URLSearchParams(location.search).get("chainId") as "8453" | "999" | "99901" | null}
+      getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} openWallet={() => { throw new Error("No wallet action expected"); }}
+      sendCustomLaunchWalletAction={async () => { throw new Error("No wallet action expected"); }}
+      sendCustomLaunchWalletActionV4={async () => { throw new Error("No wallet action expected"); }}
+      signCustomLaunchFundingAuthorization={async () => { throw new Error("No wallet action expected"); }} />
     : mode === "session-refresh" ? <SessionRefreshFixture /> : <DeveloperUniversalLaunchHistory account={controller} initialLaunchId={record.planId} getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} sendWallet={sendWallet} />}</main>);

@@ -46,8 +46,9 @@ export function DeveloperLaunchWorkspace(props: Props) {
     }
     const now = Date.now();
     if (legacy) {
-      const launch = id ? parseLaunch(body, props.account) : null;
-      const page = id ? launch ? { launches: [launch], nextCursor: null } : null : parseHistoryPage(body, props.account);
+      const chainId = source === "base" ? "8453" : source === "hyperevm" ? "999" : source === "elysium" ? "99901" : "1";
+      const launch = id ? parseLaunch(body, props.account, chainId) : null;
+      const page = id ? launch ? { launches: [launch], nextCursor: null } : null : parseHistoryPage(body, props.account, chainId);
       if (!page) throw new Error("API_RESPONSE_INVALID");
       return { source, items: page.launches.map(item => launchOverviewItem(item as unknown as Record<string, unknown>, "legacy", now)), nextCursor: page.nextCursor };
     }
