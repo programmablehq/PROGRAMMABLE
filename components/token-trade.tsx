@@ -385,6 +385,7 @@ export function TokenTrade({
   const [maxPending, setMaxPending] = useState(false);
   const [balanceState, setBalanceState] =
     useState<WalletTradeBalanceState | null>(null);
+  const formBusy = pending || maxPending;
   const amountInputId = useId();
   const amountErrorId = useId();
   const slippageInputId = useId();
@@ -464,6 +465,7 @@ export function TokenTrade({
   }, [activeInputAsset, owner, readBalances]);
 
   async function applyMaximumBalance() {
+    if (formBusy) return;
     setError("");
     setAmountInvalid(false);
     setSlippageInvalid(false);
@@ -513,6 +515,7 @@ export function TokenTrade({
 
   async function prepare(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (formBusy) return;
     setError("");
     setAmountInvalid(false);
     setSlippageInvalid(false);
@@ -654,7 +657,7 @@ export function TokenTrade({
       className={styles.tradeForm}
       onSubmit={prepare}
       aria-label={`Trade ${symbol}`}
-      aria-busy={pending}
+      aria-busy={formBusy}
     >
       <div className={styles.sideControl} role="group" aria-label="Trade side">
         <span
@@ -671,6 +674,7 @@ export function TokenTrade({
             key={option}
             type="button"
             aria-pressed={side === option}
+            disabled={formBusy}
             onClick={() => {
               setSide(option);
               setAmount("");
@@ -698,7 +702,7 @@ export function TokenTrade({
             <button
               className={styles.maxButton}
               type="button"
-              disabled={maxPending || !owner}
+              disabled={formBusy || !owner}
               aria-label={`Use maximum ${
                 side === "buy" ? "ETH" : symbol
               } balance`}
@@ -718,6 +722,7 @@ export function TokenTrade({
             aria-invalid={amountInvalid || undefined}
             aria-describedby={amountInvalid ? amountErrorId : undefined}
             value={amount}
+            disabled={formBusy}
             onChange={(event) => {
               setAmount(event.target.value);
               if (error) setError("");
@@ -764,6 +769,7 @@ export function TokenTrade({
                 list={slippagePresetsId}
                 maxLength={5}
                 value={slippagePercent}
+                disabled={formBusy}
                 onChange={(event) => {
                   setSlippagePercent(event.target.value);
                   if (error) setError("");
@@ -797,7 +803,7 @@ export function TokenTrade({
         <button
           className={styles.primaryAction}
           type={owner ? "submit" : "button"}
-          disabled={pending}
+          disabled={formBusy}
           onClick={owner ? undefined : onConnect}
         >
           {pending

@@ -622,6 +622,11 @@
   width: 100%;
 }
 
+.customMarketOption:has(.customMarketOptionInput:disabled) {
+  cursor: default;
+  opacity: 0.65;
+}
+
 .customMarketOption[data-selected="true"] {
   background: var(--liquid-glass-control-background-hover);
   border-color: color-mix(in srgb, var(--token-accent) 46%, var(--liquid-glass-border));
@@ -1085,6 +1090,11 @@
 
 .sideButtonSelected {
   color: var(--text);
+}
+
+.sideButton:disabled {
+  color: var(--dim);
+  cursor: default;
 }
 
 .sideIndicator {
