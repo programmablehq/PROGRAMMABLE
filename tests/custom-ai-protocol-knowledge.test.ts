@@ -13,9 +13,9 @@ describe("protocol knowledge and model routing",()=>{
     execFileSync(process.execPath,["scripts/custom-ai/build-interface-catalog.mjs","--check"]);
     for(const chain of [1,4663,8453,999] as const){
       const context=canonicalInterfaceContext(chain),sources=canonicalGeneralSourceCatalog(undefined,chain);
-      expect(context.contracts).toHaveLength(5);
+      expect(context.contracts).toHaveLength(chain === 1 || chain === 4663 ? 7 : 5);
       expect(context.contracts.every(contract=>sources[contract.source])).toBe(true);
-      expect(context.construction).toHaveLength(5);
+      expect(context.construction).toHaveLength(context.contracts.length);
       for(const item of context.construction){
         expect(sources[item.source].content).toContain(item.constructorSource);
         expect(item.constructorSource.length).toBeLessThan(24001);

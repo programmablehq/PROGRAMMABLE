@@ -78,6 +78,9 @@ describe("profile-selected Robinhood well-known discovery", () => {
     // Keep the frozen Robinhood proof and independently verify the additive HyperEVM surface.
     for (const profile of [historical.customLaunchApi.ethereumProfileSelection, historical.customLaunchApi.integrationPreview.profileSelection,
       historical.customLaunchApi.generalHookProfile.profileSelection, historical.customLaunchApi.versions.v3.profileSelection]) {
+      expect(profile.profile36.supportedProgrammableTradeFeePolicyHashes).toContain("sha256:14fa8dff2aca726c5b404b41f1b11fadb1456d3057e25ee33379319b26952b58");
+      profile.profile36.supportedProgrammableTradeFeePolicyHashes = profile.profile36.supportedProgrammableTradeFeePolicyHashes
+        .filter((hash: string) => hash !== "sha256:14fa8dff2aca726c5b404b41f1b11fadb1456d3057e25ee33379319b26952b58");
       profile.cli.sourceCandidateVersion = "4.2.0";
       profile.cli.releaseTag = "programmable-launch-v4.2.0";
       profile.cli.releaseUrl = "https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.2.0";

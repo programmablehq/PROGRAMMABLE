@@ -15,6 +15,8 @@ import {canonicalBrowserSha256V2} from "@/lib/custom-launch/browser-authority-v2
 // These exact library sources are shared by the three published protection
 // packages. No runtime downloads, package installs or filesystem imports occur.
 const libraries = Object.fromEntries(Object.entries(sourcePackage.sources).filter(([path]) => path.startsWith("lib/")));
+const automaticLaunchSources = Object.fromEntries(Object.entries(automaticFeeSourcePackage.sources).filter(([path]) =>
+  path.startsWith("src/automatic-platform-fees-v1/") && !path.endsWith("/RobinhoodPlatformFeeRouterV1.sol")));
 
 /** Additional pinned helpers are opt-in to source implementation, so chat and
  * source-blind planning do not receive their complete bodies on every request. */
@@ -33,7 +35,7 @@ export function canonicalGeneralLibraries(previous?: ContractProject): ContractP
 export function canonicalGeneralSourceCatalog(previous: ContractProject | undefined, chainId: BuilderChainId): ContractProject["sources"] {
   builderChain(chainId);
   const kit = chainId === 99901 ? elysiumSourcePackage : chainId === 8453 ? baseSourcePackage : chainId === 999 ? hyperSourcePackage : sourcePackage;
-  return sourceCatalog((chainId===1||chainId===4663)?{...kit.sources,...automaticFeeSourcePackage.sources}:kit.sources, previous);
+  return sourceCatalog((chainId===1||chainId===4663)?{...kit.sources,...automaticLaunchSources}:kit.sources, previous);
 }
 
 const interfaceCache=new Map<BuilderChainId,CanonicalInterfaceContext>();

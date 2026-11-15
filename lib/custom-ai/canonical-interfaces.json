@@ -64,7 +64,7 @@
       {
         "source": "src/automatic-platform-fees-v1/AutomaticProtectedNative30HookV1.sol",
         "contract": "AutomaticProtectedNative30HookV1",
-        "sourceSha256": "856590f3d5be0d1a5b2ab249a978308edef1c87052c0d480833d48e87c066acd",
+        "sourceSha256": "9837769bfdd9b38d8f22d0164cf2ce1545be028380e816a841482637f22b3955",
         "constructor": "address,(address,uint24,int24,uint160,address,address,uint16,uint16,address,uint24),address,address,bytes32,address[6],address,bytes32",
         "functions": [
           "function CANONICAL_POOL_MANAGER() view returns (address)",
@@ -117,7 +117,7 @@
       {
         "source": "src/automatic-platform-fees-v1/AutomaticNativeFeeVaultV1.sol",
         "contract": "AutomaticNativeFeeVaultV1",
-        "sourceSha256": "045914f2ccc348b317df8b667f89cbb8e6623506c375db60c79fa5d594ba31e5",
+        "sourceSha256": "21ee8dde34039b7b3ba51856eb7a8b6f89e0eec771095c97bf468167d632d224",
         "constructor": "address,address,address,bytes32",
         "functions": [
           "function AUTOMATIC_PAYOUT_GAS() view returns (uint256)",
