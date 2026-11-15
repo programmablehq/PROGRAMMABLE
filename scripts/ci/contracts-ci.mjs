@@ -55,6 +55,7 @@ export const CONTRACT_CI_RELEASE = Object.freeze([
   ["npm", "run", "contracts:robinhood:owner-envelope:test"],
   // All default-profile artifact consumers have finished before the via-IR
   // profile writes its own compiler outputs. This avoids switching back.
+  ["forge-auto", "test"],
   ["forge-ai", "test"],
   ["node", "scripts/custom-ai/export-composable.mjs", "--check"],
   ["forge-late", "lint", "src/late-migration"],
@@ -120,11 +121,11 @@ export function validateBuildReceipt(receipt, expected) {
 }
 
 function execute([command, ...args], { capture = false } = {}) {
-  const isForge = ["forge", "forge-late", "forge-ai"].includes(command);
+  const isForge = ["forge", "forge-late", "forge-ai", "forge-auto"].includes(command);
   const customAIAnalysis = command === "slither-ai";
   return execFileSync(isForge ? "forge" : customAIAnalysis ? "slither" : command, args, {
     cwd: isForge || customAIAnalysis ? contracts : root,
-    env: { ...process.env, ...(isForge || customAIAnalysis ? { FOUNDRY_PROFILE: command === "forge-late" ? "late-migration" : command === "forge-ai" || customAIAnalysis ? "custom-ai" : "default" } : {}) },
+    env: { ...process.env, ...(isForge || customAIAnalysis ? { FOUNDRY_PROFILE: command === "forge-auto" ? "automatic-platform-fees" : command === "forge-late" ? "late-migration" : command === "forge-ai" || customAIAnalysis ? "custom-ai" : "default" } : {}) },
     encoding: capture ? "utf8" : undefined,
     maxBuffer: 32 * 1024 * 1024,
     stdio: capture ? ["ignore", "pipe", "inherit"] : "inherit",

@@ -90,15 +90,22 @@ contract RobinhoodPlatformFeeRouterV1 is EIP712, ReentrancyGuardTransient, IUnlo
     }
 
     /// @notice Retry an ETH payout to the same wallet; no caller-selected destination.
-    function payNative() external nonReentrant { _payNative(); }
+    function payNative() external nonReentrant {
+        _payNative();
+    }
 
     function _payNative() private {
         uint256 amount = nativeReserve;
         if (amount == 0) return;
         nativeReserve = 0;
         (bool paid,) = TEAM_WALLET.call{ value: amount, gas: MAX_NATIVE_PAYOUT_GAS }("");
-        if (paid) { totalNativePaid += amount; emit NativePaid(amount); }
-        else { nativeReserve = amount; emit NativePayoutDeferred(amount); }
+        if (paid) {
+            totalNativePaid += amount;
+            emit NativePaid(amount);
+        } else {
+            nativeReserve = amount;
+            emit NativePayoutDeferred(amount);
+        }
     }
 
     function mainPoolKey() public pure returns (PoolKey memory) {
@@ -106,21 +113,36 @@ contract RobinhoodPlatformFeeRouterV1 is EIP712, ReentrancyGuardTransient, IUnlo
     }
 
     function orderDigest(BuybackOrder calldata order) public view returns (bytes32) {
-        return _hashTypedDataV4(keccak256(abi.encode(ORDER_TYPEHASH, order.nonce, order.amountIn,
-            order.minimumOut, order.sqrtPriceLimitX96, order.validAfter, order.deadline)));
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    ORDER_TYPEHASH,
+                    order.nonce,
+                    order.amountIn,
+                    order.minimumOut,
+                    order.sqrtPriceLimitX96,
+                    order.validAfter,
+                    order.deadline
+                )
+            )
+        );
     }
 
     /// @notice Anyone may submit a fresh price-bound order; gas never comes out of the 80/20 allocation.
     function executeBuyback(BuybackOrder calldata order, bytes calldata signature)
-        external nonReentrant returns (uint256 delivered)
+        external
+        nonReentrant
+        returns (uint256 delivered)
     {
-        if (order.nonce != nextNonce || order.amountIn == 0 || order.amountIn > MAX_BUYBACK_AMOUNT
-            || order.amountIn > buybackReserve || order.minimumOut == 0
-            || order.validAfter > block.timestamp || order.deadline < block.timestamp
-            || order.deadline < order.validAfter || order.deadline - order.validAfter > MAX_ORDER_LIFETIME
-            || order.sqrtPriceLimitX96 <= TickMath.MIN_SQRT_PRICE
-            || order.sqrtPriceLimitX96 >= TickMath.MAX_SQRT_PRICE
-            || ECDSA.recover(orderDigest(order), signature) != quoteSigner) revert InvalidOrder();
+        if (
+            order.nonce != nextNonce || order.amountIn == 0 || order.amountIn > MAX_BUYBACK_AMOUNT
+                || order.amountIn > buybackReserve || order.minimumOut == 0 || order.validAfter > block.timestamp
+                || order.deadline < block.timestamp || order.deadline < order.validAfter
+                || order.deadline - order.validAfter > MAX_ORDER_LIFETIME
+                || order.sqrtPriceLimitX96 <= TickMath.MIN_SQRT_PRICE
+                || order.sqrtPriceLimitX96 >= TickMath.MAX_SQRT_PRICE
+                || ECDSA.recover(orderDigest(order), signature) != quoteSigner
+        ) revert InvalidOrder();
         _requireInfrastructure();
         uint256 beforeBalance = IERC20(V4_TOKEN).balanceOf(TEAM_WALLET);
         buybackReserve -= order.amountIn;
@@ -137,14 +159,18 @@ contract RobinhoodPlatformFeeRouterV1 is EIP712, ReentrancyGuardTransient, IUnlo
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(POOL_MANAGER) || activeOrder == bytes32(0)
-            || keccak256(data) != activeOrder) revert UnauthorizedCallback();
+        if (msg.sender != address(POOL_MANAGER) || activeOrder == bytes32(0) || keccak256(data) != activeOrder) {
+            revert UnauthorizedCallback();
+        }
         activeOrder = bytes32(0);
         BuybackOrder memory order = abi.decode(data, (BuybackOrder));
-        BalanceDelta delta = POOL_MANAGER.swap(mainPoolKey(),
-            SwapParams(true, -int256(uint256(order.amountIn)), order.sqrtPriceLimitX96), "");
-        if (int256(delta.amount0()) != -int256(uint256(order.amountIn)) || delta.amount1() <= 0
-            || uint256(uint128(delta.amount1())) < order.minimumOut) revert InvalidSettlement();
+        BalanceDelta delta = POOL_MANAGER.swap(
+            mainPoolKey(), SwapParams(true, -int256(uint256(order.amountIn)), order.sqrtPriceLimitX96), ""
+        );
+        if (
+            int256(delta.amount0()) != -int256(uint256(order.amountIn)) || delta.amount1() <= 0
+                || uint256(uint128(delta.amount1())) < order.minimumOut
+        ) revert InvalidSettlement();
         POOL_MANAGER.sync(Currency.wrap(address(0)));
         if (POOL_MANAGER.settle{ value: order.amountIn }() != order.amountIn) revert InvalidSettlement();
         POOL_MANAGER.take(Currency.wrap(V4_TOKEN), TEAM_WALLET, uint256(uint128(delta.amount1())));
@@ -160,7 +186,9 @@ contract RobinhoodPlatformFeeRouterV1 is EIP712, ReentrancyGuardTransient, IUnlo
     }
 
     function _requireInfrastructure() private view {
-        if (address(POOL_MANAGER).codehash != MANAGER_HASH || MAIN_HOOK.codehash != HOOK_HASH
-            || V4_TOKEN.codehash != TOKEN_HASH) revert InvalidConfiguration();
+        if (
+            address(POOL_MANAGER).codehash != MANAGER_HASH || MAIN_HOOK.codehash != HOOK_HASH
+                || V4_TOKEN.codehash != TOKEN_HASH
+        ) revert InvalidConfiguration();
     }
 }

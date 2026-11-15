@@ -158,7 +158,9 @@ contract AutomaticProtectedNative30HookV1 is BaseHook {
         creatorBuyFeeBps = config.creatorBuyFeeBps;
         creatorSellFeeBps = config.creatorSellFeeBps;
         // Keep the normal fee vault as CREATE child 1 for canonical native-fee proof compatibility.
-        feeVault = new AutomaticNativeFeeVaultV1(manager, config.creatorFeeRecipient, platformFeeRouter_, platformFeeRouterCodeHash_);
+        feeVault = new AutomaticNativeFeeVaultV1(
+            manager, config.creatorFeeRecipient, platformFeeRouter_, platformFeeRouterCodeHash_
+        );
         platformFeeRouter = feeVault.PLATFORM_RECIPIENT();
         PLATFORM_RECIPIENT = platformFeeRouter;
         platformFeeRouterCodeHash = platformFeeRouterCodeHash_;

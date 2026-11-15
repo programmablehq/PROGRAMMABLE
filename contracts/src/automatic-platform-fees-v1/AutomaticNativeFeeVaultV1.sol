@@ -41,17 +41,23 @@ contract AutomaticNativeFeeVaultV1 is IUnlockCallback {
         address expectedManager = block.chainid == 1
             ? 0x000000000004444c5dc75cB358380D2e3dE08A90
             : block.chainid == 4663 ? 0x8366a39CC670B4001A1121B8F6A443A643e40951 : address(0);
-        if (expectedManager == address(0) || address(manager) != expectedManager || expectedManager.code.length == 0
-            || creator == address(0)) revert InvalidConfiguration();
+        if (
+            expectedManager == address(0) || address(manager) != expectedManager || expectedManager.code.length == 0
+                || creator == address(0)
+        ) revert InvalidConfiguration();
         if (block.chainid == 1) {
             if (router != address(0) || routerCodeHash != bytes32(0)) revert InvalidConfiguration();
             PLATFORM_RECIPIENT = TEAM_WALLET;
         } else {
-            if (router == address(0) || routerCodeHash == bytes32(0) || router.code.length == 0
-                || router.codehash != routerCodeHash) revert InvalidConfiguration();
+            if (
+                router == address(0) || routerCodeHash == bytes32(0) || router.code.length == 0
+                    || router.codehash != routerCodeHash
+            ) revert InvalidConfiguration();
             IProgrammablePlatformFeeRouterV1 policy = IProgrammablePlatformFeeRouterV1(router);
-            if (policy.TEAM_WALLET() != TEAM_WALLET || policy.SUPPORTED_CHAIN_ID() != 4663
-                || policy.BUYBACK_SHARE_BPS() != 8000 || policy.POLICY_ID() != POLICY_ID) revert InvalidConfiguration();
+            if (
+                policy.TEAM_WALLET() != TEAM_WALLET || policy.SUPPORTED_CHAIN_ID() != 4663
+                    || policy.BUYBACK_SHARE_BPS() != 8000 || policy.POLICY_ID() != POLICY_ID
+            ) revert InvalidConfiguration();
             PLATFORM_RECIPIENT = router;
         }
         poolManager = manager;
@@ -73,7 +79,8 @@ contract AutomaticNativeFeeVaultV1 is IUnlockCallback {
             if (gasleft() <= AUTOMATIC_PAYOUT_GAS + 60_000) revert InsufficientForwardGas();
             // The originating hook already unlocked the manager. A new unlock here would fail.
             // The self-call rolls back burns and transfers together if the recipient cannot receive.
-            try this.forwardWhileUnlocked{ gas: AUTOMATIC_PAYOUT_GAS }() {} catch {
+            try this.forwardWhileUnlocked{ gas: AUTOMATIC_PAYOUT_GAS }() { }
+            catch {
                 emit AutomaticPayoutDeferred(platformAccrued);
             }
         }
@@ -113,8 +120,12 @@ contract AutomaticNativeFeeVaultV1 is IUnlockCallback {
         claimActive = true;
         bytes memory data = abi.encode(recipient, amount);
         activeClaim = keccak256(data);
-        if (platform) { platformAccrued = 0; totalPlatformPaid += amount; }
-        else creatorAccrued = 0;
+        if (platform) {
+            platformAccrued = 0;
+            totalPlatformPaid += amount;
+        } else {
+            creatorAccrued = 0;
+        }
         bytes memory result = poolManager.unlock(data);
         if (result.length != 0 || activeClaim != bytes32(0)) revert InvalidClaim();
         claimActive = false;
@@ -123,8 +134,10 @@ contract AutomaticNativeFeeVaultV1 is IUnlockCallback {
     }
 
     function unlockCallback(bytes calldata data) external returns (bytes memory) {
-        if (msg.sender != address(poolManager) || !claimActive || activeClaim == bytes32(0)
-            || keccak256(data) != activeClaim) revert InvalidClaim();
+        if (
+            msg.sender != address(poolManager) || !claimActive || activeClaim == bytes32(0)
+                || keccak256(data) != activeClaim
+        ) revert InvalidClaim();
         (address recipient, uint256 amount) = abi.decode(data, (address, uint256));
         activeClaim = bytes32(0);
         poolManager.burn(address(this), 0, amount);
@@ -133,12 +146,14 @@ contract AutomaticNativeFeeVaultV1 is IUnlockCallback {
     }
 
     function _requireRouter() private view {
-        if (platformRouterCodeHash != bytes32(0) && PLATFORM_RECIPIENT.codehash != platformRouterCodeHash)
+        if (platformRouterCodeHash != bytes32(0) && PLATFORM_RECIPIENT.codehash != platformRouterCodeHash) {
             revert InvalidConfiguration();
+        }
     }
 
     function _requireBacking() private view {
-        if (poolManager.balanceOf(address(this), 0) < platformAccrued + creatorAccrued)
+        if (poolManager.balanceOf(address(this), 0) < platformAccrued + creatorAccrued) {
             revert InsufficientFeeBacking();
+        }
     }
 }

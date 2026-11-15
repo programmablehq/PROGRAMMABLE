@@ -13,7 +13,7 @@ cbor_metadata = false
 ffi = false
 # These surfaces use separate source-bound compiler profiles. The protected
 # Contracts release lane and npm verify run their complete suites separately.
-skip = ["src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**", "src/custom-ai/**", "test/custom-ai/**", "script/custom-ai/**"]
+skip = ["src/automatic-platform-fees-v1/**", "test/automatic-platform-fees-v1/**", "src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**", "src/custom-ai/**", "test/custom-ai/**", "script/custom-ai/**"]
 fs_permissions = [
   { access = "read", path = "./dependencies" },
   { access = "read", path = "./test/elysium-custom-v1" },

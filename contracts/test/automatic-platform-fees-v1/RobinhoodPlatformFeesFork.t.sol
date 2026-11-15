@@ -25,20 +25,27 @@ contract RobinhoodPlatformFeesForkTest is Test {
     }
 
     function _deposit(uint256 value) private {
-        (bool paid,) = address(router).call{value:value}(""); assertTrue(paid);
+        (bool paid,) = address(router).call{ value: value }("");
+        assertTrue(paid);
     }
 
     function _order(uint128 value) private view returns (RobinhoodPlatformFeeRouterV1.BuybackOrder memory) {
         (uint160 price, int24 tick,,) = router.POOL_MANAGER().getSlot0(PoolId.wrap(router.MAIN_POOL_ID()));
         uint256 ratioX96 = FullMath.mulDiv(price, price, uint256(1) << 96);
         uint128 minOut = uint128(FullMath.mulDiv(FullMath.mulDiv(value, 97, 100), ratioX96, uint256(1) << 96));
-        return RobinhoodPlatformFeeRouterV1.BuybackOrder(router.nextNonce(), value, minOut,
-            TickMath.getSqrtPriceAtTick(tick - 200), uint64(block.timestamp), uint64(block.timestamp + 60));
+        return RobinhoodPlatformFeeRouterV1.BuybackOrder(
+            router.nextNonce(),
+            value,
+            minOut,
+            TickMath.getSqrtPriceAtTick(tick - 200),
+            uint64(block.timestamp),
+            uint64(block.timestamp + 60)
+        );
     }
 
     function _signature(RobinhoodPlatformFeeRouterV1.BuybackOrder memory order) private view returns (bytes memory) {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(SIGNER_KEY, router.orderDigest(order));
-        return abi.encodePacked(r,s,v);
+        return abi.encodePacked(r, s, v);
     }
 
     function testLivePoolForkPaysTeamAndBuysV4WithoutClaiming() public {
@@ -49,7 +56,8 @@ contract RobinhoodPlatformFeesForkTest is Test {
         uint256 tokenBefore = IERC20(V4).balanceOf(TEAM);
         RobinhoodPlatformFeeRouterV1.BuybackOrder memory order = _order(8_000_000_000);
         bytes memory signature = _signature(order);
-        vm.prank(address(0xB0B)); uint256 delivered = router.executeBuyback(order, signature);
+        vm.prank(address(0xB0B));
+        uint256 delivered = router.executeBuyback(order, signature);
         assertGe(delivered, order.minimumOut);
         assertEq(IERC20(V4).balanceOf(TEAM) - tokenBefore, delivered);
         assertEq(router.buybackReserve(), 0);
@@ -61,7 +69,9 @@ contract RobinhoodPlatformFeesForkTest is Test {
 
     function testDustDepositsCannotChangeEightyTwentySplit() public {
         uint256 ethBefore = TEAM.balance;
-        for (uint256 i; i < 10; ++i) _deposit(1);
+        for (uint256 i; i < 10; ++i) {
+            _deposit(1);
+        }
         assertEq(router.buybackReserve(), 8);
         assertEq(router.totalRevenue(), 10);
         assertEq(TEAM.balance - ethBefore, 2);
