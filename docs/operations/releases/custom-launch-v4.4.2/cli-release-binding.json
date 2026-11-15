@@ -856,39 +856,39 @@
     },
     {
       "path": "packages/launch/scripts/build-automatic-platform-fees-v1.mjs",
-      "sha256": "sha256:12b1a0f92650f53aad80fc17f6f9dd272190905357634ad335170fad140b4221"
+      "sha256": "sha256:fedf7935c9bee20f98090e02b9a6181a4fdff5f987fb11384af919495a6d3c59"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/standard-json.json",
-      "sha256": "sha256:dbb89c3dc686a849f2559a3f0fd1d96910f7244fd7abae04c00fbadd71101011"
+      "sha256": "sha256:a8c8af9914dc8ee832e4a706c60ed476e3aa1e2a137ec12885331f4e5521755c"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/AutomaticProtectedNative30HookV1.artifact.json",
-      "sha256": "sha256:6d85baf6f5e9264181bb4b4b73c551b4e460051e6f471ee6e0c59552573aab0c"
+      "sha256": "sha256:f5afe6761a58104b98ab1deb46e775f9aec91f0663271b29e7a4f79d413eefb0"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/AutomaticNativeFeeVaultV1.artifact.json",
-      "sha256": "sha256:b7bfee26192a630c8586bfe2dc93e3fb9a2d8c2f8f3873c3477e73e9445499bc"
+      "sha256": "sha256:d4b14dba150664070c31039377c3c47f7eaff906d63d260a8d0450fd5cd762c6"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/RobinhoodPlatformFeeRouterV1.artifact.json",
-      "sha256": "sha256:c1d2de34c37aee9cafd960584de929f10d1e4e412b0c24f9834a44ca45c3b2b6"
+      "sha256": "sha256:de5b030876e0166946f4744ce678242d453a2c345ced5010e35c4ba9d665216e"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/ProtectedLaunchTokenV1.artifact.json",
-      "sha256": "sha256:bcd2bacb060e7dc9484fda4e87d10abdc69c1a0ecb96a17273a173a639258def"
+      "sha256": "sha256:389e35639a636192a645ca2f347c4b4716e23eb151e89fccb4955fb8267e14c2"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/ProtectedNativeInitializerV1.artifact.json",
-      "sha256": "sha256:fee1995650dda7a4b43499e4b6259618b564c67d4e4b9633bd1b3f59d0dd5454"
+      "sha256": "sha256:a5c56298a979815e6f74e0c5131a63af0c63d418963c46f1b3a797129c9292c5"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/LaunchProtectionModuleV1.artifact.json",
-      "sha256": "sha256:d113fd9ed7dd356d526a73b5d992adcc8e7a0775f42ee981268ef895917d6a35"
+      "sha256": "sha256:9da1fc3277b4f1f4a349601007294c26cf659ac8d2cd9500fa574d2add5e6ae4"
     },
     {
       "path": "packages/launch/contracts/automatic-platform-fees-v1/EthereumNativeFeeVaultV3.artifact.json",
-      "sha256": "sha256:87236b0515aecf0c759c3c6696c34fce57064d65ea38b5703cd9d1358bb32f4d"
+      "sha256": "sha256:bc36e909d5c2bb1d70d6514ca54ff5f8711e15c05d7f788f89d14c0c600d1a89"
     }
   ],
   "machineContracts": [

@@ -208,7 +208,8 @@
         "*": [
           "abi",
           "evm.bytecode",
-          "evm.deployedBytecode"
+          "evm.deployedBytecode",
+          "metadata"
         ],
         "": [
           "ast"
