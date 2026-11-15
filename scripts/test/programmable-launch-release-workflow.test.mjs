@@ -396,6 +396,26 @@ test("4.1.1 through 4.4.1 dispatch select separate client bindings and preserve 
   }
 });
 
+test("4.4.2 reaches all release stages with its own runtime evidence", () => {
+  const cases = [...source.matchAll(/case "\$EXPECTED_VERSION" in[\s\S]*?\n\s*esac/g)].map(match => match[0]);
+  assert.equal(cases.length, 3);
+  const results = cases.map(selection => spawnSync("bash", ["-c", [
+    "set -euo pipefail",
+    'node() { printf "node %s\\n" "$*"; }',
+    'npm() { printf "npm %s\\n" "$*"; }',
+    selection,
+    'printf "finalizer=%s\\n" "${finalizer-}"',
+  ].join("\n")], { encoding: "utf8", env: { PATH: process.env.PATH,
+    EXPECTED_VERSION: "4.4.2", GITHUB_WORKSPACE: "/fixture", evidence: "/fixture/evidence" } }));
+  for (const result of results) assert.equal(result.status, 0, result.stderr);
+  assert.match(results[0].stdout, /programmable-launch-v442-release-binding\.mjs verify-release-ready/u);
+  assert.match(results[1].stdout, /programmable-launch-v442-runtime-refresh\.test\.mjs/u);
+  assert.match(results[2].stdout, /finalizer=scripts\/programmable-launch-v442-runtime-refresh\.mjs/u);
+  const refresh = readFileSync(new URL("../programmable-launch-v442-runtime-refresh.mjs", import.meta.url), "utf8");
+  assert.match(refresh, /packageJson\.version === "4\.4\.2"/u);
+  assert.match(refresh, /release\/robinhood-chain-4663\/v4\.4\.2\/backend-promotion-input\.public\.json/u);
+});
+
 test("release workflow contract mutations fail closed", () => {
   const freshStart = source.indexOf("      - name: Freshly revalidate exact V4 Phase B immediately before mutation");
   const downloadStart = source.indexOf("      - name: Fresh-download and verify the published release");

@@ -299,7 +299,7 @@ jobs:
             4.3.0) node --test scripts/test/programmable-launch-v41-clean-room.test.mjs scripts/test/programmable-launch-v41-clean-room-workflow.test.mjs scripts/test/programmable-v41-api-activation.test.mjs scripts/test/programmable-launch-v41-release-binding.test.mjs contracts/scripts/test/robinhood-custom-launch-v41-promotion.test.mjs scripts/test/robinhood-custom-launch-v41-promotion-workflow.test.mjs scripts/test/programmable-launch-v411-release-binding.test.mjs scripts/test/programmable-launch-v412-release-binding.test.mjs scripts/test/programmable-launch-v413-release-binding.test.mjs scripts/test/programmable-launch-v414-release-binding.test.mjs scripts/test/programmable-launch-v416-release-binding.test.mjs scripts/test/programmable-launch-v416-runtime-refresh.test.mjs scripts/test/programmable-launch-v430-release-binding.test.mjs scripts/test/programmable-launch-v430-runtime-refresh.test.mjs ;;
             4.4.0) node --test scripts/test/programmable-launch-v41-clean-room.test.mjs scripts/test/programmable-launch-v41-clean-room-workflow.test.mjs scripts/test/programmable-v41-api-activation.test.mjs scripts/test/programmable-launch-v41-release-binding.test.mjs contracts/scripts/test/robinhood-custom-launch-v41-promotion.test.mjs scripts/test/robinhood-custom-launch-v41-promotion-workflow.test.mjs scripts/test/programmable-launch-v411-release-binding.test.mjs scripts/test/programmable-launch-v412-release-binding.test.mjs scripts/test/programmable-launch-v413-release-binding.test.mjs scripts/test/programmable-launch-v414-release-binding.test.mjs scripts/test/programmable-launch-v416-release-binding.test.mjs scripts/test/programmable-launch-v416-runtime-refresh.test.mjs scripts/test/programmable-launch-v440-release-binding.test.mjs scripts/test/programmable-launch-v440-runtime-refresh.test.mjs ;;
             4.4.1) node --test scripts/test/programmable-launch-v41-clean-room.test.mjs scripts/test/programmable-launch-v41-clean-room-workflow.test.mjs scripts/test/programmable-v41-api-activation.test.mjs scripts/test/programmable-launch-v41-release-binding.test.mjs contracts/scripts/test/robinhood-custom-launch-v41-promotion.test.mjs scripts/test/robinhood-custom-launch-v41-promotion-workflow.test.mjs scripts/test/programmable-launch-v411-release-binding.test.mjs scripts/test/programmable-launch-v412-release-binding.test.mjs scripts/test/programmable-launch-v413-release-binding.test.mjs scripts/test/programmable-launch-v414-release-binding.test.mjs scripts/test/programmable-launch-v416-release-binding.test.mjs scripts/test/programmable-launch-v416-runtime-refresh.test.mjs scripts/test/programmable-launch-v440-release-binding.test.mjs scripts/test/programmable-launch-v441-release-binding.test.mjs scripts/test/programmable-launch-v440-runtime-refresh.test.mjs scripts/test/programmable-launch-v441-runtime-refresh.test.mjs ;;
-            4.4.2) node --test scripts/test/programmable-launch-v442-release-binding.test.mjs scripts/test/programmable-launch-release-workflow.test.mjs ;;
+            4.4.2) node --test scripts/test/programmable-launch-v442-release-binding.test.mjs scripts/test/programmable-launch-v442-runtime-refresh.test.mjs scripts/test/programmable-launch-release-workflow.test.mjs ;;
             *) echo "Unsupported V4 release version" >&2; exit 1 ;;
           esac
 
@@ -486,6 +486,10 @@ jobs:
             4.4.1)
               promotion_evidence="$evidence/v4.1"
               finalizer="scripts/programmable-launch-v441-runtime-refresh.mjs"
+              ;;
+            4.4.2)
+              promotion_evidence="$evidence/v4.1"
+              finalizer="scripts/programmable-launch-v442-runtime-refresh.mjs"
               ;;
             *) echo "Unsupported V4 release version" >&2; exit 1 ;;
           esac
