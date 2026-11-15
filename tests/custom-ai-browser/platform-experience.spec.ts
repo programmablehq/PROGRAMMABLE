@@ -32,13 +32,8 @@ test("uses the selected network for a hook starter and resets a new project to b
 });
 
 for(const summary of ["provider-refused","incomplete"])test(`keeps editing available and distinguishes ${summary} from an unchanged continuation`,async({page,request})=>{
- await request.post(origin+"/fixture/pause",{data:{paused:true}});
+ await request.post(origin+"/fixture/fail-next",{headers:{Authorization:"Bearer fixture-alice"},data:{code:summary}});
  let starts=0;page.on("request",r=>{if(r.method()==="POST"&&r.url().endsWith("/platform/runs"))starts++;});
- await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"),async route=>{
-  if(route.request().method()!=="GET")return route.continue();
-  const response=await route.fetch(),body=await response.json();
-  await route.fulfill({json:{...body,run:{...body.run,status:"failed",summary}}});
- });
  await page.goto(origin);await page.getByRole("textbox",{name:"Describe your idea",exact:true}).fill("Read the saved project");await page.getByRole("button",{name:"Send",exact:true}).click();
  const input=page.getByRole("textbox",{name:"Message your project",exact:true}),continuation=page.getByRole("button",{name:"Continue from here",exact:true});
  if(summary==="provider-refused"){

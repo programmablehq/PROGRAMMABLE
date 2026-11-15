@@ -21,5 +21,8 @@ export async function createPlatformServer(){
       res.setHeader('Content-Type','text/html');res.end('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Programmable project workspace test</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" href="data:,"><link rel="stylesheet" href="/fixture.css"><style>body{margin:0;background:#111110;color:#f4f1eb;font:16px Arial}*{box-sizing:border-box}</style></head><body><main id="root"></main><script type="module" src="/fixture.js"></script></body></html>');
     }catch{res.writeHead(500);res.end('Fixture failed');}
   });
-  return {server,close:async()=>{await new Promise(resolve=>server.close(resolve));await api.close();}};
+  return {server,close:async()=>{
+    const closed=new Promise(resolve=>server.close(resolve));
+    server.closeAllConnections();await closed;await api.close();
+  }};
 }
