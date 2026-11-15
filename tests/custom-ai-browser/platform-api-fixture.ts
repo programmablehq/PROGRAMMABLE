@@ -25,7 +25,7 @@ export async function createPlatformFixture(){
   let tail=Promise.resolve();const pool:AIPool={connect:async()=>{const previous=tail;let release!:()=>void;tail=new Promise<void>(done=>{release=done;});await previous;return {query:(sql,values)=>db.query<Record<string,unknown>>(sql,values),release};}};
   const allowance={hourlyUnits:1000,dailyUnits:1000,globalDailyUnits:2000,concurrent:1};
   const store=createPlatformStore(pool),runs=createRunStore(pool,{allowance,leaseMs:60000,capabilities:{}}),usageStore=createAIStore(pool,allowance);
-  let paused=false;
+  let paused=false, nextFailure:string|null=null;
   const account=(request:Request)=>{const ownerId=request.headers.get("authorization")?.replace(/^Bearer fixture-/,"");if(!ownerId||!["alice","bob"].includes(ownerId))throw new CustomAIError("auth","Sign in",401);return ownerId;};
   const dependencies={enabled:()=>true,consume:async()=>{},authorize:async(request:Request,write:boolean)=>{const ownerId=account(request);if(write&&request.headers.get("x-custom-ai-cache-scope")!==`fixture:${ownerId}`)throw new CustomAIError("cache-scope","Reconnect",401);return{ownerId};}};
   const projects=createProjectRoutes({...dependencies,store:()=>store});
@@ -37,6 +37,12 @@ export async function createPlatformFixture(){
   const repositoryClient=async()=>({get:async()=>{throw Error("External repository fetch is not used by the connection UI fixture");}});
   const repositoryRoutes=createRepositoryRoutes({...dependencies,importer:()=>createRepositoryImporter(store,repositoryClient),delivery:()=>createRepositoryDelivery(pool,store,repositoryClient)});
   const work=createRunRoutes({...dependencies,store:()=>runs,onQueued:async(scope,id)=>{
+    if(nextFailure){
+      const code=nextFailure;nextFailure=null;
+      const lease=await runs.claimRun(scope,id,"fixture-worker");
+      if(lease)await runs.failRun(scope,id,lease.token,code,false);
+      return;
+    }
     if(paused)return;
     setTimeout(()=>void(async()=>{
       const lease=await runs.claimRun(scope,id,"fixture-worker");if(!lease)return;
@@ -48,6 +54,11 @@ export async function createPlatformFixture(){
   async function handle(request:Request){
     const url=new URL(request.url);
     if(url.pathname==="/fixture/pause"){paused=(await request.json()).paused;return Response.json({paused});}
+    if(url.pathname==="/fixture/fail-next"){
+      account(request);const {code}=await request.json();
+      if(!["provider-refused","incomplete"].includes(code))return new Response(null,{status:400});
+      nextFailure=code;return Response.json({code});
+    }
     if(url.pathname==="/fixture/contract"){
       const ownerId=account(request),{projectId}=await request.json(),scope={ownerId,projectId},first=await store.readProject(scope);
       const revision=await store.applyProjectPatch({...scope,expectedRevisionId:first.revisionId,idempotencyKey:"seed-contract",patch:platformContractDocument});
