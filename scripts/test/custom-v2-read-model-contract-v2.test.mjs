@@ -300,6 +300,111 @@ async function fixture() {
   return { repoRoot, input, files, options, protectedArtifacts };
 }
 
+async function currentEvidenceFixture() {
+  const value = await fixture();
+  const plan = JSON.parse(await readFile(
+    value.protectedArtifacts.plan.path,
+    "utf8",
+  ));
+  const currentVerify = JSON.parse(await readFile(
+    value.protectedArtifacts.verify.path,
+    "utf8",
+  ));
+  const finalCatalogSha256 = currentVerify.state.catalogSha256;
+  const operatorCatalogSha256 = `0x${"6".repeat(64)}`;
+  const rotationSource = {
+    repositoryCommit: "1".repeat(40),
+    repositoryTree: "2".repeat(40),
+    repositoryParent: "3".repeat(40),
+  };
+  const rotationReceipt = {
+    schemaVersion:
+      "programmable.website-projection-runtime-credential-rotation.v1",
+    operation: "rotate-existing-runtime-role-password",
+    changed: true,
+    rotatedAt: "2026-08-21T07:34:02.793Z",
+    source: rotationSource,
+    target: {
+      projectRef: "mnnvlrqwhfoppogslsje",
+      database: "postgres",
+      authorityEndpoint: "db.mnnvlrqwhfoppogslsje.supabase.co:5432",
+      runtimeEndpoint: "aws-0-eu-central-1.pooler.supabase.com:6543",
+      runtimeRole: "programmable_website_projection_runtime",
+    },
+    migrationEvidence: {
+      migrationCount: 5,
+      planSha256: plan.planSha256,
+      repositoryCommit: plan.repositoryCommit,
+      repositoryTree: plan.repositoryTree,
+      catalogSha256: finalCatalogSha256,
+      operatorCatalogSha256,
+    },
+    catalog: {
+      beforeSha256: finalCatalogSha256,
+      afterSha256: finalCatalogSha256,
+      unchanged: true,
+    },
+    runtimeProbe: {
+      runtimeRole: "programmable_website_projection_runtime",
+      databaseName: "postgres",
+      serverVersionNum: "170006",
+      sslVersion: "TLSv1.3",
+      sslCipher: "TLS_AES_256_GCM_SHA384",
+      sslBits: 256,
+      leastPrivilege: true,
+    },
+    tls: {
+      mode: "verify-full-equivalent",
+      caSha256: DIGEST("provider-ca"),
+      hostnameVerified: true,
+    },
+    cutover: {
+      passwordSlots: 1,
+      overlappingPasswordsSupported: false,
+      existingSessionsAreNotCutoverEvidence: true,
+      preCommitFailure: "automatic-transaction-rollback",
+      postCommitFailure:
+        "forward-rotate-or-rerun-with-the-same-protected-secret",
+      vercelMutationPerformed: false,
+    },
+    protectedOutputs: {
+      databaseUrl: "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_URL",
+      databaseRole: "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_ROLE",
+      databaseCaPem: "PROGRAMMABLE_WEBSITE_PROJECTION_DATABASE_CA_PEM",
+      receipt:
+        "programmable-website-projection-runtime-credential-rotation-v1.json",
+      mode: "0600",
+      containsSecretDerivedDigest: false,
+    },
+  };
+  const rotationPath = join(value.repoRoot, "rotation-receipt.json");
+  const rotationBytes = Buffer.from(`${JSON.stringify(rotationReceipt)}\n`, "utf8");
+  await writeFile(rotationPath, rotationBytes, { mode: 0o600 });
+  const rotationArtifact = {
+    path: rotationPath,
+    sha256: sha256Bytes(rotationBytes),
+  };
+  value.input.persistence.hostedEvidence = {
+    plan: value.protectedArtifacts.plan,
+    rotationReceipt: rotationArtifact,
+    currentVerify: value.protectedArtifacts.verify,
+  };
+  value.options.currentHostedEvidenceIdentity = {
+    planArtifactSha256: value.protectedArtifacts.plan.sha256,
+    rotationReceiptArtifactSha256: rotationArtifact.sha256,
+    planRepositoryCommit: plan.repositoryCommit,
+    planRepositoryTree: plan.repositoryTree,
+    planSha256: plan.planSha256,
+    orderSha256: plan.orderSha256,
+    finalCatalogSha256,
+    operatorCatalogSha256,
+    rotationSourceCommit: rotationSource.repositoryCommit,
+    rotationSourceTree: rotationSource.repositoryTree,
+    rotationSourceParent: rotationSource.repositoryParent,
+  };
+  return { ...value, rotationArtifact };
+}
+
 test("derives all six content-addressed bindings and the runtime contract", async (t) => {
   const { repoRoot, input, options } = await fixture();
   t.after(() => rm(repoRoot, { recursive: true, force: true }));
@@ -339,6 +444,60 @@ test("derives all six content-addressed bindings and the runtime contract", asyn
       contract: result.contract,
       readModelBindingHash: result.readModelBindingHash,
     }),
+  );
+});
+
+test("accepts the authenticated rotation receipt plus one current verify", async (t) => {
+  const value = await currentEvidenceFixture();
+  t.after(() => rm(value.repoRoot, { recursive: true, force: true }));
+  const result = await deriveGenericLaunchReadModelContractV2(
+    value.input,
+    value.options,
+  );
+  const evidence = result.components.persistence.hostedEvidence;
+  assert.equal(
+    evidence.evidenceBasis,
+    "authenticated-rotation-plus-current-read-only-verify",
+  );
+  assert.equal(
+    evidence.protectedArtifacts.rotationReceiptSha256,
+    value.rotationArtifact.sha256,
+  );
+  assert.equal(
+    evidence.protectedArtifacts.currentVerifySha256,
+    value.protectedArtifacts.verify.sha256,
+  );
+  assert.equal(evidence.migratedThrough, "0005");
+});
+
+test("rejects fabricated current evidence and historical substitutes", async (t) => {
+  const forged = await currentEvidenceFixture();
+  t.after(() => rm(forged.repoRoot, { recursive: true, force: true }));
+  const verify = JSON.parse(await readFile(
+    forged.protectedArtifacts.verify.path,
+    "utf8",
+  ));
+  verify.operation = "apply";
+  verify.changed = true;
+  const verifyBytes = Buffer.from(`${JSON.stringify(verify)}\n`, "utf8");
+  await writeFile(forged.protectedArtifacts.verify.path, verifyBytes, {
+    mode: 0o600,
+  });
+  forged.protectedArtifacts.verify.sha256 = sha256Bytes(verifyBytes);
+  await assert.rejects(
+    deriveGenericLaunchReadModelContractV2(forged.input, forged.options),
+    /Hosted verify evidence identity|current verify/u,
+  );
+
+  const historical = await currentEvidenceFixture();
+  t.after(() => rm(historical.repoRoot, { recursive: true, force: true }));
+  historical.input.persistence.hostedEvidence.rotationReceipt =
+    historical.protectedArtifacts.adoption;
+  historical.options.currentHostedEvidenceIdentity.rotationReceiptArtifactSha256 =
+    historical.protectedArtifacts.adoption.sha256;
+  await assert.rejects(
+    deriveGenericLaunchReadModelContractV2(historical.input, historical.options),
+    /credential rotation receipt/u,
   );
 });
 
