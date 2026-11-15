@@ -315,7 +315,7 @@
     "axios": "1.20.0",
     "cookie": "0.7.2",
     "diff": "8.0.3",
-    "hono": "4.13.11",
+    "hono": "4.13.16",
     "follow-redirects": "1.16.2",
     "postcss": "8.5.23",
     "serialize-javascript": "7.0.7",

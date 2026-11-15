@@ -56,6 +56,7 @@ const ETHEREUM_PROFILE_SELECTION = Object.freeze({
     supportedProgrammableTradeFeePolicyHashes: Object.freeze([
       "sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3",
       "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
+      "sha256:14fa8dff2aca726c5b404b41f1b11fadb1456d3057e25ee33379319b26952b58",
       "sha256:d4a42d5f04f9f94f3b45544facdda5576bcb538381134b93d14d992b62ad971a",
     ] as const),
     currentTreasurySource: "capabilities.currentTradeFeePolicy.recipient" as const,

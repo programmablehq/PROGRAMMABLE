@@ -9,6 +9,11 @@ export type ProductionProtectionBindings = {
   nativeUsdFeedMaxAgeSeconds: number; sequencerUptimeFeed: `0x${string}` | null;
 };
 export const PROTECTED_COMPONENT_ROLES = ["feeVault", "hook", "initializer", "module", "openingTaxVault", "token"] as const;
+export type AutomaticPlatformFeePolicy = {
+  policyId:"programmable.automatic-platform-fees.v1"; status:"active"; chainId:"1"|"4663";
+  teamWallet:"0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"; platformFeeBps:30;
+  buybackBps:0|8000;nativePayoutBps:10000|2000;activationTime:string;router:ProductionBinding|null;
+};
 export type ProductionProtectionPolicy = {
   policyVersion: "programmable.launch-protection.v1"; required: boolean; appliesTo: "custom-contract";
   evidenceAuthority: "authenticated-original-source-and-graph-review";
@@ -33,6 +38,7 @@ export type LaunchProductionContext = {
   protectionPolicy?: ProductionProtectionPolicy;
   /** V3 pins constructor configuration, not observed dependency code/state. */
   protectionBindings?: ProductionProtectionBindings | null;
+  automaticPlatformFees?: AutomaticPlatformFeePolicy;
 };
 type ContextBody = Omit<LaunchProductionContext, "id">;
 const address = /^0x(?!0{40}$)[a-f0-9]{40}$/iu, code = /^0x(?!0{64}$)[a-f0-9]{64}$/u;
@@ -44,7 +50,7 @@ const exact = (value: object, keys: string) => value && [Object.prototype, null]
 
 export function createLaunchProductionContext(body: ContextBody): LaunchProductionContext {
   builderChain(body.chainId);
-  if (!exact(body,`version,chainId,route,profileVersion,poolManager,executor,graphProfile,manifestDigest,tradeFee,protections${body.version>=2?",protectionPolicy":""}${body.version===3?",protectionBindings":""}`)
+  if (!exact(body,`version,chainId,route,profileVersion,poolManager,executor,graphProfile,manifestDigest,tradeFee,protections${body.version>=2?",protectionPolicy":""}${body.version===3?",protectionBindings":""}${body.automaticPlatformFees?",automaticPlatformFees":""}`)
     || ![1,2,3].includes(body.version) || body.route !== (body.chainId === 4663 ? "plan-v1" : "graph-v3")
     || body.profileVersion !== (body.chainId === 4663 ? "custom-launch-plan.v1" : "3.6.0")
     || ![body.poolManager, body.executor].every(binding => binding && exact(binding,"address,runtimeCodeHash") && address.test(binding.address) && code.test(binding.runtimeCodeHash))
@@ -71,6 +77,15 @@ export function createLaunchProductionContext(body: ContextBody): LaunchProducti
       || ![p.swapRouter,p.nativeUsdFeed].every(binding=>binding&&exact(binding,"address,runtimeCodeHash")&&address.test(binding.address)&&code.test(binding.runtimeCodeHash))
       || !integer(p.nativeUsdFeedMaxAgeSeconds,604800) || p.nativeUsdFeedMaxAgeSeconds===0
       || (body.chainId===8453 ? typeof p.sequencerUptimeFeed!=="string"||!address.test(p.sequencerUptimeFeed) : p.sequencerUptimeFeed!==null))) return invalid();
+  }
+  if (body.automaticPlatformFees) {
+    const p=body.automaticPlatformFees;
+    if(!exact(p,"policyId,status,chainId,teamWallet,platformFeeBps,buybackBps,nativePayoutBps,activationTime,router")
+      ||p.policyId!=="programmable.automatic-platform-fees.v1"||p.status!=="active"||String(body.chainId)!==p.chainId
+      ||![1,4663].includes(body.chainId)||p.teamWallet!=="0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"||p.platformFeeBps!==30
+      ||!Number.isFinite(Date.parse(p.activationTime))||p.buybackBps!==(body.chainId===4663?8000:0)
+      ||p.nativePayoutBps!==(body.chainId===4663?2000:10000)
+      ||(body.chainId===1?p.router!==null:!p.router||!exact(p.router,"address,runtimeCodeHash")||!address.test(p.router.address)||!code.test(p.router.runtimeCodeHash)))return invalid();
   }
   if (body.protections) {
     const p = body.protections;

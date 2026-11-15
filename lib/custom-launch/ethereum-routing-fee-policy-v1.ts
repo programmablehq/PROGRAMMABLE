@@ -61,10 +61,19 @@ export const ETHEREUM_ROUTING_FEE_POLICY_V3 = Object.freeze({
   native30Waiver: null,
 });
 
-export type EthereumRoutingFeePolicy = typeof ETHEREUM_ROUTING_FEE_POLICY_V1 | typeof ETHEREUM_ROUTING_FEE_POLICY_V2 | typeof ETHEREUM_ROUTING_FEE_POLICY_V3;
+/** New-launch policy only. Existing signed recipients remain unchanged. */
+export const ETHEREUM_ROUTING_FEE_POLICY_V4 = Object.freeze({
+  ...ETHEREUM_ROUTING_FEE_POLICY_V2,
+  policyVersion: "programmable.ethereum-routed-native-fee.v4",
+  defaultCollection: { ...ETHEREUM_ROUTING_FEE_POLICY_V2.defaultCollection, recipient: "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62" },
+  native30Waiver: { ...ETHEREUM_ROUTING_FEE_POLICY_V2.native30Waiver, recipient: "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",
+    hook: "AutomaticProtectedNative30HookV1", vault: "AutomaticNativeFeeVaultV1" },
+} as const);
+
+export type EthereumRoutingFeePolicy = typeof ETHEREUM_ROUTING_FEE_POLICY_V1 | typeof ETHEREUM_ROUTING_FEE_POLICY_V2 | typeof ETHEREUM_ROUTING_FEE_POLICY_V3 | typeof ETHEREUM_ROUTING_FEE_POLICY_V4;
 export const ETHEREUM_ROUTING_FEE_POLICY_HASH_V2 = canonicalBrowserSha256V2(ETHEREUM_ROUTING_FEE_POLICY_V2.schemaVersion, ETHEREUM_ROUTING_FEE_POLICY_V2);
 export function isEthereumRoutingFeePolicy(policy: unknown, policyHash: unknown): policy is EthereumRoutingFeePolicy {
-  return [ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, ETHEREUM_ROUTING_FEE_POLICY_V3].some(expected =>
+  return [ETHEREUM_ROUTING_FEE_POLICY_V1, ETHEREUM_ROUTING_FEE_POLICY_V2, ETHEREUM_ROUTING_FEE_POLICY_V3, ETHEREUM_ROUTING_FEE_POLICY_V4].some(expected =>
     policyHash === canonicalBrowserSha256V2(expected.schemaVersion, expected)
     && canonicalBrowserJsonV2(policy) === canonicalBrowserJsonV2(expected));
 }

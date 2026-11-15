@@ -641,7 +641,7 @@ import {
 } from '@programmable/launch/launch-protection';
 ```
 
-For Robinhood, fetch `/v4/chains/4663/custom-launch-capabilities`, pass its current atomic executor as `initializerAuthority` to `prepareProtectedNativeContractsV1`, then call `protectedRobinhoodPlanV1`. Bind the connected credential controller, current manifest, publication metadata and validity window. Submit the bytes returned by `protectedRobinhoodPlanBytesV1` to `/v4/chains/4663/custom-launch-plans:preflight`, then to `/v4/chains/4663/custom-launch-plans`, with the existing Bearer credential and `Programmable-Launch-Response-Version: 1.2`. The standard deterministic deployment factory is `0x4e59b44847b379578588920cA78FbF26c0B4956C`. A fresh 32-byte `nonce` avoids collisions.
+For Robinhood, fetch `/v4/chains/4663/custom-launch-capabilities`, pass the response as `capabilities` and its current atomic executor as `initializerAuthority` to `prepareProtectedNativeContractsV1`, then call `protectedRobinhoodPlanV1`. Bind the connected credential controller, current manifest, publication metadata and validity window. Submit the bytes returned by `protectedRobinhoodPlanBytesV1` to `/v4/chains/4663/custom-launch-plans:preflight`, then to `/v4/chains/4663/custom-launch-plans`, with the existing Bearer credential and `Programmable-Launch-Response-Version: 1.2`. The standard deterministic deployment factory is `0x4e59b44847b379578588920cA78FbF26c0B4956C`. A fresh 32-byte `nonce` avoids collisions.
 
 For Ethereum, fetch `/v3/capabilities` and use `buildProtectedEthereumLaunchV1({ projectRoot, client, capabilities, input, permitWindow })`. `input` includes the connected `launchWallet`, a fresh 32-byte `nonce`, complete `projectMetadata`, `initialBuyWei`, `minimumTokensOut`, optional creator fees and `additionalTaxExemptWallets`. The helper writes the exact sources and pack configuration and returns the existing SDK `built` result for the normal V3 preflight/submission workflow. The supplied RPC client must read the intended live chain; it must not substitute a price feed or router.
 
@@ -677,3 +677,9 @@ Elysium uses `chainId: "99901"` (`eip155:99901`) and native HYPE. Read the [Elys
 ## Windows file output (4.4.1)
 
 CLI 4.4.1 fixes `EPERM` after writing `launch.json` on Windows so the pack receipt is written too. Temporary files are still synced before publication, and file write errors still fail the command. Launch request bytes, profiles and contract bindings are unchanged.
+
+## Automatic platform fees
+
+When the live chain response includes `automaticPlatformFees.status: "active"`, new Ethereum and Robinhood launches must bind that complete policy. Pass current capabilities to the protected SDK builders. The automatic kit uses `AutomaticProtectedNative30HookV1` and `AutomaticNativeFeeVaultV1`; an older manual-claim vault does not satisfy this policy.
+
+The fixed recipient is `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. On Ethereum, each normal 30-bps platform fee is paid as ETH. On Robinhood, the published immutable router sends 20% as ETH and reserves 80% for bounded V4 purchases delivered to that same wallet. Purchases run after settlement through the monitored keeper, so they do not depend on liquidity during the originating swap. If delivery fails, funds remain backed and retryable. Creator fees, opening-protection surcharges and historical launch contracts retain their existing rules. Package availability alone does not activate the policy.

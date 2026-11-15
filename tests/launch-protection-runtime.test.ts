@@ -70,3 +70,31 @@ describe("historical protected runtime support", () => {
     expect(rebuildEthereumNative30RuntimeProofV1(JSON.parse(JSON.stringify(proof)), market)).toEqual(proof);
   });
 });
+
+import { AUTOMATIC_PLATFORM_FEES_RECIPES_V1 as automatic } from "@/lib/launch-protection/automatic-fees-recipes-v1";
+
+describe("automatic platform fee runtime", () => {
+  function autoFixture(chain: 1 | 4663) {
+    const prior = fixture(chain), chainManager = chain === 1 ? manager : "0x8366a39CC670B4001A1121B8F6A443A643e40951";
+    const router = chain === 1 ? automatic.teamWallet : "0x5555555555555555555555555555555555555555";
+    const routerWords = Object.fromEntries(automatic.router.immutableWords.map(({name}) => [name, word(0n)]));
+    routerWords.quoteSigner = word(developer);
+    const routerCode = materialize(automatic.router, routerWords), routerHash = chain === 1 ? word(0n) : keccak256(routerCode);
+    const words = {...prior.words, PLATFORM_RECIPIENT:word(router),platformFeeRouter:word(router),platformFeeRouterCodeHash:routerHash};
+    return {...prior, router, routerHash, codes:{...prior.codes,[router]:routerCode,
+      [hook]:materialize(automatic.hook,words),[feeVault]:materialize(automatic.vault,{poolManager:word(chainManager),kernel:word(hook),creatorRecipient:word(developer),PLATFORM_RECIPIENT:word(router),platformRouterCodeHash:routerHash})}};
+  }
+  it("binds Ethereum payouts to the fixed team wallet while retaining source proof on serialization", () => {
+    const f = autoFixture(1), proof = proveEthereumNative30RuntimeV1(market,f.codes);
+    expect(proof).toMatchObject({recipeId:"automatic_native30_v1",recipient:automatic.teamWallet,automaticPayout:true,platformRouterCodeHash:word(0n)});
+    expect(rebuildEthereumNative30RuntimeProofV1(structuredClone(proof),market)).toEqual(proof);
+    expect(proveEthereumNative30RuntimeV1(market,{...f.codes,[feeVault]:"0x6000"})).toBeNull();
+  });
+  it("requires the exact 80/20 router runtime on Robinhood", () => {
+    const f=autoFixture(4663), rhMarket={...market,chainId:"4663" as const,poolManager:"0x8366a39CC670B4001A1121B8F6A443A643e40951" as Address};
+    const proof=proveImmutablePoolFeeRuntimeV2(rhMarket,f.codes);
+    expect(proof).toMatchObject({automaticPayout:true,recipient:f.router,platformRouterCodeHash:f.routerHash});
+    expect(rebuildImmutablePoolFeeRuntimeProofV2(structuredClone(proof),rhMarket)).toEqual(proof);
+    expect(proveImmutablePoolFeeRuntimeV2(rhMarket,{...f.codes,[f.router]:"0x6000"})).toBeNull();
+  });
+});

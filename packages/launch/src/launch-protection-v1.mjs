@@ -31,13 +31,13 @@ export function protectedLaunchExemptionsV1(developer, extra = []) {
   return [...result, ...Array(PROTECTED_LAUNCH_POLICY_V1.maximumAdditionalTaxExemptWallets - result.length).fill(ZERO)];
 }
 
-async function kit(chainId) {
+async function kit(chainId, automatic = false) {
   const baseKit = Number(chainId) === 8453;
   const hyperKit = Number(chainId) === 999;
   const elysiumKit = Number(chainId) === 99901;
-  const root = elysiumKit ? new URL('../contracts/elysium-launch-protection-v1/', import.meta.url) : hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
+  const root = automatic ? new URL('../contracts/automatic-platform-fees-v1/', import.meta.url) : elysiumKit ? new URL('../contracts/elysium-launch-protection-v1/', import.meta.url) : hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
   const prefix=elysiumKit?'Elysium':hyperKit?'HyperEvm':baseKit?'Base':null;
-  const contractNames = prefix ? { ...names, initializer: prefix+'ProtectedNativeInitializerV1', hook:prefix+'ProtectedNative30HookV1', module:prefix+'LaunchProtectionModuleV1' } : names;
+  const contractNames = automatic ? { ...names, hook:'AutomaticProtectedNative30HookV1', feeVault:'AutomaticNativeFeeVaultV1' } : prefix ? { ...names, initializer: prefix+'ProtectedNativeInitializerV1', hook:prefix+'ProtectedNative30HookV1', module:prefix+'LaunchProtectionModuleV1' } : names;
   const standardJsonBytes = await readFile(new URL('standard-json.json', root));
   const artifacts = Object.fromEntries(await Promise.all(Object.entries(contractNames).map(async ([role, name]) =>
     [role, JSON.parse(await readFile(new URL(name + '.artifact.json', root), 'utf8'))])));
@@ -67,9 +67,21 @@ function materialize(a, values, args, address) {
 /** Builds exact bytes only; no account, signature or transaction is sent. The supplied reader must be on the intended chain. */
 export async function prepareProtectedNativeContractsV1({ client, chainId, developer, deploymentFactory, initializerAuthority,
   nonce, name, symbol, supply = '1000000000000000000000000000', creatorBuyFeeBps = 0, creatorSellFeeBps = 0,
-  additionalTaxExemptWallets = [], targetFdvUsd = '15000', initialBuyWei, minimumTokensOut, deriveRootAddress }) {
+  additionalTaxExemptWallets = [], targetFdvUsd = '15000', initialBuyWei, minimumTokensOut, deriveRootAddress, platformFeePolicy, capabilities }) {
   const pins = PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
+  platformFeePolicy ??= capabilities?.automaticPlatformFees;
+  if (platformFeePolicy && (platformFeePolicy.policyId !== 'programmable.automatic-platform-fees.v1' || platformFeePolicy.status !== 'active'
+    || String(platformFeePolicy.chainId) !== String(chainId) || platformFeePolicy.platformFeeBps !== 30
+    || platformFeePolicy.nativePayoutBps !== (Number(chainId)===4663?2000:10000))) throw new TypeError('Unsupported automatic fee policy');
+  const automatic = platformFeePolicy?.policyId === 'programmable.automatic-platform-fees.v1';
+  if (automatic && (![1,4663].includes(Number(chainId)) || platformFeePolicy.teamWallet !== '0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62'
+    || platformFeePolicy.buybackBps !== (Number(chainId)===4663?8000:0))) throw new TypeError('Automatic fee policy differs');
   if (!pins || await client.getChainId() !== Number(chainId)) throw new TypeError('Unsupported or mismatched chain');
+  if(automatic && Number(chainId)===4663 && !platformFeePolicy.router) throw new TypeError('Automatic fee router missing');
+  const platformRouter = automatic && Number(chainId)===4663 ? getAddress(platformFeePolicy.router.address) : ZERO;
+  const platformRouterHash = automatic && Number(chainId)===4663 ? platformFeePolicy.router.runtimeCodeHash : '0x'+'00'.repeat(32);
+  if (automatic && Number(chainId)===4663 && (!/^0x[0-9a-f]{64}$/i.test(platformRouterHash) || !platformRouterHash.match(/[1-9a-f]/i)
+    || keccak256(await client.getCode({address:platformRouter})) !== platformRouterHash)) throw new TypeError('Automatic fee router is not the published deployment');
   const owner = getAddress(developer), factory = getAddress(deploymentFactory), authority = getAddress(initializerAuthority);
   if (owner === ZERO || factory === ZERO || authority === ZERO || !/^0x(?!0{64}$)[0-9a-f]{64}$/i.test(nonce)
     || typeof name !== 'string' || Buffer.byteLength(name) < 1 || Buffer.byteLength(name) > 64
@@ -95,7 +107,7 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
     if(!code || code==='0x' || seq[1]!==0n || seq[2]===0n || seq[2]>=block.timestamp || block.timestamp-seq[2]<=3600n) throw new TypeError('Base sequencer is unavailable or recovering');
     sequencerFeedCodeHash=keccak256(code);
   }
-  const k = await kit(chainId), a = k.artifacts;
+  const k = await kit(chainId, automatic), a = k.artifacts;
   const salt = (role, attempt = 0n) => keccak256(encodeAbiParameters(parseAbiParameters('uint256,address,bytes32,string,uint256'), [BigInt(chainId), owner, nonce, role, attempt]));
   const root = (role, args, flags) => {
     const initCode = encodeDeployData({ abi: a[role].abi, bytecode: a[role].creationBytecode, args });
@@ -112,7 +124,7 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
   const init = root('initializer', [pins.manager, authority, pins.feed, pins.feedCodeHash]);
   const token = root('token', [name, symbol, amount, init.address, pins.manager]);
   const config = [token.address, 0, 60, price.sqrtPriceX96, init.address, owner, buyBps, sellBps, ZERO, 0];
-  const hook = root('hook', [pins.manager, config, owner, pins.router, pins.routerCodeHash, exemptions], 0x20cc);
+  const hook = root('hook', [pins.manager, config, owner, pins.router, pins.routerCodeHash, exemptions, ...(automatic?[platformRouter,platformRouterHash]:[])], 0x20cc);
   const feeVault = getContractAddress({ from: hook.address, nonce: 1n }), protectionModule = getContractAddress({ from: hook.address, nonce: 2n }), openingTaxVault = getContractAddress({ from: hook.address, nonce: 3n });
   const moduleArgs = [hook.address, token.address, owner, pins.router, pins.routerCodeHash, buyBps, exemptions];
   const moduleMaterialized = materialize(a.module, { kernel: hook.address, token: token.address, developer: owner,
@@ -123,13 +135,13 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
     token: materialize(a.token, { initializer: init.address, poolManager: pins.manager, launchSupply: amount, walletTokenLimit: amount / 50n }, token.args, token.address),
     hook: materialize(a.hook, { poolManager: pins.manager, CANONICAL_POOL_MANAGER: pins.manager, CHAIN_ID: chainId, token: token.address,
       lpFee: 0, tickSpacing: 60, initialSqrtPriceX96: price.sqrtPriceX96, initializer: init.address, creatorBuyFeeBps: buyBps,
-      creatorSellFeeBps: sellBps, module: protectionModule, moduleCodeHash: moduleMaterialized.runtimeCodeHash, maxModuleLpFeePips: 0, feeVault, openingTaxVault }, hook.args, hook.address),
+      creatorSellFeeBps: sellBps, module: protectionModule, moduleCodeHash: moduleMaterialized.runtimeCodeHash, maxModuleLpFeePips: 0, feeVault, openingTaxVault, ...(automatic?{platformFeeRouter:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,PLATFORM_RECIPIENT:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,platformFeeRouterCodeHash:platformRouterHash}:{}) }, hook.args, hook.address),
     module: moduleMaterialized,
-    feeVault: materialize(a.feeVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: owner }, [pins.manager, owner], feeVault),
+    feeVault: materialize(a.feeVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: owner, ...(automatic?{PLATFORM_RECIPIENT:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,platformRouterCodeHash:platformRouterHash}:{}) }, [pins.manager, owner, ...(automatic?[platformRouter,platformRouterHash]:[])], feeVault),
     openingTaxVault: materialize(a.openingTaxVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: PROTECTED_LAUNCH_POLICY_V1.treasury }, [pins.manager, PROTECTED_LAUNCH_POLICY_V1.treasury], openingTaxVault),
   };
   const initializeData = encodeFunctionData({ abi: a.initializer.abi, functionName: 'initialize', args: [hook.address, token.address, price.initialTick, owner, minimum] });
-  return { chainId: String(chainId), developer: owner, factory, factoryCodeHash: keccak256(factoryCode), authority, contracts,
+  return { chainId: String(chainId), developer: owner, factory, factoryCodeHash: keccak256(factoryCode), authority, contracts, ...(automatic?{automaticPlatformFees:platformFeePolicy}:{}),
     deployments: Object.fromEntries([['initializer', init], ['token', token], ['hook', hook]]), initialBuy, initializeData,
     supply: amount, walletTokenLimit: amount / 50n, exemptions, price, oracle: { address: pins.feed, runtimeCodeHash: pins.feedCodeHash,
       blockNumber: block.number, blockHash: block.hash, timestamp: block.timestamp, round }, ...k };
@@ -169,7 +181,8 @@ export function protectedRobinhoodPlanV1(prepared, { manifestDigest, controller,
       callbackAbi: prepared.artifacts.hook.abi.filter(x => x.type === 'function' && ['beforeInitialize', 'beforeSwap', 'afterSwap'].includes(x.name)) }],
     dependencies: [{ dependencyId: 'create2-factory', chainId: '4663', address: prepared.factory, runtimeCodeHash: prepared.factoryCodeHash },
       { dependencyId: 'usd-feed', chainId: '4663', address: prepared.oracle.address, runtimeCodeHash: prepared.oracle.runtimeCodeHash },
-      { dependencyId: 'swap-router', chainId: '4663', address: PROTECTED_LAUNCH_CHAIN_PINS_V1[4663].router, runtimeCodeHash: PROTECTED_LAUNCH_CHAIN_PINS_V1[4663].routerCodeHash }],
+      { dependencyId: 'swap-router', chainId: '4663', address: PROTECTED_LAUNCH_CHAIN_PINS_V1[4663].router, runtimeCodeHash: PROTECTED_LAUNCH_CHAIN_PINS_V1[4663].routerCodeHash },
+      ...(prepared.automaticPlatformFees?.router?[{dependencyId:'platform-fee-router',chainId:'4663',...prepared.automaticPlatformFees.router}]:[])],
     expectedEffects: effects, budgets: { maxTotalValue: String(prepared.initialBuy), maxTotalGas, validAfter, deadline },
     feeObligations: [], claimDescriptors: [], distributionPreferences: [], publication: { visibility: 'listed',
       primaryComponentId: 'token', primaryMarketId: 'primary', ...publication } };

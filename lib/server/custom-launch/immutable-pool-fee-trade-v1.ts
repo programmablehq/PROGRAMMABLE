@@ -1,3 +1,4 @@
+import {proveAutomaticPlatformFeeAccrualV1} from "./automatic-platform-fee-accrual-v1";
 import "server-only";
 import { decodeFunctionData, encodeFunctionData, parseAbi, type Address, type Hex } from "viem";
 import type { ImmutablePoolFeeRuntimeProof } from "@/lib/custom-launch/immutable-pool-fee-runtime";
@@ -93,12 +94,15 @@ export async function proveImmutablePoolFeeTradeAccrualV1(input: Readonly<{
     read("platformAccrued", false), read("platformAccrued", true), read("creatorAccrued", false), read("creatorAccrued", true),
     read("balanceOf", false), read("balanceOf", true),
   ]);
-  if (platformAfter - platformBefore !== platform || creatorAfter - creatorBefore !== recorded[0]!.args[1]
-    || backingAfter - backingBefore !== platform + recorded[0]!.args[1]
+  const automatic = "automaticPayout" in proof && proof.automaticPayout === true;
+  const paid = automatic ? await proveAutomaticPlatformFeeAccrualV1({vault:proof.feeVault,poolManager:proof.market.poolManager,recipient:proof.recipient,expected:platform,trace,post,call}) : 0n;
+  if (platformAfter - platformBefore !== platform - paid || creatorAfter - creatorBefore !== recorded[0]!.args[1]
+    || backingAfter - backingBefore !== platform - paid + recorded[0]!.args[1]
     || backingBefore < platformBefore + creatorBefore || backingAfter < platformAfter + creatorAfter) return pendingTradeV1("POOL_FEE_BACKING_UNPROVEN");
   return { proofDigest: proof.proofDigest, vault: proof.feeVault, currency: ZERO, recipient: proof.recipient, rateBps: proof.rateBps,
     assessmentBase: "gross_native_leg", rounding: "ceil_per_trade", grossNativeAmount: grossNative.toString(),
-    nativePoolDelta: nativeDelta.toString(), platformAccruedIncrease: platform.toString(),
+    nativePoolDelta: nativeDelta.toString(), platformAccruedIncrease: (platform-paid).toString(),
+    ...(automatic?{automaticPayout:true,platformPaid:paid.toString()}:{}),
     platformAccruedBefore: platformBefore.toString(), platformAccruedAfter: platformAfter.toString(),
     creatorAccruedBefore: creatorBefore.toString(), creatorAccruedAfter: creatorAfter.toString(), creatorAccruedIncrease: (creatorAfter - creatorBefore).toString(),
     backingBefore: backingBefore.toString(), backingIncrease: (backingAfter - backingBefore).toString(), backingAfter: backingAfter.toString(),

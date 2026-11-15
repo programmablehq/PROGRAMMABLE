@@ -137,7 +137,7 @@ export function launchPlanTradeBindingV1(projectionInput: LaunchProjectionV1, re
     return bad("INVALID_NATIVE_FUNDING", "Native funding requires the canonical wrapped ETH market.", 400);
   const fee: LaunchPlanFeeBindingV1 = poolFeeProof ? { mode: "pool_enforced", obligationId,
     policyVersion: poolFeeProof.rateBps === 20 ? ROUTED_FEE_POLICY_V1 : poolFeeProof.rateBps === 100 ? ROUTED_FEE_POLICY_V3 : ROUTED_FEE_POLICY_V2, scope: "fee_on_proven_pool_paths", rateBps: poolFeeProof.rateBps, routedRateBps: 0,
-    recipient: ROUTED_FEE_RECIPIENT_V1, base: "not_applicable", rounding: "not_applicable", currency: outputCurrency,
+    recipient: poolFeeProof.recipient, base: "not_applicable", rounding: "not_applicable", currency: outputCurrency,
     poolEnforcementWitness: poolFeeProof } : { mode: "programmable_routed", obligationId,
     policyVersion, scope: "fee_on_programmable_routed_trades",
     rateBps: routedRateBps, routedRateBps, recipient: ROUTED_FEE_RECIPIENT_V1,
@@ -250,7 +250,9 @@ export function validateLaunchPlanTradePreparationV1(value: unknown, projection:
     if (!projectionObject(accrued) || accrued.proofDigest !== poolFeeProof.proofDigest || accrued.vault !== poolFeeProof.feeVault
       || accrued.currency !== ZERO || accrued.recipient !== poolFeeProof.recipient || accrued.rateBps !== poolFeeProof.rateBps
       || accrued.assessmentBase !== "gross_native_leg" || accrued.rounding !== "ceil_per_trade"
-      || uint(accrued.grossNativeAmount) === 0n || uint(accrued.platformAccruedIncrease) !== (uint(accrued.grossNativeAmount) * BigInt(poolFeeProof.rateBps) + 9999n) / 10000n
+      || uint(accrued.grossNativeAmount) === 0n || (("automaticPayout" in poolFeeProof && poolFeeProof.automaticPayout)
+        ? accrued.automaticPayout !== true || uint(accrued.platformAccruedIncrease) !== 0n || uint(accrued.platformPaid) !== (uint(accrued.grossNativeAmount) * BigInt(poolFeeProof.rateBps) + 9999n) / 10000n
+        : uint(accrued.platformAccruedIncrease) !== (uint(accrued.grossNativeAmount) * BigInt(poolFeeProof.rateBps) + 9999n) / 10000n)
       || typeof accrued.nativePoolDelta !== "string" || !/^-?[1-9][0-9]{0,38}$/.test(accrued.nativePoolDelta)
       || BigInt(accrued.nativePoolDelta) <= -(1n << 127n) || BigInt(accrued.nativePoolDelta) >= 1n << 127n
       || (request.zeroForOne ? BigInt(accrued.nativePoolDelta) >= 0n : BigInt(accrued.nativePoolDelta) <= 0n)

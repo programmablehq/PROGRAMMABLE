@@ -1,3 +1,4 @@
+import automaticFeeSourcePackage from "@/packages/launch/contracts/automatic-platform-fees-v1/standard-json.json";
 import elysiumSourcePackage from "@/packages/launch/contracts/elysium-launch-protection-v1/standard-json.json";
 import "server-only";
 import sourcePackage from "@/packages/launch/contracts/launch-protection-v1/standard-json.json";
@@ -14,6 +15,8 @@ import {canonicalBrowserSha256V2} from "@/lib/custom-launch/browser-authority-v2
 // These exact library sources are shared by the three published protection
 // packages. No runtime downloads, package installs or filesystem imports occur.
 const libraries = Object.fromEntries(Object.entries(sourcePackage.sources).filter(([path]) => path.startsWith("lib/")));
+const automaticLaunchSources = Object.fromEntries(Object.entries(automaticFeeSourcePackage.sources).filter(([path]) =>
+  path.startsWith("src/automatic-platform-fees-v1/") && !path.endsWith("/RobinhoodPlatformFeeRouterV1.sol")));
 
 /** Additional pinned helpers are opt-in to source implementation, so chat and
  * source-blind planning do not receive their complete bodies on every request. */
@@ -32,7 +35,7 @@ export function canonicalGeneralLibraries(previous?: ContractProject): ContractP
 export function canonicalGeneralSourceCatalog(previous: ContractProject | undefined, chainId: BuilderChainId): ContractProject["sources"] {
   builderChain(chainId);
   const kit = chainId === 99901 ? elysiumSourcePackage : chainId === 8453 ? baseSourcePackage : chainId === 999 ? hyperSourcePackage : sourcePackage;
-  return sourceCatalog(kit.sources, previous);
+  return sourceCatalog((chainId===1||chainId===4663)?{...kit.sources,...automaticLaunchSources}:kit.sources, previous);
 }
 
 const interfaceCache=new Map<BuilderChainId,CanonicalInterfaceContext>();
@@ -45,7 +48,7 @@ export function canonicalInterfaceContext(chainId:BuilderChainId):CanonicalInter
   builderChain(chainId);
   const saved=interfaceCache.get(chainId);if(saved)return structuredClone(saved);
   const family=chainId===99901?"elysium-launch-protection-v1":chainId===8453?"base-launch-protection-v1":chainId===999?"hyperevm-launch-protection-v1":"launch-protection-v1";
-  const sources=canonicalGeneralSourceCatalog(undefined,chainId),contracts=interfaces.families[family];
+  const sources=canonicalGeneralSourceCatalog(undefined,chainId),contracts=[...interfaces.families[family],...([1,4663].includes(chainId)?interfaces.families["automatic-platform-fees-v1"].filter(candidate=>!interfaces.families[family].some(existing=>existing.source===candidate.source&&existing.contract===candidate.contract)):[])];
   for(const contract of contracts){
     const source=sources[contract.source];
     if(!source||createHash("sha256").update(source.content).digest("hex")!==contract.sourceSha256)throw new Error("Canonical interface source changed; regenerate its catalog.");

@@ -9,8 +9,6 @@ import { resolveDirectNativeProfile } from './profile-direct-native-v1.mjs';
 import { GRAPH_TARGET_SALT_TYPE, LAUNCH_SEEDED_CONCENTRATED_LIQUIDITY_VECTORS } from './constants.mjs';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
-const kitUrl = new URL('../contracts/launch-protection-v1/', import.meta.url);
-const contracts = { initializer: 'ProtectedNativeInitializerV1', token: 'ProtectedLaunchTokenV1', hook: 'ProtectedNative30HookV1' };
 async function exactFile(file, content) {
   await mkdir(path.dirname(file), { recursive: true });
   try { const previous = await readFile(file); if (!previous.equals(Buffer.from(content))) throw new Error('Refusing to overwrite a different project source: ' + file); }
@@ -20,13 +18,16 @@ async function exactFile(file, content) {
 export async function buildProtectedEthereumLaunchV1({ projectRoot, client, capabilities, input, permitWindow }) {
   if (capabilities.chain?.id !== '1' || capabilities.profile?.profileVersion !== '3.6.0'
     || capabilities.profile?.productionLaunchAuthorized !== true) throw new TypeError('Current Ethereum capabilities are required');
+  const automatic=capabilities.automaticPlatformFees?.status==='active' ? capabilities.automaticPlatformFees : undefined;
+  const kitUrl = automatic ? new URL('../contracts/automatic-platform-fees-v1/',import.meta.url) : new URL('../contracts/launch-protection-v1/',import.meta.url);
+  const contracts={initializer:'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:automatic?'AutomaticProtectedNative30HookV1':'ProtectedNative30HookV1'};
   const root = path.resolve(projectRoot), metadata = input.projectMetadata;
   const selection = { schemaVersion: 'programmable.direct-native-hook-graph-profile-selection.v3',
     profileId: 'programmable.direct-native-hook-graph.v1', profileRevision: 3,
     targetRoles: { tokenTargetId: 'token', hookTargetId: 'hook', initializerTargetId: 'initializer', platformFeeBindingTargetId: 'hook' },
     fundingMode: 'wallet-transaction-value', accountingMode: 'inclusive-selected-total',
     assessmentBase: 'executed-gross-declared-quote', feeCurrency: 'declared-quote-currency',
-    claimMode: 'immutable-payout-recipient', payoutRecipient: PROTECTED_LAUNCH_POLICY_V1.treasury,
+    claimMode: 'immutable-payout-recipient', payoutRecipient: automatic?.teamWallet ?? PROTECTED_LAUNCH_POLICY_V1.treasury,
     applicantSelectedBuyHundredthsOfBip: String(((input.creatorBuyFeeBps ?? 0) + 30) * 100),
     applicantSelectedSellHundredthsOfBip: String(((input.creatorSellFeeBps ?? 0) + 30) * 100),
     liquidityModel: { schemaVersion: 'programmable.direct-native-liquidity-model-intent.v1', model: 'launch-seeded-concentrated-liquidity',
@@ -48,7 +49,7 @@ export async function buildProtectedEthereumLaunchV1({ projectRoot, client, capa
   const source = await buildSourceBundle(root, bundlePaths);
   const namespace = deriveRouteNamespace(source.bundleContentSha256, input.launchWallet, profile);
   const saltType = keccak256(stringToHex(GRAPH_TARGET_SALT_TYPE));
-  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, chainId: 1, developer: input.launchWallet,
+  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, platformFeePolicy:automatic, chainId: 1, developer: input.launchWallet,
     name: metadata.token.name, symbol: metadata.token.symbol, deploymentFactory: profile.graphFactory,
     initializerAuthority: profile.graphFactory,
     deriveRootAddress({ role, initCodeHash, applicantSalt }) {
@@ -70,7 +71,7 @@ export async function buildProtectedEthereumLaunchV1({ projectRoot, client, capa
     { ...base('hook'), constructorArguments: [pins.manager, [{ target: 'token' }, 0, 60, String(prepared.price.sqrtPriceX96), { target: 'initializer' }, input.launchWallet,
       input.creatorBuyFeeBps ?? 0, input.creatorSellFeeBps ?? 0, ZERO, 0], input.launchWallet,
       PROTECTED_LAUNCH_CHAIN_PINS_V1[1].router,
-      PROTECTED_LAUNCH_CHAIN_PINS_V1[1].routerCodeHash, prepared.exemptions],
+      PROTECTED_LAUNCH_CHAIN_PINS_V1[1].routerCodeHash, prepared.exemptions, ...(automatic?[ZERO,'0x'+'00'.repeat(32)]:[])],
       declaredHookPermissions: ['beforeInitialize', 'beforeSwap', 'afterSwap', 'beforeSwapReturnDelta', 'afterSwapReturnDelta'] },
   ];
   const config = { schemaVersion: 'programmable.launch-pack-config.v3', profileVersion: '3.6.0', chainId: '1', launchWallet: input.launchWallet,

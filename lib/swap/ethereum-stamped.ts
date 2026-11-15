@@ -274,14 +274,16 @@ export function validateEthereumStampedPreparation(value: unknown, route: Ethere
         requireValue(object(accrued) && accrued.proofDigest === native30Proof.proofDigest && accrued.vault === native30Proof.feeVault
           && accrued.recipient === native30Proof.recipient && accrued.rateBps === native30Proof.rateBps && accrued.currency === NATIVE
           && accrued.assessmentBase === "gross_native_leg" && accrued.rounding === native30Proof.rounding
-          && accrued.grossNativeAmount === fee.grossNativeAmount && accrued.platformAccruedIncrease === fee.platformFeeAmount
+          && accrued.grossNativeAmount === fee.grossNativeAmount && (native30Proof.automaticPayout
+            ? accrued.automaticPayout === true && accrued.platformPaid === fee.platformFeeAmount && accrued.platformAccruedIncrease === "0"
+            : accrued.platformAccruedIncrease === fee.platformFeeAmount)
           && digest(accrued.callbackTraceDigest) && digest(accrued.recordTraceDigest), "The pool fee accrual is invalid.");
         const ledger = (key: string) => { const value = accrued[key]; const change = key === "creatorAccruedIncrease" || key === "backingIncrease";
           requireValue(typeof value === "string" && (change ? /^(0|-?[1-9][0-9]{0,77})$/ : /^(0|[1-9][0-9]{0,77})$/).test(value), "The pool fee ledger is invalid."); return BigInt(value); };
-        requireValue(ledger("platformAccruedAfter") - ledger("platformAccruedBefore") === platform
+        requireValue(ledger("platformAccruedAfter") - ledger("platformAccruedBefore") === (native30Proof.automaticPayout ? 0n : platform)
           && ledger("creatorAccruedAfter") - ledger("creatorAccruedBefore") === ledger("creatorAccruedIncrease")
           && ledger("backingAfter") - ledger("backingBefore") === ledger("backingIncrease")
-          && ledger("backingIncrease") === platform + ledger("creatorAccruedIncrease")
+          && ledger("backingIncrease") === (native30Proof.automaticPayout ? 0n : platform) + ledger("creatorAccruedIncrease")
           && ledger("backingBefore") >= ledger("platformAccruedBefore") + ledger("creatorAccruedBefore")
           && ledger("backingAfter") >= ledger("platformAccruedAfter") + ledger("creatorAccruedAfter"), "The pool fee is not backed.");
       }

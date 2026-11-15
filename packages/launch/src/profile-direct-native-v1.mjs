@@ -1645,7 +1645,7 @@ function canonicalClaimMode(value) {
 
 function canonicalImmutablePayoutRecipient(value) {
   const payoutRecipient = getAddress(value);
-  if (![PLATFORM_FEE_CLAIM_AUTHORITY, "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"].includes(payoutRecipient)) {
+  if (![PLATFORM_FEE_CLAIM_AUTHORITY, "0xD88539d3c4C460136a733A3Fd60cf6BF269079da", "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"].includes(payoutRecipient)) {
     throw new TypeError(
       "direct-native immutable payout recipient must be the platform claim authority",
     );

@@ -58,6 +58,9 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
       "swap-router":production.protectionBindings?.swapRouter.address,"swap-router-runtime-hash":production.protectionBindings?.swapRouter.runtimeCodeHash,
       "native-usd-feed":production.protectionBindings?.nativeUsdFeed.address,"native-usd-feed-runtime-hash":production.protectionBindings?.nativeUsdFeed.runtimeCodeHash,
       "sequencer-uptime-feed":production.protectionBindings?.sequencerUptimeFeed,
+      "platform-fee-router":production.automaticPlatformFees?.router?.address ?? zeroAddress,
+      "platform-fee-router-runtime-hash":production.automaticPlatformFees?.router?.runtimeCodeHash ?? `0x${"00".repeat(32)}`,
+      "platform-team-wallet":production.automaticPlatformFees?.teamWallet,
       "opening-tick":opening?.inputs.initialTick.toString(),"opening-sqrt-price-x96":opening?.inputs.sqrtPriceX96 };
     const resolve = (value: DeploymentValue): PackerValue => {
       if (Array.isArray(value)) return value.map(resolve);
@@ -67,8 +70,8 @@ export function resolveGeneralDeploymentValues(project: ContractProject, compila
         const literal = bindings[value.binding];
         if (typeof literal !== "string") return invalid();
         if (value.binding === "opening-tick" || value.binding === "opening-sqrt-price-x96") return literal;
-        if(value.binding==="swap-router-runtime-hash"||value.binding==="native-usd-feed-runtime-hash") {
-          if(!/^0x(?!0{64}$)[a-f0-9]{64}$/u.test(literal))return invalid();return literal;
+        if(value.binding==="swap-router-runtime-hash"||value.binding==="native-usd-feed-runtime-hash"||value.binding==="platform-fee-router-runtime-hash") {
+          if(!/^0x[a-f0-9]{64}$/u.test(literal)||value.binding!=="platform-fee-router-runtime-hash"&&/^0x0{64}$/.test(literal))return invalid();return literal;
         }
         return getAddress(literal);
       }
