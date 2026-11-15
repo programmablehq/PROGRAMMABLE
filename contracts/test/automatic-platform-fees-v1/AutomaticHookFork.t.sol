@@ -29,9 +29,8 @@ contract AutomaticHookForkTest is Test {
         );
         address swapRouter =
             robinhood ? 0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99 : 0xd92A36B0000531EF3063dEd4De20A0783308446C;
-        address feed = robinhood
-            ? 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9
-            : 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
+        address feed =
+            robinhood ? 0x78F3556b67E17Df817D51Ef5a990cDaF09E8d3A9 : 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
         address recipientRouter = robinhood ? address(new RobinhoodPlatformFeeRouterV1(vm.addr(0xA11CE))) : address(0);
         bytes32 routerHash = robinhood ? recipientRouter.codehash : bytes32(0);
         ProtectedNativeInitializerV1 initializer =
