@@ -58,8 +58,17 @@ export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3 = deepFre
   native30Waiver: null,
 });
 
+/** New-launch policy only. Existing signed recipients remain unchanged. */
+export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_AUTOMATIC_V4 = deepFreeze({
+  ...DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2,
+  policyVersion: "programmable.ethereum-routed-native-fee.v4",
+  defaultCollection: { ...DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2.defaultCollection, recipient: "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62" },
+  native30Waiver: { ...DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2.native30Waiver, recipient: "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",
+    hook: "AutomaticProtectedNative30HookV1", vault: "AutomaticNativeFeeVaultV1" },
+});
+
 export function assertDirectNativeProgrammableTradeFeePolicyV36(value) {
-  if (![ELYSIUM_PROFILE_V1.programmableTradeFeePolicy, HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
+  if (![DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_AUTOMATIC_V4, ELYSIUM_PROFILE_V1.programmableTradeFeePolicy, HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
     throw new TypeError("PROFILE_36_PROGRAMMABLE_TRADE_FEE_POLICY_MISMATCH");
   }
   return value;

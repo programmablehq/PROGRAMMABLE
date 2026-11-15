@@ -17,7 +17,7 @@ const object = (value: unknown): ObjectValue => {
 };
 const same = (a: unknown, b: unknown) => canonicalBrowserJsonV2(a) === canonicalBrowserJsonV2(b);
 const unavailable = () => new CustomAIError("launch-context", "The launch network configuration could not be checked. Your saved design is kept.", 503);
-type ProtectionStatus = { required: boolean; supportedChains: readonly string[]; protections: NonNullable<LaunchProductionContext["protections"]>; openingTaxRecipient: `0x${string}` };
+type ProtectionStatus = { automaticPlatformFees?: NonNullable<LaunchProductionContext["automaticPlatformFees"]>[]; required: boolean; supportedChains: readonly string[]; protections: NonNullable<LaunchProductionContext["protections"]>; openingTaxRecipient: `0x${string}` };
 export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus {
   try {
     const v = object(value);
@@ -31,7 +31,7 @@ export function projectLaunchProtectionStatus(value: unknown): ProtectionStatus 
       || Object.entries(expected).some(([key, expected]) => v[key] !== expected)
       || !Array.isArray(v.supportedChains)
       || ![ ["1","4663","8453","999"], ["1","4663","8453","999","99901"] ].some(chains => same([...v.supportedChains as string[]].sort(), chains))) throw Error();
-    return { required: v.required, supportedChains: v.supportedChains as string[], openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
+    return { ...(Array.isArray(v.automaticPlatformFees)?{automaticPlatformFees:v.automaticPlatformFees as NonNullable<LaunchProductionContext["automaticPlatformFees"]>[]} : {}), required: v.required, supportedChains: v.supportedChains as string[], openingTaxRecipient: v.openingTaxRecipient as `0x${string}`, protections: {
       openingFeePpm: 990000, openingSeconds: 30, buyerLimitBps: 200, recipientLimitBps: 200,
       protectionSeconds: 300, maximumAdditionalTaxExemptWallets: 6, minimumFdvUsd: "15000" } };
   } catch { throw unavailable(); }
@@ -41,8 +41,9 @@ function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | un
   if (!status.supportedChains.includes(String(chainId))) throw unavailable();
   const required = status.required || chainId === 8453 || chainId === 999 || chainId === 99901;
   if (legacy && !same(legacy, status.protections)) throw unavailable();
+  const automatic=status.automaticPlatformFees?.find(p=>p?.chainId===String(chainId));
   const pins=PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
-  return { version: 3 as const, protections: required ? status.protections : null,
+  return { ...(automatic?{automaticPlatformFees:automatic}:{}), version: 3 as const, protections: required ? status.protections : null,
     protectionBindings: required ? { source:"canonical-protection-kit-v1" as const,poolManagerAddress:pins.manager as `0x${string}`,
       swapRouter:binding(pins.router,pins.routerCodeHash),nativeUsdFeed:binding(pins.feed,pins.feedCodeHash),
       nativeUsdFeedMaxAgeSeconds:Number(pins.maxAge),sequencerUptimeFeed:chainId===8453?PROTECTED_LAUNCH_CHAIN_PINS_V1[8453].sequencerFeed as `0x${string}`:null } : null,
