@@ -1,7 +1,8 @@
 /** Only bounded diagnostic identifiers are copied. Never copy response bodies or credentials. */
 export function safeDeveloperDetails(message: string, chainId?: string) {
   const requestId = message.match(/(?:request[ _-]?id[\s:]+)([a-zA-Z0-9._:-]{1,128})/iu)?.[1]?.replace(/\.$/u, "");
-  const httpStatus = message.match(/\bHTTP[ _](\d{3})\b/u)?.[1];
+  const httpStatus = message.match(/\bHTTP[ _](\d{3})\b/u)?.[1]
+    ?? message.match(/^\s*([45]\d{2})(?:\s|$)/u)?.[1];
   const code = message.match(/\b(?:PLAN|API|API_KEY|CUSTOM_LAUNCH|LAUNCH_PLAN|HTTP|AUTH)_[A-Z0-9_]{2,96}\b/u)?.[0];
   return ["Programmable developer access", chainId ? `Chain: ${chainId}` : null,
     requestId && !requestId.startsWith("pm_live_") ? `Request ID: ${requestId}` : null, code ? `Code: ${code}` : null, httpStatus ? `HTTP: ${httpStatus}` : null].filter(Boolean).join("\n");
