@@ -1,7 +1,7 @@
 import ELYSIUM_PROFILE_V1 from "./elysium-profile-v1.json" with {type: "json"};
 import BASE_PROFILE_V1 from "./base-profile-v1.json" with {type: "json"};
 import HYPEREVM_PROFILE_V1 from "./hyperevm-profile-v1.json" with {type: "json"};
-import { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, assertDirectNativeProgrammableTradeFeePolicyV36 } from "./profile-v36.mjs";
+import { DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, assertDirectNativeProgrammableTradeFeePolicyV36, withAutomaticNativeProfileV2 } from "./profile-v36.mjs";
 import { validateCanonicalSettlementFeeVaultV2Graph, validateCanonicalSettlementFeeVaultV2Build } from "./canonical-settlement-fee-vault-v2.mjs";
 import {
   decodeFunctionData,
@@ -300,7 +300,8 @@ export function validateDirectNativeProfileSelection(value) {
 
 export function resolveDirectNativeProfile(selection, options = {}) {
   if (["8453", "999", "99901"].includes(options.chainId)) {
-    const profile = options.chainId === "99901" ? ELYSIUM_PROFILE_V1 : options.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1;
+    const legacyProfile = options.chainId === "99901" ? ELYSIUM_PROFILE_V1 : options.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1;
+    const profile=options.programmableTradeFeePolicy?.policyVersion?.endsWith(".v2")?withAutomaticNativeProfileV2(legacyProfile,options.programmableTradeFeePolicy):legacyProfile;
     const selected = validateDirectNativeProfileSelection(selection);
     if (options.profileVersion !== "3.6.0" || selected.fundingMode !== "wallet-transaction-value"
       || selected.accountingMode !== profile.platformFeePolicy.accountingMode
@@ -384,7 +385,8 @@ export function resolveDirectNativeProfile(selection, options = {}) {
 
 export function validateEmbeddedDirectNativeProfile(value) {
   if (["8453", "999", "99901"].includes(value?.chainId)) {
-    const profile = value.chainId === "99901" ? ELYSIUM_PROFILE_V1 : value.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1;
+    const legacyProfile = value.chainId === "99901" ? ELYSIUM_PROFILE_V1 : value.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1;
+    const profile=value.programmableTradeFeePolicy?.policyVersion?.endsWith(".v2")?withAutomaticNativeProfileV2(legacyProfile,value.programmableTradeFeePolicy):legacyProfile;
     if (canonicalizeJson(value) !== canonicalizeJson(profile)) throw new TypeError("EVM profile differs from the canonical deployment");
     return structuredClone(profile);
   }

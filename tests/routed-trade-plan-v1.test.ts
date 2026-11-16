@@ -1,3 +1,4 @@
+import { AUTOMATIC_PLATFORM_FEES_RECIPES_V2 } from "@/lib/launch-protection/automatic-fees-recipes-v2";
 import {AUTOMATIC_PLATFORM_FEES_RECIPES_V1} from "../lib/launch-protection/automatic-fees-recipes-v1";
 import { describe, expect, it, vi } from "vitest";
 import { decodeAbiParameters, decodeFunctionData, encodeAbiParameters, encodeFunctionData, getContractAddress, keccak256, parseAbi, toHex, type Hex } from "viem";
@@ -117,7 +118,7 @@ function immutablePoolFixture(index = 0, options: { unbacked?: boolean; wrongAcc
   const protectedFixture = options.protected ? protectedVector(typeof options.protected === "string" ? options.protected : undefined) : null;
   const vector = (protectedFixture ? protectedFixture.proof : options.native100 ? native100Vector() : options.native30 ? native30Vector : feeVectors.proofs[index]!) as unknown as ImmutablePoolFeeRuntimeProofV1;
   const proof = rebuildImmutablePoolFeeRuntimeProof(vector, vector.market);
-  const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v3" ? feeRecipesV3[proof.recipeId] : proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? (proof.recipeId === "automatic_native30_v1" ? AUTOMATIC_PLATFORM_FEES_RECIPES_V1 : feeRecipesV2[proof.recipeId]) : feeRecipes[proof.recipeId];
+  const recipes = proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v3" ? feeRecipesV3[proof.recipeId] : proof.schemaVersion === "programmable.immutable-pool-fee-runtime-proof.v2" ? (proof.recipeId === "automatic_native30_v1" ? AUTOMATIC_PLATFORM_FEES_RECIPES_V1 : proof.recipeId === "automatic_native30_v2" ? AUTOMATIC_PLATFORM_FEES_RECIPES_V2 : feeRecipesV2[proof.recipeId]) : feeRecipes[proof.recipeId];
   const platform = BigInt(proof.rateBps) * 10n;
   const tradeRequest = { ...request(), zeroForOne: !options.sell };
   const creatorAmount = proof.recipeId === "native_fee_kernel_v1" ? options.sell ? 250n : 150n : 0n;

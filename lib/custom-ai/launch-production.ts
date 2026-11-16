@@ -10,7 +10,7 @@ export type ProductionProtectionBindings = {
 };
 export const PROTECTED_COMPONENT_ROLES = ["feeVault", "hook", "initializer", "module", "openingTaxVault", "token"] as const;
 export type AutomaticPlatformFeePolicy = {
-  policyId:"programmable.automatic-platform-fees.v1"; status:"active"; chainId:"1"|"4663";
+  policyId:"programmable.automatic-platform-fees.v1"|"programmable.automatic-platform-fees.v2"; status:"active"; chainId:"1"|"4663"|"8453"|"999"|"99901";
   teamWallet:"0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"; platformFeeBps:30;
   buybackBps:0|8000;nativePayoutBps:10000|2000;activationTime:string;router:ProductionBinding|null;
 };
@@ -81,11 +81,11 @@ export function createLaunchProductionContext(body: ContextBody): LaunchProducti
   if (body.automaticPlatformFees) {
     const p=body.automaticPlatformFees;
     if(!exact(p,"policyId,status,chainId,teamWallet,platformFeeBps,buybackBps,nativePayoutBps,activationTime,router")
-      ||p.policyId!=="programmable.automatic-platform-fees.v1"||p.status!=="active"||String(body.chainId)!==p.chainId
-      ||![1,4663].includes(body.chainId)||p.teamWallet!=="0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"||p.platformFeeBps!==30
+      ||!["programmable.automatic-platform-fees.v1","programmable.automatic-platform-fees.v2"].includes(p.policyId)||p.status!=="active"||String(body.chainId)!==p.chainId
+      ||!(p.policyId==="programmable.automatic-platform-fees.v2"?[1,4663,8453,999,99901]:[1,4663]).includes(body.chainId)||p.teamWallet!=="0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"||p.platformFeeBps!==30
       ||!Number.isFinite(Date.parse(p.activationTime))||p.buybackBps!==(body.chainId===4663?8000:0)
       ||p.nativePayoutBps!==(body.chainId===4663?2000:10000)
-      ||(body.chainId===1?p.router!==null:!p.router||!exact(p.router,"address,runtimeCodeHash")||!address.test(p.router.address)||!code.test(p.router.runtimeCodeHash)))return invalid();
+      ||(body.chainId!==4663?p.router!==null:!p.router||!exact(p.router,"address,runtimeCodeHash")||!address.test(p.router.address)||!code.test(p.router.runtimeCodeHash)))return invalid();
   }
   if (body.protections) {
     const p = body.protections;

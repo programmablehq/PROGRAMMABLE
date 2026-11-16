@@ -555,3 +555,18 @@ test("Custom AI discovery permits exact public funding runtime hashes with crede
     assertFiles(scan(t, { [`${path}.backup`]: line }, { raw: true }), [`${path}.backup`]);
   }
 });
+
+test("V2 fee artifacts allow only the exact existing public constants", t => {
+  const path="packages/launch/contracts/automatic-platform-fees-v2/standard-json.json";
+  const source=JSON.parse(readFileSync(new URL(`../../${path}`,import.meta.url),"utf8"));
+  const line=JSON.stringify({content:source.sources["src/automatic-platform-fees-v1/RobinhoodPlatformFeeRouterV1.sol"].content});
+  assert.deepEqual(scan(t,{[path]:line},{raw:true}),[]);
+  assertFiles(scan(t,{[path]:line.replace(/0xC60bA256B44334A0Cd2C7242E98B88f031abB006/,material)},{raw:true}),[path]);
+  assertFiles(scan(t,{[`${path}.backup`]:line},{raw:true}),[`${path}.backup`],2);
+  const binding="docs/operations/releases/custom-launch-v4.4.3/cli-release-binding.json";
+  const value=JSON.parse(readFileSync(new URL(`../../${binding}`,import.meta.url),"utf8"));
+  const publicValue=value.elysiumClient.profile.fundingTokenRuntimeCodeHash;
+  assert.deepEqual(scan(t,{[binding]:{fundingTokenRuntimeCodeHash:publicValue}}),[]);
+  assertFiles(scan(t,{[binding]:{apiKey:material}}),[binding]);
+  assertFiles(scan(t,{[`${binding}.backup`]:{fundingTokenRuntimeCodeHash:publicValue}}),[`${binding}.backup`]);
+});

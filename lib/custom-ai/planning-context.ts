@@ -53,7 +53,7 @@ export function modelDesignContext(input:{memory?:string;pendingRevision?:ChatRe
   const projectView=generalProject?generalProjectView(generalProject):input.generalProjectView;
   const original=includeSource&&generalProject?generalProject.project.sources:undefined;
   const fixed=original?Object.fromEntries(Object.entries(original).filter(([path,source])=>input.canonicalSources?.[path]?.content===source.content)):undefined;
-  const dependencies=fixed?dependencySourceContext(fixed):undefined;
+  const dependencies=fixed?dependencySourceContext(fixed,{libraryDeclarations:true}):undefined;
   const sources=original?{...original,...dependencies?.modelSources}:undefined;
   return {
     memory:input.memory,pendingRevision:input.pendingRevision,ruleSpec:input.ruleSpec,editTarget:input.editTarget,productBlueprint:input.productBlueprint,

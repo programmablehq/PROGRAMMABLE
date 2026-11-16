@@ -31,13 +31,13 @@ export function protectedLaunchExemptionsV1(developer, extra = []) {
   return [...result, ...Array(PROTECTED_LAUNCH_POLICY_V1.maximumAdditionalTaxExemptWallets - result.length).fill(ZERO)];
 }
 
-async function kit(chainId, automatic = false) {
+async function kit(chainId, automatic = false, automaticV2 = false) {
   const baseKit = Number(chainId) === 8453;
   const hyperKit = Number(chainId) === 999;
   const elysiumKit = Number(chainId) === 99901;
-  const root = automatic ? new URL('../contracts/automatic-platform-fees-v1/', import.meta.url) : elysiumKit ? new URL('../contracts/elysium-launch-protection-v1/', import.meta.url) : hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
+  const root = automaticV2 ? new URL('../contracts/automatic-platform-fees-v2/', import.meta.url) : automatic ? new URL('../contracts/automatic-platform-fees-v1/', import.meta.url) : elysiumKit ? new URL('../contracts/elysium-launch-protection-v1/', import.meta.url) : hyperKit ? new URL('../contracts/hyperevm-launch-protection-v1/', import.meta.url) : baseKit ? new URL('../contracts/base-launch-protection-v1/', import.meta.url) : kitUrl;
   const prefix=elysiumKit?'Elysium':hyperKit?'HyperEvm':baseKit?'Base':null;
-  const contractNames = automatic ? { ...names, hook:'AutomaticProtectedNative30HookV1', feeVault:'AutomaticNativeFeeVaultV1' } : prefix ? { ...names, initializer: prefix+'ProtectedNativeInitializerV1', hook:prefix+'ProtectedNative30HookV1', module:prefix+'LaunchProtectionModuleV1' } : names;
+  const contractNames = automaticV2 ? { ...names, initializer:prefix?prefix+'ProtectedNativeInitializerV1':names.initializer, hook:'AutomaticProtectedNative30HookV2', feeVault:'AutomaticNativeFeeVaultV2', openingTaxVault:'AutomaticNativeFeeVaultV2', module:'AutomaticLaunchProtectionModuleV2' } : automatic ? { ...names, hook:'AutomaticProtectedNative30HookV1', feeVault:'AutomaticNativeFeeVaultV1' } : prefix ? { ...names, initializer: prefix+'ProtectedNativeInitializerV1', hook:prefix+'ProtectedNative30HookV1', module:prefix+'LaunchProtectionModuleV1' } : names;
   const standardJsonBytes = await readFile(new URL('standard-json.json', root));
   const artifacts = Object.fromEntries(await Promise.all(Object.entries(contractNames).map(async ([role, name]) =>
     [role, JSON.parse(await readFile(new URL(name + '.artifact.json', root), 'utf8'))])));
@@ -70,11 +70,12 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
   additionalTaxExemptWallets = [], targetFdvUsd = '15000', initialBuyWei, minimumTokensOut, deriveRootAddress, platformFeePolicy, capabilities }) {
   const pins = PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId];
   platformFeePolicy ??= capabilities?.automaticPlatformFees;
-  if (platformFeePolicy && (platformFeePolicy.policyId !== 'programmable.automatic-platform-fees.v1' || platformFeePolicy.status !== 'active'
+  if (platformFeePolicy && (!['programmable.automatic-platform-fees.v1','programmable.automatic-platform-fees.v2'].includes(platformFeePolicy.policyId) || platformFeePolicy.status !== 'active'
     || String(platformFeePolicy.chainId) !== String(chainId) || platformFeePolicy.platformFeeBps !== 30
     || platformFeePolicy.nativePayoutBps !== (Number(chainId)===4663?2000:10000))) throw new TypeError('Unsupported automatic fee policy');
-  const automatic = platformFeePolicy?.policyId === 'programmable.automatic-platform-fees.v1';
-  if (automatic && (![1,4663].includes(Number(chainId)) || platformFeePolicy.teamWallet !== '0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62'
+  const automaticV2 = platformFeePolicy?.policyId === 'programmable.automatic-platform-fees.v2';
+  const automatic = automaticV2 || platformFeePolicy?.policyId === 'programmable.automatic-platform-fees.v1';
+  if (automatic && (!(automaticV2?[1,4663,8453,999,99901]:[1,4663]).includes(Number(chainId)) || platformFeePolicy.teamWallet !== '0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62'
     || platformFeePolicy.buybackBps !== (Number(chainId)===4663?8000:0))) throw new TypeError('Automatic fee policy differs');
   if (!pins || await client.getChainId() !== Number(chainId)) throw new TypeError('Unsupported or mismatched chain');
   if(automatic && Number(chainId)===4663 && !platformFeePolicy.router) throw new TypeError('Automatic fee router missing');
@@ -107,7 +108,7 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
     if(!code || code==='0x' || seq[1]!==0n || seq[2]===0n || seq[2]>=block.timestamp || block.timestamp-seq[2]<=3600n) throw new TypeError('Base sequencer is unavailable or recovering');
     sequencerFeedCodeHash=keccak256(code);
   }
-  const k = await kit(chainId, automatic), a = k.artifacts;
+  const k = await kit(chainId, automatic, automaticV2), a = k.artifacts;
   const salt = (role, attempt = 0n) => keccak256(encodeAbiParameters(parseAbiParameters('uint256,address,bytes32,string,uint256'), [BigInt(chainId), owner, nonce, role, attempt]));
   const root = (role, args, flags) => {
     const initCode = encodeDeployData({ abi: a[role].abi, bytecode: a[role].creationBytecode, args });
@@ -135,10 +136,10 @@ export async function prepareProtectedNativeContractsV1({ client, chainId, devel
     token: materialize(a.token, { initializer: init.address, poolManager: pins.manager, launchSupply: amount, walletTokenLimit: amount / 50n }, token.args, token.address),
     hook: materialize(a.hook, { poolManager: pins.manager, CANONICAL_POOL_MANAGER: pins.manager, CHAIN_ID: chainId, token: token.address,
       lpFee: 0, tickSpacing: 60, initialSqrtPriceX96: price.sqrtPriceX96, initializer: init.address, creatorBuyFeeBps: buyBps,
-      creatorSellFeeBps: sellBps, module: protectionModule, moduleCodeHash: moduleMaterialized.runtimeCodeHash, maxModuleLpFeePips: 0, feeVault, openingTaxVault, ...(automatic?{platformFeeRouter:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,PLATFORM_RECIPIENT:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,platformFeeRouterCodeHash:platformRouterHash}:{}) }, hook.args, hook.address),
+      creatorSellFeeBps: sellBps, module: protectionModule, moduleCodeHash: moduleMaterialized.runtimeCodeHash, maxModuleLpFeePips: 0, feeVault, openingTaxVault, ...(automaticV2?{OPENING_TAX_RECIPIENT:Number(chainId)!==4663?platformFeePolicy.teamWallet:platformRouter}:{}), ...(automatic?{platformFeeRouter:Number(chainId)!==4663?platformFeePolicy.teamWallet:platformRouter,PLATFORM_RECIPIENT:Number(chainId)!==4663?platformFeePolicy.teamWallet:platformRouter,platformFeeRouterCodeHash:platformRouterHash}:{}) }, hook.args, hook.address),
     module: moduleMaterialized,
-    feeVault: materialize(a.feeVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: owner, ...(automatic?{PLATFORM_RECIPIENT:Number(chainId)===1?platformFeePolicy.teamWallet:platformRouter,platformRouterCodeHash:platformRouterHash}:{}) }, [pins.manager, owner, ...(automatic?[platformRouter,platformRouterHash]:[])], feeVault),
-    openingTaxVault: materialize(a.openingTaxVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: PROTECTED_LAUNCH_POLICY_V1.treasury }, [pins.manager, PROTECTED_LAUNCH_POLICY_V1.treasury], openingTaxVault),
+    feeVault: materialize(a.feeVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: owner, ...(automatic?{PLATFORM_RECIPIENT:Number(chainId)!==4663?platformFeePolicy.teamWallet:platformRouter,platformRouterCodeHash:platformRouterHash}:{}) }, [pins.manager, owner, ...(automatic?[platformRouter,platformRouterHash]:[])], feeVault),
+    openingTaxVault: materialize(a.openingTaxVault, { poolManager: pins.manager, kernel: hook.address, creatorRecipient: automaticV2?platformFeePolicy.teamWallet:PROTECTED_LAUNCH_POLICY_V1.treasury, ...(automaticV2?{PLATFORM_RECIPIENT:Number(chainId)!==4663?platformFeePolicy.teamWallet:platformRouter,platformRouterCodeHash:platformRouterHash}:{}) }, [pins.manager, automaticV2?platformFeePolicy.teamWallet:PROTECTED_LAUNCH_POLICY_V1.treasury, ...(automaticV2?[platformRouter,platformRouterHash]:[])], openingTaxVault),
   };
   const initializeData = encodeFunctionData({ abi: a.initializer.abi, functionName: 'initialize', args: [hook.address, token.address, price.initialTick, owner, minimum] });
   return { chainId: String(chainId), developer: owner, factory, factoryCodeHash: keccak256(factoryCode), authority, contracts, ...(automatic?{automaticPlatformFees:platformFeePolicy}:{}),

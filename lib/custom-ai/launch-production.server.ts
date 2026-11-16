@@ -49,7 +49,7 @@ function protectionFields(chainId: BuilderChainId, status: ProtectionStatus | un
       nativeUsdFeedMaxAgeSeconds:Number(pins.maxAge),sequencerUptimeFeed:chainId===8453?PROTECTED_LAUNCH_CHAIN_PINS_V1[8453].sequencerFeed as `0x${string}`:null } : null,
     protectionPolicy: { policyVersion: "programmable.launch-protection.v1" as const, required, appliesTo: "custom-contract" as const,
       evidenceAuthority: "authenticated-original-source-and-graph-review" as const,
-      componentRoles: required ? [...PROTECTED_COMPONENT_ROLES] : [], openingTaxRecipient: required ? status.openingTaxRecipient : null } };
+      componentRoles: required ? [...PROTECTED_COMPONENT_ROLES] : [], openingTaxRecipient: required ? automatic?.policyId==="programmable.automatic-platform-fees.v2" ? automatic.router?.address??automatic.teamWallet : status.openingTaxRecipient : null } };
 }
 function binding(address: unknown, runtimeCodeHash: unknown): ProductionBinding {
   if (typeof address !== "string" || !/^0x(?!0{40}$)[a-f0-9]{40}$/iu.test(address)

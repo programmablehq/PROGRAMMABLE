@@ -25,12 +25,17 @@ export const HYPEREVM_TRADE_FEE_POLICY_V1 = Object.freeze({
   },
   native30Waiver: null,
 } as const);
+export const HYPEREVM_TRADE_FEE_POLICY_V2 = Object.freeze({
+  ...HYPEREVM_TRADE_FEE_POLICY_V1, policyVersion:"programmable.hyperevm-native-fee.v2",
+  defaultCollection:{...HYPEREVM_TRADE_FEE_POLICY_V1.defaultCollection,
+    recipient:"0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",collection:"atomic-pool-fee-forwarding"},
+} as const);
 export interface HyperEvmRoutingFeePolicyBindingV1 {
   schemaVersion: "programmable.hyperevm-launch-routing-fee-policy-binding.v1";
   launchProfileVersion: "3.6.0";
   launchProfileHash: `sha256:${string}`;
   policyHash: `sha256:${string}`;
-  policy: typeof HYPEREVM_TRADE_FEE_POLICY_V1;
+  policy: typeof HYPEREVM_TRADE_FEE_POLICY_V1 | typeof HYPEREVM_TRADE_FEE_POLICY_V2;
   enforcementBoundary: {
     chainId: "999";
     blockNumber: string;
@@ -54,8 +59,8 @@ export function parseHyperEvmRoutingFeePolicyV1(value: unknown): HyperEvmRouting
   if (Object.keys(v).sort().join() !== "bindingHash,enforcementBoundary,launchProfileHash,launchProfileVersion,policy,policyHash,schemaVersion,stampBinding"
     || v.schemaVersion !== "programmable.hyperevm-launch-routing-fee-policy-binding.v1" || v.launchProfileVersion !== "3.6.0"
     || !hash(v.launchProfileHash) || !hash(v.policyHash)
-    || canonicalBrowserJsonV2(v.policy) !== canonicalBrowserJsonV2(HYPEREVM_TRADE_FEE_POLICY_V1)
-    || v.policyHash !== canonicalBrowserSha256V2(HYPEREVM_TRADE_FEE_POLICY_V1.schemaVersion, HYPEREVM_TRADE_FEE_POLICY_V1)
+    || ![HYPEREVM_TRADE_FEE_POLICY_V1,HYPEREVM_TRADE_FEE_POLICY_V2].some(p=>canonicalBrowserJsonV2(v.policy) === canonicalBrowserJsonV2(p))
+    || v.policyHash !== canonicalBrowserSha256V2(v.policy.schemaVersion, v.policy)
     || !v.enforcementBoundary || Object.keys(v.enforcementBoundary).sort().join() !== "blockHash,blockNumber,chainId,releaseId"
     || v.enforcementBoundary.chainId !== "999" || v.enforcementBoundary.blockNumber !== HYPEREVM_CUSTOM_ROOTS_V1.deploymentBlock
     || v.enforcementBoundary.blockHash !== HYPEREVM_CUSTOM_ROOTS_V1.deploymentBlockHash || !hash(v.enforcementBoundary.releaseId)

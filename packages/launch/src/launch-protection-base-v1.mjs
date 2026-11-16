@@ -19,18 +19,20 @@ async function exactFile(file, content) {
 export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabilities, input, permitWindow }) {
   const chainId=capabilities.chain?.id;
   if (!['8453','999','99901'].includes(chainId) || capabilities.profile?.profileVersion !== '3.6.0') throw new TypeError('Current EVM capabilities are required');
+  const automatic=capabilities.automaticPlatformFees?.status==='active'?capabilities.automaticPlatformFees:undefined;
+  const automaticV2=automatic?.policyId==='programmable.automatic-platform-fees.v2';
   const hyper=chainId==='999';
   const elysium=chainId==='99901';
-  const kitUrl=new URL(elysium?'../contracts/elysium-launch-protection-v1/':hyper?'../contracts/hyperevm-launch-protection-v1/':'../contracts/base-launch-protection-v1/',import.meta.url);
+  const kitUrl=new URL(automaticV2?'../contracts/automatic-platform-fees-v2/':elysium?'../contracts/elysium-launch-protection-v1/':hyper?'../contracts/hyperevm-launch-protection-v1/':'../contracts/base-launch-protection-v1/',import.meta.url);
   const prefix=elysium?'Elysium':hyper?'HyperEvm':'Base';
-  const contracts={initializer:prefix+'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:prefix+'ProtectedNative30HookV1'};
+  const contracts={initializer:prefix+'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:automaticV2?'AutomaticProtectedNative30HookV2':prefix+'ProtectedNative30HookV1'};
   const root = path.resolve(projectRoot), metadata = input.projectMetadata;
   const selection = { schemaVersion: 'programmable.direct-native-hook-graph-profile-selection.v3',
     profileId: 'programmable.direct-native-hook-graph.v1', profileRevision: 3,
     targetRoles: { tokenTargetId: 'token', hookTargetId: 'hook', initializerTargetId: 'initializer', platformFeeBindingTargetId: 'hook' },
     fundingMode: 'wallet-transaction-value', accountingMode: 'inclusive-selected-total',
     assessmentBase: 'executed-gross-declared-quote', feeCurrency: 'declared-quote-currency',
-    claimMode: 'immutable-payout-recipient', payoutRecipient: PROTECTED_LAUNCH_POLICY_V1.treasury,
+    claimMode: 'immutable-payout-recipient', payoutRecipient: automatic?.teamWallet??PROTECTED_LAUNCH_POLICY_V1.treasury,
     applicantSelectedBuyHundredthsOfBip: String(((input.creatorBuyFeeBps ?? 0) + 30) * 100),
     applicantSelectedSellHundredthsOfBip: String(((input.creatorSellFeeBps ?? 0) + 30) * 100),
     liquidityModel: { schemaVersion: 'programmable.direct-native-liquidity-model-intent.v1', model: 'launch-seeded-concentrated-liquidity',
@@ -52,7 +54,7 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
   const source = await buildSourceBundle(root, bundlePaths);
   const namespace = deriveRouteNamespace(source.bundleContentSha256, input.launchWallet, profile);
   const saltType = keccak256(stringToHex(GRAPH_TARGET_SALT_TYPE));
-  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, chainId: Number(chainId), developer: input.launchWallet,
+  const prepared = await prepareProtectedNativeContractsV1({ ...input, client, platformFeePolicy:automatic, chainId: Number(chainId), developer: input.launchWallet,
     name: metadata.token.name, symbol: metadata.token.symbol, deploymentFactory: profile.graphFactory,
     initializerAuthority: profile.graphFactory,
     deriveRootAddress({ role, initCodeHash, applicantSalt }) {
@@ -74,7 +76,7 @@ export async function buildProtectedBaseLaunchV1({ projectRoot, client, capabili
     { ...base('hook'), constructorArguments: [pins.manager, [{ target: 'token' }, 0, 60, String(prepared.price.sqrtPriceX96), { target: 'initializer' }, input.launchWallet,
       input.creatorBuyFeeBps ?? 0, input.creatorSellFeeBps ?? 0, ZERO, 0], input.launchWallet,
       PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId].router,
-      PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId].routerCodeHash, prepared.exemptions],
+      PROTECTED_LAUNCH_CHAIN_PINS_V1[chainId].routerCodeHash, prepared.exemptions,...(automaticV2?[ZERO,'0x'+'00'.repeat(32)]:[])],
       declaredHookPermissions: ['beforeInitialize', 'beforeSwap', 'afterSwap', 'beforeSwapReturnDelta', 'afterSwapReturnDelta'] },
   ];
   const config = { schemaVersion: 'programmable.launch-pack-config.v3', profileVersion: '3.6.0', chainId, launchWallet: input.launchWallet,
