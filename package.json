@@ -335,6 +335,9 @@
     "minimatch": "$minimatch",
     "@typescript-eslint/typescript-estree": {
       "minimatch": "11.0.3"
+    },
+    "@uniswap/v3-staker": {
+      "@openzeppelin/contracts": "3.4.2-solc-0.7"
     }
   }
 }
