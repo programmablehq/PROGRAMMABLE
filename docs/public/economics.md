@@ -19,7 +19,11 @@ These percentages apply to trades, not an allocation of the coin's token supply.
 
 ## Custom launches
 
-New Custom Launch approvals on Ethereum Mainnet, Robinhood, Base and HyperEVM require a **0.3% (30 bps)** platform fee on buys and sells through the launch pool, including the initial buy. The fee must be enforced by the submitted contracts and paid or accrued to `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. A website-only surcharge does not meet this requirement. Project fees and liquidity-provider fees are separate. Ethereum's routed fee uses the gross ETH input on buys and gross ETH output on sells. Robinhood's routed fee uses the gross output asset. The [Base](developers/base-custom-launch.md#protection-and-fees) and [HyperEVM](developers/hyperevm-custom-launch.md) guides describe their protection and fee requirements.
+New Custom Launch approvals on Ethereum Mainnet, Robinhood, Base and HyperEVM require a **0.3% (30 bps)** platform fee on buys and sells through the launch pool, including the initial buy. The submitted contracts must enforce this fee. Project fees and liquidity-provider fees are separate.
+
+New Ethereum launches send the normal platform fee as ETH to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. New Robinhood launches use the automatic fee router, which pays 20% as ETH to the same wallet and reserves 80% for V4 purchases delivered there. The [fee reference](reference/fee-versions.md) describes these routes and the rules retained by earlier contracts.
+
+The [Base](developers/base-custom-launch.md#protection-and-fees) and [HyperEVM](developers/hyperevm-custom-launch.md) guides describe their protection and fee requirements. Use each chain's live capabilities to identify the selected fee policy.
 
 Before approval, Programmable records buy and sell checks for the exact submitted source and configuration, including the fee asset, assessment base, fixed recipient, backing and claim path. The Ethereum Native30 reference contracts use the gross native ETH leg and round up per trade. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
@@ -35,18 +39,20 @@ Programmable allocates fee revenue after it has actually been collected. This in
 
 | Use | Share |
 | --- | --- |
-| Manual V4 buybacks and burns | 80% |
+| V4 purchases, automatic for the new Robinhood router | 80% |
 | Programmable treasury and operating costs | 20% |
 
 For example, collecting 1 ETH of eligible fee revenue allocates 0.8 ETH to V4 buybacks and 0.2 ETH to the treasury. Creator fees, module rewards, customer funds, liquidity principal and transfers between Programmable wallets are excluded. Unclaimed fees do not create a buyback budget yet.
 
-Buybacks and burns are executed manually. There is no automatic purchase on each trade or fixed daily execution schedule. The 80% allocation is a spending policy; only confirmed transactions count as completed buybacks or burns.
+The automatic Robinhood router batches its 80% reserve into price-bounded V4 purchases when the configured gas and market limits permit. These purchases deliver V4 to the team wallet; they do not burn it. Ethereum revenue and revenue outside this router continue to use manual purchases. Burns remain separate transactions. Only confirmed transactions count as completed purchases or burns.
 
 Fee tracking covers these Programmable wallets together on Ethereum and Robinhood:
 
 | Wallet | Main role |
 | --- | --- |
-| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Current platform fees from Module Mode, Custom Launches and Custom AI |
+| `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62` | Automatic Ethereum Custom Launch payouts, Robinhood native payouts and purchased V4 |
+| `0xB7ec61e7f5a981F8C89E3788E61cE5EB2428A001` | Robinhood automatic Custom Launch fee router and V4 purchase reserve |
+| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Earlier immutable fee contracts, other selected routes and opening-protection surcharges |
 | `0x39544A7023081B56D7405c1af0bFaf72da7e24F6` | V4 liquidity fees and the project's burn wallet |
 | `0x4957f49620AFf3Adbbe8195a4f633E49cc93376c` | Fees from earlier Ethereum contracts |
 

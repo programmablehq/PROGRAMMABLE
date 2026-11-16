@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "programmable.runtime-capture-observer.v1",
+  "runtime": {
+    "repository": "programmablehq/programmable-open-hook-v2-internal",
+    "sourceCommit": "ae37a367c112805856aa495005769041e12a6966",
+    "sourceTree": "fd1bd36f2ccc4bde74bcf4c9c28d182cb0018e4f"
+  },
+  "observer": {
+    "repository": "programmablehq/programmable-open-hook-v2-internal",
+    "sourceCommit": "ae37a367c112805856aa495005769041e12a6966",
+    "sourceTree": "fd1bd36f2ccc4bde74bcf4c9c28d182cb0018e4f"
+  }
+}

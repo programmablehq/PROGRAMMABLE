@@ -692,7 +692,7 @@
     },
     {
       "path": "packages/launch/README.md",
-      "sha256": "sha256:e2179a90c1e585fbdbeee1c16032413d6fedb53f677165fa888c6d5ebe017adf"
+      "sha256": "sha256:eb5b70c3fa69ea14f204b8d1015b70e8237c0409f711f5c96242866e5352619d"
     },
     {
       "path": "packages/launch/src/pack.mjs",

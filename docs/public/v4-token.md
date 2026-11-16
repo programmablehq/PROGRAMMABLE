@@ -17,7 +17,7 @@ Programmable's liquidity is held in a [locked position](https://robinhoodchain.b
 
 ## Buybacks and burns
 
-Programmable allocates **80% of its collected fee revenue** to manual V4 buybacks and burns. The remaining 20% goes to its treasury and operating costs. This includes collected platform fees and quote-asset fees from its own liquidity position; creator fees and module rewards are excluded. There is no automatic buyback on each trade or fixed daily schedule. [Fees and revenue](economics.md#platform-revenue) explains the collection basis and tracked wallets.
+Programmable allocates **80% of its collected fee revenue** to V4 purchases. For new Robinhood Custom Launches, the automatic fee router reserves 80% for price-bounded purchases and pays 20% as ETH to the team wallet. Purchases run in batches when gas and market limits permit, and the V4 goes to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. This transfer is separate from a burn. Revenue outside that router, including collected liquidity-position fees, continues to use manual purchases and burns; creator fees and module rewards are excluded. [Fees and revenue](economics.md#platform-revenue) explains the collection basis and tracked wallets.
 
 V4 collected directly from Programmable's own liquidity fees is also burned. It is recorded separately from V4 bought with fee revenue.
 
