@@ -10,7 +10,7 @@ Use the [HyperEVM API reference](https://programmable.market/openapi/hyperevm-cu
 
 Create a wallet API key in the [HyperEVM setup](https://programmable.market/developers/api-keys?guide=custom-hook&chainId=999), with `custom-launch:create` and `custom-launch:read` and a HyperEVM grant. The request's `launchWallet` must match that key's wallet. Partner keys are not accepted on this route. Fund that wallet with HYPE on HyperEVM for deployment, initial liquidity and gas. An Ethereum balance cannot pay HyperEVM gas.
 
-The HyperEVM client is included in [CLI 4.3.0](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.3.0). Use that immutable release and verify its published asset checksums and GitHub attestations before installation. Direct HTTP access uses the same review and signing requirements.
+The HyperEVM client is included in [CLI 4.4.3](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.4.3). Use that immutable release and verify its published asset checksums and GitHub attestations before installation. Direct HTTP access uses the same review and signing requirements.
 
 ## First HyperEVM launch
 
@@ -50,6 +50,8 @@ Use `Retry-After` for rate limits or temporary unavailability. A `503`, pending 
 
 ## Protection and fees
 
+For `programmable.automatic-platform-fees.v2`, the protected hook sends platform fees and the additional opening surcharge automatically as HYPE to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. Creator fees remain separate. If payout fails, the backed claim remains retryable. Historical contracts keep their recorded recipients. Read the exact policy from live capabilities.
+
 The HyperEVM review requires a fresh oracle check supporting at least USD 15,000 initial FDV; separate cumulative 2% supply limits for the authenticated buyer and recipient for 300 seconds; 99% total opening buy fees declining to normal fees over 30 seconds; and working sells. The developer and at most six fixed extra wallets may be exempt only from the opening surcharge. Caps still apply. Protection, surcharge custody and normal fees remain separate.
 
 The additional opening tax goes to the fixed platform treasury. The platform receives 0.3% on buys and sells. With `pool_enforced` collection, a trading integration must not charge the platform fee a second time. Require all twelve protection scenarios and exact buy, sell and fee evidence. Exceptions granted to a particular project on another chain do not transfer to HyperEVM.
@@ -76,7 +78,7 @@ The canonical coin page is `/token/{token}?chain=999`. Finalized HyperEVM launch
 | Uniswap v4 PoolManager | `0x12D4Fd9C5DeDd00ab8a0bCe2CF0167bbf94b6B1F` |
 | Reference protected route: Universal Router 2.1.2 | `0xeD270A1Bcdc63cf1356D695e7f40961d4819d6bF` |
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
-| Platform treasury | `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` |
+| V2 platform recipient | `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62` |
 
 Use the current release's runtime hashes and policy from capabilities, not addresses copied from another network. Uniswap's [deployment registry](https://developers.uniswap.org/docs/protocols/v4/deployments) describes its HyperEVM contracts. For the wider integration model, read [Index launches](https://programmable.market/docs/developers/indexing).
 

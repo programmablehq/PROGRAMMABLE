@@ -12,6 +12,7 @@ Choose the guide for your network. Each uses an API key for preparation and stat
 | Robinhood Chain · `4663` | [Custom Launch Plans](#robinhood-custom-launch-plans) |
 | Base · `8453` | [Base Custom Launch](base-custom-launch.md) |
 | HyperEVM · `999` | [HyperEVM Custom Launch](hyperevm-custom-launch.md) |
+| Elysium · `99901` | [Elysium Custom Launch](https://programmable.market/developers/elysium-custom-launch-api-v1.md) |
 
 Check the chosen network's live capabilities before preparing a request. Request schemas, deployment bindings, gas currency and finality rules are specific to that network.
 

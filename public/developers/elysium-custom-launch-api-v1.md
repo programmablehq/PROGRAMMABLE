@@ -12,7 +12,7 @@ Create an [Elysium wallet API key](https://programmable.market/developers/api-ke
 
 ## Build and submit
 
-The Elysium builder is included in [CLI 4.4.0](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.4.0). Verify the release asset checksums and GitHub attestations before installation. `buildProtectedElysiumLaunchV1` creates the protected native-HYPE reference package. Direct HTTP clients use the same source and review requirements.
+The Elysium builder is included in [CLI 4.4.3](https://github.com/programmablehq/PROGRAMMABLE/releases/tag/programmable-launch-v4.4.3). Verify the release asset checksums and GitHub attestations before installation. `buildProtectedElysiumLaunchV1` creates the protected native-HYPE reference package. Direct HTTP clients use the same source and review requirements.
 
 1. Compile the complete source closure with the specified Solidity compiler and settings. Bind creation code, constructors and materialized runtime for every target and internally created component. Supply the token name, symbol, image, description and required links.
 2. Build the exact Elysium profile `3.6.0` graph with 3–16 targets. Funding uses the controller transaction value. The reference builder uses native HYPE; custom ERC-20 quotes require their own reviewed configuration.
@@ -24,6 +24,8 @@ The Elysium builder is included in [CLI 4.4.0](https://github.com/programmablehq
 Elysium does not use HyperEVM's large-block wallet setting or HyperCore account activation. Connect the wallet directly to chain `99901` using the [official network configuration](https://elysium.kinetiq.xyz/docs/connecting-to-elysium).
 
 ## Fees and launch protections
+
+For `programmable.automatic-platform-fees.v2`, the protected hook sends platform fees and the additional opening surcharge automatically as HYPE to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. Creator fees remain separate. If payout fails, the backed claim remains retryable. Historical contracts keep their recorded recipients. Read the exact policy from live capabilities.
 
 The reference package retains the $15,000 opening FDV floor, 0.3% platform fee on buys and sells, opening buy tax starting at 99% and decaying over 30 seconds, and five-minute cumulative 2% buyer and recipient limits. Up to six additional wallets can be exempted from the additional opening tax. Other custody and fee rules still apply to those wallets.
 
@@ -49,6 +51,6 @@ The zero-address quote asset is native HYPE. Wrapped HYPE is a separate token. M
 | Uniswap v4 PoolManager | `0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1` |
 | Reference Universal Router | `0xA13f7611115752DEB2B13813BDDE16A5073e4b45` |
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
-| Platform treasury | `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` |
+| V2 platform recipient | `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62` |
 
 Use the runtime hashes and policy returned by live capabilities. The [official explorer](https://elysium.kinetiq.xyz/explorer) and [Uniswap deployment registry](https://developers.uniswap.org/docs/protocols/v4/deployments) provide independent network references. Module Mode is available on its existing supported networks; Elysium uses Custom Contracts.

@@ -31,7 +31,7 @@ export default function V4TokenDocsPage() {
       </section>
       <section id="allocation">
         <h2>Revenue allocation</h2>
-        <p>The revenue policy allocates 80% of Programmable&apos;s collected fee revenue to manual V4 buybacks and burns, and 20% to its treasury and operating costs. This includes platform fees and quote-asset fees from the project&apos;s own liquidity position. Creator fees and module rewards are excluded. There is no automatic buyback on each trade or fixed daily schedule. V4 collected directly from the project&apos;s LP fees is also burned and reported separately from purchased V4.</p>
+        <p>The revenue policy allocates 80% of Programmable&apos;s collected fee revenue to V4 purchases and 20% to treasury and operating costs. For new Robinhood Custom Launches, the automatic fee router reserves 80% for purchases and pays 20% as ETH to the team wallet. Purchases run in batches when gas, price and liquidity limits permit. The V4 goes to <code>0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62</code>; delivery to this wallet is separate from burning. Revenue outside the router continues to use manual purchases and burns. Creator fees and module rewards are excluded.</p>
         <p>Read <Link href="/docs/economics">Fees and revenue</Link> for the rates and contract versions. An allocation policy and an executed claim, purchase or burn are different records. Use <a href="https://dune.com/programmablehq/analytics">Dune</a> to inspect observed execution.</p>
       </section>
       <section id="burns">

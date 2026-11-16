@@ -1,8 +1,8 @@
 # Automatic native platform fees V2
 
-This candidate adds an exact five-chain hook/vault kit. It is inactive until the
-reviewed API and issuer configuration select the V2 capability. Local fork
-evidence is not proof of production activation.
+The V2 hook/vault kit is active for new Custom Launches on all five chains.
+The retained signed runtime capture binds the exact API and issuer release;
+live capabilities remain the source for current selection.
 
 | Chain | Platform destination | Native currency |
 | --- | --- | --- |
@@ -16,13 +16,15 @@ Team wallet: `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. The same policy appli
 to the additional opening surcharge; creator fees remain separate. Purchased
 V4 is delivered to the team wallet by the existing bounded worker. No burn.
 
-Activation requires the additive V2 fee-profile database configuration, matching
-API/issuer public policy and all five AI production contexts, existing runtime
-release gates and a newly authorized Robinhood completion launch. The previous
-one-launch financial authorization is consumed. Keep old release captures and
-contract packages unchanged. Previously approved exact subjects retain their
-valid signing window and original fee policy.
+The additive V2 fee-profile configuration, API/issuer policy and all five AI
+production contexts were activated together. The signed release gates include
+the finalized Robinhood completion launch below. That one-launch financial
+authorization is consumed. Keep old release captures and contract packages
+unchanged. Previously approved exact subjects retain their valid signing window
+and original fee policy.
 
 Legacy deployments cannot be redirected in place. Their fixed-recipient claims
 need a separate collection/forwarding action; a new capability does not sweep
 old liquidity, non-native fee assets, creator fees, or external exchange revenue.
+
+Activation receipt: `sha256:3c7fbb446beebd5ceffd82311dbf3ae3872df12fdd7ff715d9eedd1c3ab2b91b`. Completion transaction: `0xea68b7f7d60488a3ef2387c274d8516c987bc302e2d476d7bf48f4cc6edc40d5`.

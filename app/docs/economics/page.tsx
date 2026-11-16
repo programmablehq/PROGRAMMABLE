@@ -28,13 +28,13 @@ export default function EconomicsDocsPage() {
       </section>
       <section id="custom">
         <h2>Robinhood Custom Launches</h2>
-        <p>The new Custom Launch fee policy charges <strong>0.3% (30 bps)</strong> on buys and sells prepared by Programmable. It is deducted from the gross output in the output asset, rounded down once. A gross output of 100 tokens pays 0.3 tokens to Programmable before the remaining output reaches the trader. Creator and pool fees are separate. Live capabilities identify the active policy.</p>
-        <p>The trade review shows the exact fee, asset and recipient before wallet confirmation. The routed fee is paid to <code>0xD88539d3c4C460136a733A3Fd60cf6BF269079da</code> in the same swap. This pricing applies to Programmable routes; it does not establish a fee on external trades.</p>
+        <p>New Custom Launch approvals on Ethereum, Robinhood, Base, HyperEVM and Elysium require <strong>0.3% (30 bps)</strong> for Programmable on buys and sells through the launch pool, including the initial buy. Creator and liquidity-provider fees are separate. Live capabilities identify the exact policy enforced by the submitted contracts.</p>
+        <p>On Robinhood, the automatic hook sends platform fees to the fee router. It pays 20% as ETH to the team wallet <code>0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62</code> and reserves 80% for V4 purchases delivered to that wallet. The additional opening surcharge uses the same route; creator fees remain separate.</p>
         <p>Earlier signed fee obligations and verified immutable pool fees retain their recorded rates. When the existing pool fee is verified, Programmable adds no second route fee. Native20 accrues native ETH claims to its fixed recipient; claiming those balances does not create new revenue.</p>
       </section>
       <section id="ethereum">
         <h2>Ethereum Mainnet Custom Hooks</h2>
-        <p>The new Ethereum routed policy charges <strong>0.3% (30 bps)</strong> on the gross native ETH input of a buy or gross native ETH output of a sell prepared by Programmable, rounded down once. A 1 ETH trade at this rate allocates 0.003 ETH to Programmable in the same swap. Project and LP fees are separate. Read the live capabilities and the trade&apos;s bound policy; external trades do not establish platform revenue.</p>
+        <p>On Ethereum and Base, the automatic hook pays the platform share directly as ETH to the team wallet <code>0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62</code>. HyperEVM and Elysium pay HYPE to the same wallet. A 1 ETH trade at the normal 0.3% rate allocates 0.003 ETH to Programmable. Opening surcharges follow the same destination.</p>
         <p>Verify the deployed hook&apos;s fee basis, asset, accounting mode and claim path. A launch stamp establishes origin; it does not prove fee enforcement or payment. Earlier Classic contracts and retained fee-certified API profiles keep their recorded 0.10% share.</p>
         <p><Link href="/developer-reference/ethereum-custom-hook#fees">Read the Ethereum Custom Hook reference</Link> for launch inputs and fee disclosure.</p>
       </section>
@@ -51,12 +51,12 @@ export default function EconomicsDocsPage() {
       </section>
       <section id="revenue">
         <h2>Protocol revenue allocation</h2>
-        <p>The revenue policy allocates 80% of fee revenue actually collected by Programmable to manual V4 buybacks and burns, and 20% to the treasury and operating costs. This includes platform fees and quote-asset fees from the project&apos;s own liquidity position. Creator fees, module rewards, customer funds, liquidity principal and internal wallet transfers are excluded. Collecting 1 ETH of eligible fees allocates 0.8 ETH to buybacks and 0.2 ETH to the treasury.</p>
-        <p>Buybacks and burns are manual, with no automatic purchase on each trade or fixed daily schedule. V4 collected directly from the project&apos;s LP fees is also burned and reported separately from purchased V4. Finalized transactions establish what was processed. Unclaimed fees, the buyback allocation, completed purchases and burns are separate records. Read <Link href="/docs/v4-token">V4 token</Link> for token identity and burn accounting.</p>
+        <p>The revenue policy allocates 80% of fee revenue actually collected by Programmable to V4 purchases and 20% to treasury and operating costs. This includes platform fees and quote-asset fees from the project&apos;s own liquidity position. Creator fees, module rewards, customer funds, liquidity principal and internal wallet transfers are excluded. Collecting 1 ETH of eligible fees allocates 0.8 ETH to buybacks and 0.2 ETH to the treasury.</p>
+        <p>The Robinhood fee router makes automatic V4 purchases in batches when its gas, price and liquidity limits permit. Purchased V4 goes to the team wallet. Revenue outside this router continues to use manual purchases. Burns are separate transactions. Unclaimed fees, the buyback allocation, completed purchases and completed burns are separate records. Read <Link href="/docs/v4-token">V4 token</Link> for token identity and burn accounting.</p>
       </section>
       <section id="analytics">
         <h2>Analytics</h2>
-        <p>The <a href="https://dune.com/programmablehq/analytics">Dune dashboard</a> reports the sources covered by each query and its indexed-through time. Track the project wallets 0xD885…79da, 0x3954…24F6 and 0x4957…376c together across Ethereum and Robinhood. Accrued fees, collected fee revenue, the 80% buyback allocation, actual purchases and actual burns are separate measurements. A claim does not create revenue a second time, and a transfer between project wallets is not another collection.</p>
+        <p>The <a href="https://dune.com/programmablehq/analytics">Dune dashboard</a> reports the sources covered by each query and its indexed-through time. Track the automatic team wallet 0x9F58…8f62, Robinhood fee router 0xB7ec…A001 and earlier project wallets 0xD885…79da, 0x3954…24F6 and 0x4957…376c together. Accrued fees, collected revenue, the 80% allocation, actual purchases and actual burns are separate measurements. A claim or internal wallet transfer does not create revenue a second time.</p>
       </section>
     </DocsShell>
   );

@@ -49,8 +49,8 @@ describe("profile-selected Robinhood well-known discovery", () => {
         programmableTradeFeePolicyHash: "sha256:e2025776ad3b12e6277575259cccf11444810365975209083fea534d8e70b4b5",
         rateSource: "capabilities.programmableTradeFeePolicy.policy.ratePpm",
       },
-      cli: { sourceCandidateVersion: "4.4.0", publicationVerified: null,
-        releaseTag: "programmable-launch-v4.4.0", publishedReleaseAndArtifactVerificationRequired: true },
+      cli: { sourceCandidateVersion: "4.4.3", publicationVerified: null,
+        releaseTag: "programmable-launch-v4.4.3", publishedReleaseAndArtifactVerificationRequired: true },
     });
     expect(original.customLaunchApi.launchProtection).toMatchObject({
       policyVersion: "programmable.launch-protection.v1",

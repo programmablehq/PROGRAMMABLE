@@ -25,9 +25,11 @@ Creator and pool fees are additional. Author rewards are divided equally between
 
 ## Custom launches
 
-New Custom Launch approvals on Ethereum, Robinhood Chain, Base and HyperEVM require a 30 bps (0.3%) platform share collected by the pool on each buy and sell. Project and LP fees are separate. Use the selected network's live capabilities and exact deployed contracts to identify the fee asset, assessment base, rounding and claim path.
+New Custom Launch approvals on Ethereum, Robinhood, Base, HyperEVM and Elysium require a 30 bps (0.3%) platform share on pool buys and sells. The selected chain's capabilities identify the exact policy.
 
-When live capabilities select `programmable.automatic-platform-fees.v1`, new Ethereum launches send the normal 30 bps share as ETH to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. New Robinhood launches send it to `0xB7ec61e7f5a981F8C89E3788E61cE5EB2428A001`, which pays 20% as ETH to that wallet and reserves 80% for bounded V4 purchases delivered there. Creator fees and opening-protection surcharges keep separate accounting. Existing signed requests and immutable contracts keep their recorded recipients.
+For `programmable.automatic-platform-fees.v2`, Ethereum and Base forward platform fees as ETH, while HyperEVM and Elysium forward HYPE. The fixed destination is `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. Robinhood forwards to `0xB7ec61e7f5a981F8C89E3788E61cE5EB2428A001`, which pays 20% as ETH and reserves 80% for bounded V4 purchases delivered to the team wallet. The additional opening surcharge uses the same destination; creator fees stay separate.
+
+Historical V1 automatic contracts and earlier manual-claim contracts keep their original behavior. A new policy does not redirect previously deployed vaults or sweep liquidity principal. Canonical pre-activation approvals keep their exact subject and valid signing window. V4 purchases and burns are separate actions.
 
 The earlier Ethereum Native30 V3 reference uses the gross native ETH leg, rounds up per trade and accrues fully backed PoolManager native claims. `claimPlatform()` always pays `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`, regardless of its caller. Exact runtime and trade-accrual proof lets the website recognize that fee and avoid adding a second routing fee. Source, bytecode and trade evidence must agree.
 

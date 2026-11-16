@@ -596,7 +596,7 @@
     },
     {
       "path": "public/developers/hyperevm-custom-launch-api-v1.md",
-      "sha256": "sha256:e23cafee0d416896b5ff47a0820545fda938574a386aff63999a60b1aa13b1c9"
+      "sha256": "sha256:69bcf924091ffaa3d0778553270d3b531d1eb1c0fc35483bccc26a41faacdcca"
     },
     {
       "path": "packages/launch/contracts/hyperevm-launch-protection-v1/standard-json.json",
@@ -640,7 +640,7 @@
     },
     {
       "path": "public/developers/base-custom-launch-api-v1.md",
-      "sha256": "sha256:d8bfee542a780f57da7ba090e5d16601e4814956e797a91356adaeedbfa4a3ec"
+      "sha256": "sha256:e99dbaa4f913eba3ff830de34e576851b1865b1bfb96b5bf6aabf236ce99726f"
     },
     {
       "path": "packages/launch/contracts/base-launch-protection-v1/BaseLaunchProtectionModuleV1.artifact.json",
@@ -700,7 +700,7 @@
     },
     {
       "path": "packages/launch/README.md",
-      "sha256": "sha256:406542c67d868cd51f89b31fb77be427e81eb9cc1bea0c9da1ee7aa22338f329"
+      "sha256": "sha256:4c4c8ec0e4ecbf88164c626dbf01f3304cedc0fd1e43b08b2da259c800570556"
     },
     {
       "path": "packages/launch/src/pack.mjs",
@@ -836,7 +836,7 @@
     },
     {
       "path": "public/developers/elysium-custom-launch-api-v1.md",
-      "sha256": "sha256:0359b0163ed8fad28b4553f4214bcc0c5668ccad2aa5ad46230803ccf8ebb7ba"
+      "sha256": "sha256:197fb4e77eb99b11b4be512e8118a7822a583dd4d4c25049ad578a94f7c69c89"
     },
     {
       "path": "packages/launch/contracts/elysium-launch-protection-v1/standard-json.json",
