@@ -1,6 +1,178 @@
 {
   "version": 1,
   "families": {
+    "automatic-platform-fees-v2": [
+      {
+        "source": "src/launch-protection/ProtectedNativeInitializerV1.sol",
+        "contract": "ProtectedNativeInitializerV1",
+        "sourceSha256": "24859c75b9ce031480007cac1faa34e2a06a33b3da4fe927cb7f1021996a47bd",
+        "constructor": "address,address,address,bytes32",
+        "functions": [
+          "function MAX_FEED_AGE() view returns (uint256)",
+          "function MINIMUM_FDV_USD() view returns (uint256)",
+          "function feedCodeHash() view returns (bytes32)",
+          "function feedDecimals() view returns (uint8)",
+          "function graphFactory() view returns (address)",
+          "function initialize(address hook,address token,int24 startTick,address buyer,uint256 minTokenOut) payable",
+          "function initialized() view returns (bool)",
+          "function lockedLiquidity() view returns (uint128)",
+          "function nativeUsdFeed() view returns (address)",
+          "function openingFdvUsd() view returns (uint256)",
+          "function poolManager() view returns (address)",
+          "function unlockCallback(bytes data) returns (bytes)"
+        ],
+        "events": [
+          "event ProtectedLaunch(address indexed,address indexed,uint256,uint128,uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/launch-protection/ProtectedLaunchTokenV1.sol",
+        "contract": "ProtectedLaunchTokenV1",
+        "sourceSha256": "496ea707aace0ee807ff3772b282825ccc896c6deef1c14155b7ab406e168b91",
+        "constructor": "string,string,uint256,address,address",
+        "functions": [
+          "function POLICY_REVISION() view returns (uint256)",
+          "function PROTECTION_SECONDS() view returns (uint256)",
+          "function WALLET_LIMIT_BPS() view returns (uint256)",
+          "function allowance(address owner,address spender) view returns (uint256)",
+          "function approve(address spender,uint256 value) returns (bool)",
+          "function balanceOf(address account) view returns (uint256)",
+          "function burn(uint256 amount)",
+          "function decimals() view returns (uint8)",
+          "function initializer() view returns (address)",
+          "function launchSupply() view returns (uint256)",
+          "function name() view returns (string)",
+          "function poolManager() view returns (address)",
+          "function receivedDuringProtection(address) view returns (uint256)",
+          "function start()",
+          "function startedAt() view returns (uint256)",
+          "function symbol() view returns (string)",
+          "function totalSupply() view returns (uint256)",
+          "function transfer(address to,uint256 value) returns (bool)",
+          "function transferFrom(address from,address to,uint256 value) returns (bool)",
+          "function walletTokenLimit() view returns (uint256)"
+        ],
+        "events": [
+          "event Approval(address indexed,address indexed,uint256)",
+          "event Transfer(address indexed,address indexed,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/automatic-platform-fees-v2/AutomaticProtectedNative30HookV2.sol",
+        "contract": "AutomaticProtectedNative30HookV2",
+        "sourceSha256": "844b18e8c3abceaf3019858c43cbee7b4f75e05b9bf05fe9b0eb84a1c3159367",
+        "constructor": "address,(address,uint24,int24,uint160,address,address,uint16,uint16,address,uint24),address,address,bytes32,address[6],address,bytes32",
+        "functions": [
+          "function CANONICAL_POOL_MANAGER() view returns (address)",
+          "function CHAIN_ID() view returns (uint256)",
+          "function FEE_DENOMINATOR() view returns (uint16)",
+          "function FEE_PROFILE() view returns (bytes32)",
+          "function OPENING_TAX_RECIPIENT() view returns (address)",
+          "function PLATFORM_FEE_BPS() view returns (uint16)",
+          "function PLATFORM_RECIPIENT() view returns (address)",
+          "function POLICY_REVISION() view returns (uint256)",
+          "function afterAddLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,int256 delta0,int256 delta1,bytes hookData) returns (bytes4,int256)",
+          "function afterDonate(address sender,(address,address,uint24,int24,address) key,uint256 amount0,uint256 amount1,bytes hookData) returns (bytes4)",
+          "function afterInitialize(address sender,(address,address,uint24,int24,address) key,uint160 sqrtPriceX96,int24 tick) returns (bytes4)",
+          "function afterRemoveLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,int256 delta0,int256 delta1,bytes hookData) returns (bytes4,int256)",
+          "function afterSwap(address sender,(address,address,uint24,int24,address) key,(bool,int256,uint160) params,int256 delta,bytes hookData) returns (bytes4,int128)",
+          "function beforeAddLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,bytes hookData) returns (bytes4)",
+          "function beforeDonate(address sender,(address,address,uint24,int24,address) key,uint256 amount0,uint256 amount1,bytes hookData) returns (bytes4)",
+          "function beforeInitialize(address sender,(address,address,uint24,int24,address) key,uint160 sqrtPriceX96) returns (bytes4)",
+          "function beforeRemoveLiquidity(address sender,(address,address,uint24,int24,address) key,(int24,int24,int256,bytes32) params,bytes hookData) returns (bytes4)",
+          "function beforeSwap(address sender,(address,address,uint24,int24,address) key,(bool,int256,uint160) params,bytes hookData) returns (bytes4,int256,uint24)",
+          "function boughtDuringProtection(address) view returns (uint256)",
+          "function creatorBuyFeeBps() view returns (uint16)",
+          "function creatorSellFeeBps() view returns (uint16)",
+          "function feeVault() view returns (address)",
+          "function getHookPermissions() pure returns ((bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool,bool) permissions)",
+          "function initialSqrtPriceX96() view returns (uint160)",
+          "function initialized() view returns (bool)",
+          "function initializer() view returns (address)",
+          "function lpFee() view returns (uint24)",
+          "function maxModuleLpFeePips() view returns (uint24)",
+          "function module() view returns (address)",
+          "function moduleCodeHash() view returns (bytes32)",
+          "function openingTaxVault() view returns (address)",
+          "function platformFeeRouter() view returns (address)",
+          "function platformFeeRouterCodeHash() view returns (bytes32)",
+          "function poolKey() view returns ((address,address,uint24,int24,address))",
+          "function poolManager() view returns (address)",
+          "function previewTradeFees(uint256 amount,bool amountIsNet,bool isBuy,address buyer) view returns (uint256 gross,uint256 platformFee,uint256 creatorFee,uint256 openingTax)",
+          "function quoteFees(uint256 amount,bool amountIsNet,bool isBuy) view returns (uint256 gross,uint256 platformFee,uint256 creatorFee)",
+          "function tickSpacing() view returns (int24)",
+          "function token() view returns (address)"
+        ],
+        "events": [
+          "event NativeFeesAccrued(bytes32 indexed,address indexed,bool,uint256,uint256,uint256)",
+          "event OpeningTaxAccrued(bytes32 indexed,address indexed,uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/automatic-platform-fees-v2/AutomaticNativeFeeVaultV2.sol",
+        "contract": "AutomaticNativeFeeVaultV2",
+        "sourceSha256": "53e2632bf0120a6adfd7a1d8577c62c172d850b80af465cacdf1727207fb32c8",
+        "constructor": "address,address,address,bytes32",
+        "functions": [
+          "function AUTOMATIC_PAYOUT_GAS() view returns (uint256)",
+          "function PLATFORM_RECIPIENT() view returns (address)",
+          "function POLICY_ID() view returns (bytes32)",
+          "function TEAM_WALLET() view returns (address)",
+          "function claimCreator() returns (uint256 amount)",
+          "function claimPlatform() returns (uint256 amount)",
+          "function creatorAccrued() view returns (uint256)",
+          "function creatorRecipient() view returns (address)",
+          "function forwardWhileUnlocked()",
+          "function kernel() view returns (address)",
+          "function platformAccrued() view returns (uint256)",
+          "function platformRouterCodeHash() view returns (bytes32)",
+          "function poolManager() view returns (address)",
+          "function recordFees(uint256 platformAmount,uint256 creatorAmount)",
+          "function totalPlatformPaid() view returns (uint256)",
+          "function totalPlatformRecorded() view returns (uint256)",
+          "function unlockCallback(bytes data) returns (bytes)"
+        ],
+        "events": [
+          "event AutomaticPayoutDeferred(uint256)",
+          "event FeesClaimed(address indexed,uint256,bool)",
+          "event FeesRecorded(uint256,uint256)"
+        ],
+        "allowReceive": false,
+        "allowFallback": false
+      },
+      {
+        "source": "src/automatic-platform-fees-v2/AutomaticLaunchProtectionModuleV2.sol",
+        "contract": "AutomaticLaunchProtectionModuleV2",
+        "sourceSha256": "ab44fe3aa7fd8ebba58bba2180cb9639d71ee7f875e9eed048e27f4123323f19",
+        "constructor": "address,address,address,address,bytes32,uint16,address[6]",
+        "functions": [
+          "function DECAY_SECONDS() view returns (uint256)",
+          "function OPENING_TOTAL_PPM() view returns (uint256)",
+          "function additionalTaxPpmForBuyer(address buyer) view returns (uint24)",
+          "function afterSwap(address,(address,address,uint24,int24,address),(bool,int256,uint160),int256,bytes) view returns (bytes4,int128)",
+          "function beforeSwap(address,(address,address,uint24,int24,address) key,(bool,int256,uint160),bytes) view returns (bytes4,int256,uint24)",
+          "function developer() view returns (address)",
+          "function exemptWallets() view returns (address[6])",
+          "function isTaxExempt(address wallet) view returns (bool)",
+          "function kernel() view returns (address)",
+          "function normalBuyFeePpm() view returns (uint256)",
+          "function openingTaxPpmForSender(address sender) view returns (uint24)",
+          "function protectedBuyer(address sender) view returns (address)",
+          "function router() view returns (address)",
+          "function routerCodeHash() view returns (bytes32)",
+          "function token() view returns (address)"
+        ],
+        "events": [],
+        "allowReceive": false,
+        "allowFallback": false
+      }
+    ],
     "automatic-platform-fees-v1": [
       {
         "source": "src/launch-protection/ProtectedNativeInitializerV1.sol",

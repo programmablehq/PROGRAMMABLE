@@ -98,3 +98,17 @@ describe("automatic platform fee runtime", () => {
     expect(proveImmutablePoolFeeRuntimeV2(rhMarket,{...f.codes,[f.router]:"0x6000"})).toBeNull();
   });
 });
+
+import { AUTOMATIC_PLATFORM_FEES_RECIPES_V2 as automaticV2 } from "@/lib/launch-protection/automatic-fees-recipes-v2";
+describe("v2 automatic payout recognition",()=>{
+  it.each([1,4663] as const)("binds the new immutable vault on chain %s and preserves serialized proof",chain=>{
+    const chainManager=chain===1?manager:"0x8366a39CC670B4001A1121B8F6A443A643e40951";
+    const router=chain===1?automaticV2.teamWallet:"0x5555555555555555555555555555555555555555";
+    const routerCode=materialize(automatic.router,{...Object.fromEntries(automatic.router.immutableWords.map(({name})=>[name,word(0n)])),quoteSigner:word(developer)}),routerHash=chain===1?word(0n):keccak256(routerCode);
+    const moduleCode=materialize(automaticV2.module,{developer:word(developer),kernel:word(hook),normalBuyFeePpm:word(10000n),router:word(chain===1?"0xd92A36B0000531EF3063dEd4De20A0783308446C":"0x06AfBA43Fd06227fA663b0DAecF536f6EaA6bf99"),routerCodeHash:word(1n),token:word(token)});
+    const words={...fixture(chain).words,moduleCodeHash:keccak256(moduleCode),PLATFORM_RECIPIENT:word(router),OPENING_TAX_RECIPIENT:word(router),platformFeeRouter:word(router),platformFeeRouterCodeHash:routerHash};
+    const codes={[hook]:materialize(automaticV2.hook,words),[protectionModule]:moduleCode,[router]:routerCode,[feeVault]:materialize(automaticV2.vault,{poolManager:word(chainManager),kernel:word(hook),creatorRecipient:word(developer),PLATFORM_RECIPIENT:word(router),platformRouterCodeHash:routerHash})};
+    if(chain===1){const proof=proveEthereumNative30RuntimeV1(market,codes)!;expect(proof.recipeId).toBe("automatic_native30_v2");expect(rebuildEthereumNative30RuntimeProofV1(structuredClone(proof),market)).toEqual(proof);}
+    else {const key={...market,chainId:"4663" as const,poolManager:chainManager as Address};const proof=proveImmutablePoolFeeRuntimeV2(key,codes)!;expect(proof.recipeId).toBe("automatic_native30_v2");expect(rebuildImmutablePoolFeeRuntimeProofV2(structuredClone(proof),key)).toEqual(proof);}
+  });
+});

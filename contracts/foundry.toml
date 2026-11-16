@@ -13,7 +13,7 @@ cbor_metadata = false
 ffi = false
 # These surfaces use separate source-bound compiler profiles. The protected
 # Contracts release lane and npm verify run their complete suites separately.
-skip = ["src/automatic-platform-fees-v1/**", "test/automatic-platform-fees-v1/**", "src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**", "src/custom-ai/**", "test/custom-ai/**", "script/custom-ai/**"]
+skip = ["src/automatic-platform-fees-v2/**", "test/automatic-platform-fees-v2/**", "src/automatic-platform-fees-v1/**", "test/automatic-platform-fees-v1/**", "src/late-migration/**", "test/late-migration/**", "src/module-foundation/**", "test/module-foundation/**", "script/module-foundation/**", "src/custom-ai/**", "test/custom-ai/**", "script/custom-ai/**"]
 fs_permissions = [
   { access = "read", path = "./dependencies" },
   { access = "read", path = "./test/elysium-custom-v1" },
@@ -195,6 +195,18 @@ test = "test/automatic-platform-fees-v1"
 script = "script/automatic-platform-fees-v1"
 out = "out/automatic-platform-fees-v1"
 cache_path = "cache/automatic-platform-fees-v1"
+via_ir = true
+optimizer_runs = 200
+auto_detect_remappings = false
+
+# Five-chain automatic normal and opening fee routing, independent of the live V1.
+[profile.automatic-platform-fees-v2]
+skip = []
+src = "src/automatic-platform-fees-v2"
+test = "test/automatic-platform-fees-v2"
+script = "script/automatic-platform-fees-v2"
+out = "out/automatic-platform-fees-v2"
+cache_path = "cache/automatic-platform-fees-v2"
 via_ir = true
 optimizer_runs = 200
 auto_detect_remappings = false

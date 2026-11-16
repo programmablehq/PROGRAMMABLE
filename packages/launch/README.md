@@ -683,3 +683,20 @@ CLI 4.4.1 fixes `EPERM` after writing `launch.json` on Windows so the pack recei
 When the live chain response includes `automaticPlatformFees.status: "active"`, new Ethereum and Robinhood launches must bind that complete policy. Pass current capabilities to the protected SDK builders. The automatic kit uses `AutomaticProtectedNative30HookV1` and `AutomaticNativeFeeVaultV1`; an older manual-claim vault does not satisfy this policy.
 
 The fixed recipient is `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. On Ethereum, each normal 30-bps platform fee is paid as ETH. On Robinhood, the published immutable router sends 20% as ETH and reserves 80% for bounded V4 purchases delivered to that same wallet. Purchases run after settlement through the monitored keeper, so they do not depend on liquidity during the originating swap. If delivery fails, funds remain backed and retryable. Creator fees, opening-protection surcharges and historical launch contracts retain their existing rules. Package availability alone does not activate the policy.
+
+## Automatic platform fees V2 (CLI 4.4.3)
+
+Read `automaticPlatformFees` from current chain capabilities. When it selects
+`programmable.automatic-platform-fees.v2`, the protected launch kit forwards
+the platform share and additional opening surcharge during the originating swap.
+Ethereum and Base send native ETH directly to
+`0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`; HyperEVM and Elysium send native HYPE.
+Robinhood sends 20% as ETH to this wallet and reserves 80% for bounded V4 purchases.
+The buyback worker delivers purchased V4 to the same wallet once the reserve
+supports an economical trade. This is not a burn or a purchase on every swap.
+
+Creator fees retain their separate ledger and recipient. If an automatic payout
+fails, backed platform fees remain available for permissionless retry to the fixed
+recipient. Historical contracts retain their immutable recipients and claim rules;
+installing this package does not migrate them. The active server capability,
+exact source review and normal wallet authorization determine new-launch availability.

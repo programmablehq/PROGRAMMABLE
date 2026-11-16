@@ -25,12 +25,17 @@ export const ELYSIUM_TRADE_FEE_POLICY_V1 = Object.freeze({
   },
   native30Waiver: null,
 } as const);
+export const ELYSIUM_TRADE_FEE_POLICY_V2 = Object.freeze({
+  ...ELYSIUM_TRADE_FEE_POLICY_V1, policyVersion:"programmable.elysium-native-fee.v2",
+  defaultCollection:{...ELYSIUM_TRADE_FEE_POLICY_V1.defaultCollection,
+    recipient:"0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",collection:"atomic-pool-fee-forwarding"},
+} as const);
 export interface ElysiumRoutingFeePolicyBindingV1 {
   schemaVersion: "programmable.elysium-launch-routing-fee-policy-binding.v1";
   launchProfileVersion: "3.6.0";
   launchProfileHash: `sha256:${string}`;
   policyHash: `sha256:${string}`;
-  policy: typeof ELYSIUM_TRADE_FEE_POLICY_V1;
+  policy: typeof ELYSIUM_TRADE_FEE_POLICY_V1 | typeof ELYSIUM_TRADE_FEE_POLICY_V2;
   enforcementBoundary: {
     chainId: "99901";
     blockNumber: string;
@@ -54,8 +59,8 @@ export function parseElysiumRoutingFeePolicyV1(value: unknown): ElysiumRoutingFe
   if (Object.keys(v).sort().join() !== "bindingHash,enforcementBoundary,launchProfileHash,launchProfileVersion,policy,policyHash,schemaVersion,stampBinding"
     || v.schemaVersion !== "programmable.elysium-launch-routing-fee-policy-binding.v1" || v.launchProfileVersion !== "3.6.0"
     || !hash(v.launchProfileHash) || !hash(v.policyHash)
-    || canonicalBrowserJsonV2(v.policy) !== canonicalBrowserJsonV2(ELYSIUM_TRADE_FEE_POLICY_V1)
-    || v.policyHash !== canonicalBrowserSha256V2(ELYSIUM_TRADE_FEE_POLICY_V1.schemaVersion, ELYSIUM_TRADE_FEE_POLICY_V1)
+    || ![ELYSIUM_TRADE_FEE_POLICY_V1,ELYSIUM_TRADE_FEE_POLICY_V2].some(p=>canonicalBrowserJsonV2(v.policy) === canonicalBrowserJsonV2(p))
+    || v.policyHash !== canonicalBrowserSha256V2(v.policy.schemaVersion, v.policy)
     || !v.enforcementBoundary || Object.keys(v.enforcementBoundary).sort().join() !== "blockHash,blockNumber,chainId,releaseId"
     || v.enforcementBoundary.chainId !== "99901" || v.enforcementBoundary.blockNumber !== ELYSIUM_CUSTOM_ROOTS_V1.deploymentBlock
     || v.enforcementBoundary.blockHash !== ELYSIUM_CUSTOM_ROOTS_V1.deploymentBlockHash || !hash(v.enforcementBoundary.releaseId)

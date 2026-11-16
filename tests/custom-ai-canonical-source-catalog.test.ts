@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import ethKit from "../packages/launch/contracts/launch-protection-v1/standard-json.json";
+import automaticKitV2 from "../packages/launch/contracts/automatic-platform-fees-v2/standard-json.json";
 import automaticKit from "../packages/launch/contracts/automatic-platform-fees-v1/standard-json.json";
 import baseKit from "../packages/launch/contracts/base-launch-protection-v1/standard-json.json";
 import hypeKit from "../packages/launch/contracts/hyperevm-launch-protection-v1/standard-json.json";
@@ -30,12 +31,13 @@ describe("selected canonical protection source context", () => {
     const sources = canonicalGeneralSourceCatalog(undefined, chain);
     const automaticLaunchSources = Object.fromEntries(Object.entries(automaticKit.sources).filter(([name]) =>
       name.startsWith("src/automatic-platform-fees-v1/") && !name.endsWith("/RobinhoodPlatformFeeRouterV1.sol")));
-    const expected = chain === 1 || chain === 4663 ? {...kit.sources,...automaticLaunchSources} : kit.sources;
+    const automaticSourcesV2=Object.fromEntries(Object.entries(automaticKitV2.sources).filter(([name])=>name.startsWith("src/automatic-platform-fees-v2/")));
+    const expected = {...kit.sources,...automaticLaunchSources,...automaticSourcesV2};
     expect(sources).toEqual(expected);
     for(const [name,source] of Object.entries(kit.sources))expect(sources[name]).toEqual(source);
     expect(sources[path]).toEqual(kit.sources[path as keyof typeof kit.sources]);
-    const context = dependencySourceContext(sources);
-    expect(JSON.stringify(context.modelSources).length).toBeLessThan(chain === 1 || chain === 4663 ? 144_000 : 120_000);
+    const context = dependencySourceContext(sources,{libraryDeclarations:true});
+    expect(JSON.stringify(context.modelSources).length).toBeLessThan(120_000);
     expect(context.complete).toEqual(sources);
     sources[path].content = "changed by a caller";
     expect(canonicalGeneralSourceCatalog(undefined, chain)[path]).toEqual(kit.sources[path as keyof typeof kit.sources]);

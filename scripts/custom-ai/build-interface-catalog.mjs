@@ -10,6 +10,7 @@ const parameters = values => (values ?? []).map(type).join(",");
 // Keep compiler-issued top-level names, especially adjacent bool/uint fields.
 const namedParameters = values => (values ?? []).map(p => `${type(p)}${p.name ? ` ${p.name}` : ""}`).join(",");
 const groups = [
+  ["automatic-platform-fees-v2", ["ProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "AutomaticProtectedNative30HookV2", "AutomaticNativeFeeVaultV2", "AutomaticLaunchProtectionModuleV2"]],
   ["automatic-platform-fees-v1", ["ProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "AutomaticProtectedNative30HookV1", "AutomaticNativeFeeVaultV1", "EthereumNativeFeeVaultV3", "LaunchProtectionModuleV1"]],
   ["elysium-launch-protection-v1", ["ElysiumProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "ElysiumProtectedNative30HookV1", "EthereumNativeFeeVaultV3", "ElysiumLaunchProtectionModuleV1"]],
   ["launch-protection-v1", ["ProtectedNativeInitializerV1", "ProtectedLaunchTokenV1", "ProtectedNative30HookV1", "EthereumNativeFeeVaultV3", "LaunchProtectionModuleV1"]],

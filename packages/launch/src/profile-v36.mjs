@@ -67,8 +67,21 @@ export const DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_AUTOMATIC_V4 = deep
     hook: "AutomaticProtectedNative30HookV1", vault: "AutomaticNativeFeeVaultV1" },
 });
 
+export const AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2 = deepFreeze(Object.fromEntries(
+  [["8453",BASE_PROFILE_V1],["999",HYPEREVM_PROFILE_V1],["99901",ELYSIUM_PROFILE_V1]].map(([chain,profile])=>{
+    const old=profile.programmableTradeFeePolicy;
+    return [chain,{...old,policyVersion:old.policyVersion.replace(/v1$/, 'v2'),defaultCollection:{...old.defaultCollection,
+      recipient:"0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",collection:"atomic-pool-fee-forwarding"}}];
+  })
+));
+export function withAutomaticNativeProfileV2(profile,policy) {
+  const expected=AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2[profile.chainId];
+  if(!expected||canonicalizeJson(policy)!==canonicalizeJson(expected))throw new TypeError("Automatic native policy differs");
+  return {...structuredClone(profile),platformFeePolicy:{...profile.platformFeePolicy,claimAuthority:expected.defaultCollection.recipient},programmableTradeFeePolicy:structuredClone(expected)};
+}
+
 export function assertDirectNativeProgrammableTradeFeePolicyV36(value) {
-  if (![DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_AUTOMATIC_V4, ELYSIUM_PROFILE_V1.programmableTradeFeePolicy, HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
+  if (![...Object.values(AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2), DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_AUTOMATIC_V4, ELYSIUM_PROFILE_V1.programmableTradeFeePolicy, HYPEREVM_PROFILE_V1.programmableTradeFeePolicy, BASE_PROFILE_V1.programmableTradeFeePolicy, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_TREASURY_V2, DIRECT_NATIVE_PROGRAMMABLE_TRADE_FEE_POLICY_V36_FEE100_V3].some(policy => canonicalizeJson(value) === canonicalizeJson(policy))) {
     throw new TypeError("PROFILE_36_PROGRAMMABLE_TRADE_FEE_POLICY_MISMATCH");
   }
   return value;

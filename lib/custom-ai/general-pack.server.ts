@@ -100,7 +100,7 @@ export async function packGeneralGraph(input: GeneralPackInput, signal?: AbortSi
         }
       });
       const overrides = { directNativeProfileVersion: production.profileVersion, directNativeRouter: production.executor.address,
-        ...(plan.source.project.chainId === 1 ? { directNativeTradeFeePolicy: production.graphProfile!.programmableTradeFeePolicy } : {}) };
+        directNativeTradeFeePolicy: production.graphProfile!.programmableTradeFeePolicy };
       child.stdin?.write(`${JSON.stringify({ version: 1, configPath, overrides })}\n`);
     });
     signal?.throwIfAborted();

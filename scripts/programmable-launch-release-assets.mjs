@@ -23,6 +23,7 @@ import * as v416Binding from "./programmable-launch-v416-release-binding.mjs";
 
 import * as v417Binding from "./programmable-launch-v417-release-binding.mjs";
 
+import * as v443Binding from "./programmable-launch-v443-release-binding.mjs";
 import * as v442Binding from "./programmable-launch-v442-release-binding.mjs";
 import * as v441Binding from "./programmable-launch-v441-release-binding.mjs";
 import * as v440Binding from "./programmable-launch-v440-release-binding.mjs";
@@ -39,6 +40,7 @@ export function releaseBindingTools(version) {
   if (version === "4.1.5") return v415Binding;
   if (version === "4.1.6") return v416Binding;
   if (version === "4.1.7") return v417Binding;
+  if (version === "4.4.3") return v443Binding;
   if (version === "4.4.2") return v442Binding;
   if (version === "4.4.1") return v441Binding;
   if (version === "4.4.0") return v440Binding;

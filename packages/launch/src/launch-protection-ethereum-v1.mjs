@@ -19,8 +19,9 @@ export async function buildProtectedEthereumLaunchV1({ projectRoot, client, capa
   if (capabilities.chain?.id !== '1' || capabilities.profile?.profileVersion !== '3.6.0'
     || capabilities.profile?.productionLaunchAuthorized !== true) throw new TypeError('Current Ethereum capabilities are required');
   const automatic=capabilities.automaticPlatformFees?.status==='active' ? capabilities.automaticPlatformFees : undefined;
-  const kitUrl = automatic ? new URL('../contracts/automatic-platform-fees-v1/',import.meta.url) : new URL('../contracts/launch-protection-v1/',import.meta.url);
-  const contracts={initializer:'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:automatic?'AutomaticProtectedNative30HookV1':'ProtectedNative30HookV1'};
+  const automaticV2=automatic?.policyId==='programmable.automatic-platform-fees.v2';
+  const kitUrl = automaticV2 ? new URL('../contracts/automatic-platform-fees-v2/',import.meta.url) : automatic ? new URL('../contracts/automatic-platform-fees-v1/',import.meta.url) : new URL('../contracts/launch-protection-v1/',import.meta.url);
+  const contracts={initializer:'ProtectedNativeInitializerV1',token:'ProtectedLaunchTokenV1',hook:automaticV2?'AutomaticProtectedNative30HookV2':automatic?'AutomaticProtectedNative30HookV1':'ProtectedNative30HookV1'};
   const root = path.resolve(projectRoot), metadata = input.projectMetadata;
   const selection = { schemaVersion: 'programmable.direct-native-hook-graph-profile-selection.v3',
     profileId: 'programmable.direct-native-hook-graph.v1', profileRevision: 3,

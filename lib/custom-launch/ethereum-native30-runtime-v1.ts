@@ -1,3 +1,4 @@
+import { AUTOMATIC_PLATFORM_FEES_RECIPES_V2 as automaticRecipeV2 } from "../launch-protection/automatic-fees-recipes-v2";
 import { AUTOMATIC_PLATFORM_FEES_RECIPES_V1 as automaticRecipe } from "../launch-protection/automatic-fees-recipes-v1";
 import { getAddress, getContractAddress, keccak256, stringToHex, type Address, type Hex } from "viem";
 import { ETHEREUM_NATIVE30_RECIPES_V1 } from "./ethereum-native30-recipes-v1";
@@ -9,6 +10,7 @@ import { ETHEREUM_CUSTOM_NATIVE30_RECIPES_V1 as customRecipes, isBrownieNative30
 import { ETHEREUM_LEDGER_NATIVE30_RECIPES_V1 as ledgerRecipes, isEthereumLedgerNative30RecipeV1 } from "./ethereum-ledger-native30-recipes-v1";
 const recipes = {
   automatic_native30_v1: {...automaticRecipe,recipient:automaticRecipe.teamWallet},
+  automatic_native30_v2: {...automaticRecipeV2,recipient:automaticRecipeV2.teamWallet},
   ...ETHEREUM_NATIVE100_RECIPES_V1,
   native30_fee_kernel_v2: { ...ETHEREUM_NATIVE30_RECIPES_V1.native30_fee_kernel_v2, recipient: "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c" },
   ...ETHEREUM_NATIVE30_RECIPES_V2,
@@ -132,7 +134,7 @@ function hookCandidate(market: EthereumNative30MarketV1, runtime: Hex) {
     || numberWord(words, "creatorBuyFeeBps") + BigInt(rateBps) >= 10000n || numberWord(words, "creatorSellFeeBps") + BigInt(rateBps) >= 10000n
     || numberWord(words, "maxModuleLpFeePips") > 1000000n || eq(feeModule, key.poolManager)
     || eq(feeModule, ZERO) !== eq(words.moduleCodeHash!, WORD0)) return null;
-  if (recipeId === "automatic_native30_v1" && (!eq(addressWord(words,"PLATFORM_RECIPIENT"), addressWord(words,"platformFeeRouter"))
+  if ((recipeId === "automatic_native30_v1" || recipeId === "automatic_native30_v2") && (!eq(addressWord(words,"PLATFORM_RECIPIENT"), addressWord(words,"platformFeeRouter"))
     || !eq(addressWord(words,"PLATFORM_RECIPIENT"), automaticRecipe.teamWallet) || words.platformFeeRouterCodeHash !== WORD0)) return null;
   return { key, words, vault, feeModule, recipeId, recipe, rateBps };
 }
@@ -142,7 +144,7 @@ export function ethereumNative30RequiredAddressesV1(market: EthereumNative30Mark
     const custom = customCandidate(market, hookRuntime);
     if (custom) return frozen([...new Set([custom.key.hooks, custom.vault])]);
     const candidate = hookCandidate(market, hookRuntime); if (!candidate) return null;
-    return frozen([candidate.key.hooks, candidate.vault, ...(candidate.recipeId === "automatic_native30_v1" && !eq(candidate.words.platformFeeRouterCodeHash!,WORD0) ? [addressWord(candidate.words,"platformFeeRouter")] : []), ...(eq(candidate.feeModule, ZERO) ? [] : [candidate.feeModule])]);
+    return frozen([candidate.key.hooks, candidate.vault, ...((candidate.recipeId === "automatic_native30_v1" || candidate.recipeId === "automatic_native30_v2") && !eq(candidate.words.platformFeeRouterCodeHash!,WORD0) ? [addressWord(candidate.words,"platformFeeRouter")] : []), ...(eq(candidate.feeModule, ZERO) ? [] : [candidate.feeModule])]);
   } catch { return null; }
 }
 
@@ -271,7 +273,7 @@ function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<str
   const vaultWords = readEthereumNative30RuntimeWordsV1(recipe.vault, vaultCode);
   if (!vaultWords || !eq(addressWord(vaultWords, "poolManager"), key.poolManager)
     || !eq(addressWord(vaultWords, "kernel"), key.hooks) || eq(addressWord(vaultWords, "creatorRecipient"), ZERO)) return null;
-  if (recipeId === "automatic_native30_v1") {
+  if ((recipeId === "automatic_native30_v1" || recipeId === "automatic_native30_v2")) {
     if (!eq(addressWord(vaultWords,"PLATFORM_RECIPIENT"),addressWord(words,"PLATFORM_RECIPIENT"))
       || vaultWords.platformRouterCodeHash !== words.platformFeeRouterCodeHash) return null;
     const router=addressWord(words,"platformFeeRouter");
@@ -294,7 +296,7 @@ function buildProof(market: EthereumNative30MarketV1, codes: Readonly<Record<str
   bindings.sort((a, b) => a.role.localeCompare(b.role));
   const body = { schemaVersion: ETHEREUM_NATIVE30_PROOF_SCHEMA_V1, recipeId,
     sourceArtifactHash: recipe.sourceArtifactHash, market: key,
-    ...(recipeId === "automatic_native30_v1" ? {automaticPayout:true as const,teamWallet:automaticRecipe.teamWallet,platformRouterCodeHash:words.platformFeeRouterCodeHash!}:{}),
+    ...((recipeId === "automatic_native30_v1" || recipeId === "automatic_native30_v2") ? {automaticPayout:true as const,teamWallet:automaticRecipe.teamWallet,platformRouterCodeHash:words.platformFeeRouterCodeHash!}:{}),
     recipient: getAddress(recipe.recipient), rateBps, denominator: 10000 as const,
     scope: "exact_pool_key" as const, feeCurrency: "native" as const, assessmentBase: "gross_native_leg" as const,
     rounding: "ceil_per_trade" as const, accrual: "backed_pool_manager_native_claims" as const,

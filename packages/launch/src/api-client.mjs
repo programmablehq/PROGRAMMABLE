@@ -1,7 +1,7 @@
 import ELYSIUM_PROFILE_V1 from "./elysium-profile-v1.json" with {type: "json"};
 import HYPEREVM_PROFILE_V1 from "./hyperevm-profile-v1.json" with {type: "json"};
 import BASE_PROFILE_V1 from "./base-profile-v1.json" with { type: "json" };
-import { assertDirectNativeProgrammableTradeFeePolicyV36, directNativeProgrammableTradeFeePolicyHashV36 } from "./profile-v36.mjs";
+import { withAutomaticNativeProfileV2, assertDirectNativeProgrammableTradeFeePolicyV36, directNativeProgrammableTradeFeePolicyHashV36 } from "./profile-v36.mjs";
 import { assertRobinhoodInitialBuyReviewV1 } from "./initial-buy-review-v1.mjs";
 import { assertRobinhoodFeeReviewV1 } from "./fee-review-v1.mjs";
 import { isRobinhoodProfileV41 } from "./profile-v41.mjs";
@@ -2348,7 +2348,7 @@ function assertPreflightV4Field(condition, field) {
 function assertProfile36RequestMatchesCapabilities(request, capabilities) {
   if (["8453","999","99901"].includes(request?.chainId)) {
     assertEvmCapabilitiesResponse(capabilities, request.chainId);
-    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(request.chainId === "99901" ? ELYSIUM_PROFILE_V1 : request.chainId === "999" ? HYPEREVM_PROFILE_V1 : BASE_PROFILE_V1), "profile.exactBaseBindings");
+    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(capabilities.profile), "profile.exactBaseBindings");
     return;
   }
   if (request?.launchProfile?.profileVersion !== DIRECT_NATIVE_PROFILE_VERSION_V36) return;
@@ -2361,14 +2361,23 @@ function assertProfile36RequestMatchesCapabilities(request, capabilities) {
 
 export function assertBaseCapabilitiesResponse(value) { return assertEvmCapabilitiesResponse(value, "8453"); }
 export function assertEvmCapabilitiesResponse(value, chainId) {
-  const canonicalProfile=chainId === "99901" ? ELYSIUM_PROFILE_V1 : chainId === "999" ? HYPEREVM_PROFILE_V1 : chainId === "8453" ? BASE_PROFILE_V1 : null;
-  assertCapabilitiesField(canonicalProfile !== null, "chain");
+  const legacyProfile=chainId === "99901" ? ELYSIUM_PROFILE_V1 : chainId === "999" ? HYPEREVM_PROFILE_V1 : chainId === "8453" ? BASE_PROFILE_V1 : null;
+  assertCapabilitiesField(legacyProfile !== null, "chain");
   assertCapabilitiesField(isPlainObject(value), "$");
   assertCapabilitiesField(value.schemaVersion === "programmable.custom-launch-capabilities.v1" && value.apiVersion === "v4", "schemaVersion");
   assertCapabilitiesField(value.chain?.id === chainId && value.chain?.name === (chainId === "99901" ? "Elysium" : chainId === "999" ? "HyperEVM" : "Base"), "chain");
   assertCapabilitiesField(Number.isFinite(Date.parse(value.serverTime)) && SHA256.test(value.releaseId), "release");
   assertCapabilitiesField(["active", "canary"].includes(value.mode), "mode");
   assertCapabilitiesField(value.publicLaunchAuthorized === (value.mode === "active") && value.moduleMode === false, "publicLaunchAuthorized");
+  let canonicalProfile=legacyProfile;
+  if(value.automaticPlatformFees?.policyId === "programmable.automatic-platform-fees.v2") {
+    const automatic=value.automaticPlatformFees;
+    assertCapabilitiesField(automatic.status==="active" && automatic.chainId===chainId
+      && automatic.teamWallet==="0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+      && automatic.platformFeeBps===30 && automatic.buybackBps===0 && automatic.nativePayoutBps===10000
+      && automatic.router===null && Number.isFinite(Date.parse(automatic.activationTime)),"automaticPlatformFees");
+    canonicalProfile=withAutomaticNativeProfileV2(legacyProfile,value.profile?.programmableTradeFeePolicy);
+  } else assertCapabilitiesField(value.automaticPlatformFees===undefined,"automaticPlatformFees");
   const { productionLaunchAuthorized, ...profile } = value.profile ?? {};
   const { productionLaunchAuthorized: _staticAuthorization, ...expectedProfile } = canonicalProfile;
   assertCapabilitiesField(productionLaunchAuthorized === value.publicLaunchAuthorized
