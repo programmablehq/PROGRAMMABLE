@@ -14,7 +14,7 @@ Programmable is a platform for launching coins and applications on Uniswap v4. C
 | Custom Launch | Deploy a token, hook or application with its own source and contract structure | [API quickstart](docs/public/developers/custom-launch-quickstart.md) |
 | Classic on Ethereum | Launch a fixed supply token with selected buy and sell transaction fees | [Classic](docs/public/models/classic.md) |
 
-On Robinhood Chain (`4663`), separate token and hook contracts use the V4 API. A single contract implementing both token and hook roles uses MultiRole V2. Ethereum Mainnet uses its own V3 integration. Each path publishes the supported profile, client, funding requirements and evidence contract through [live discovery](https://programmable.market/.well-known/programmable.json).
+Start new Robinhood Chain (`4663`) integrations with the [open Custom Launch Plan guide](https://api.programmable.market/v4/chains/4663/custom-launch-contract/guide.md). Ethereum Mainnet uses its own V3 integration. Read [live discovery](https://programmable.market/.well-known/programmable.json) and the selected network's capabilities for the current request interface, client, funding requirements and evidence contract. Existing profile-based V4 and MultiRole requests keep their recorded schemas and recovery paths.
 
 ## Custom Launch integration
 
@@ -22,7 +22,7 @@ Start with the [quickstart](https://programmable.market/docs/developers/custom-l
 
 API credentials grant scoped preparation and read access. The controller wallet reviews and signs the authorized transaction separately. Finality, source verification, indexing and trading support each have their own evidence. An unchanged retry preserves the original request bytes and idempotency key.
 
-Robinhood Native20 charges **20 bps (0.20%)** of gross native ETH per successful buy or sell for Programmable. Creator fees and pool fees are additional. A zero creator fee earns zero creator rewards. Module Mode and Ethereum deployments retain their own fee contracts; [Fees and revenue](docs/public/economics.md) covers rates, recipients, version differences and the policy allocating 80% of collected fee revenue to V4 purchases, including the automatic router for new Robinhood Custom Launches.
+New Custom Launch approvals require a **30 bps (0.3%)** platform share on pool buys and sells, including the initial buy. Read the selected network's live fee policy for the recipient and payout mechanism. Creator and pool fees are separate. [Fees and revenue](docs/public/economics.md) explains the automatic Ethereum payouts, Robinhood's 80/20 fee router, and the rules retained by earlier contracts and other launch sources.
 
 ## Modules and indexing
 
