@@ -46,10 +46,15 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   const [mobilePane,setMobilePane]=useState<"chat"|"result">("chat"),[hasPending,setHasPending]=useState(false);
   const drafts=useRef(new Map<string,string>()),generation=useRef(0),pendingCreate=useRef<string>(undefined),pendingMessage=useRef<MessageIntent>(undefined);
   const root=useRef<HTMLDivElement>(null),transcript=useRef<HTMLDivElement>(null),composer=useRef<HTMLTextAreaElement>(null),main=useRef<HTMLDivElement>(null),follow=useRef(true);
+  const pendingComposerFocus=useRef(false);
   const cacheLoaded=useRef(false),seenResults=useRef(new Set<string>()),historyGeneration=useRef(0),historyAbort=useRef<AbortController>(undefined);
   const cacheVersion=useRef(0),cacheWrites=useRef<Promise<void>>(Promise.resolve());
   const entry=useRef(initialPrompt),accepted=useRef(onPromptAccepted);useEffect(()=>{accepted.current=onPromptAccepted;},[onPromptAccepted]);
   const locked=dirty||launchLocked,legacyOpen=Boolean(legacyContent);
+  useEffect(()=>{
+    if(!pendingComposerFocus.current||busy||!ready||legacyOpen)return;
+    pendingComposerFocus.current=false;composer.current?.focus();
+  },[busy,ready,selected,legacyOpen]);
   const cacheKey=scope?`programmable.project-workspace.v1:${scope}:${account}`:undefined;
   const persistWorkspace=useCallback((snapshot:Drafts)=>{
     if(!cacheKey)return Promise.resolve();
@@ -165,7 +170,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   async function create(){
     if(busy||locked)return;
     await runTask(async()=>{if(pendingMessage.current)throw Error("Retry your saved message before starting another project.");if(legacyOpen)await beforeLeaveLegacy?.();
-      pendingCreate.current??=crypto.randomUUID();const {project}=await api<{project:ProjectRevision}>("/projects",{body:{projectId:pendingCreate.current}});pendingCreate.current=undefined;await activate(project.projectId,project);setOperation("build");setPreviewAfterBuild(true);setTab("project");setResultIntent(undefined);onProject?.();requestAnimationFrame(()=>composer.current?.focus());});
+      pendingCreate.current??=crypto.randomUUID();const {project}=await api<{project:ProjectRevision}>("/projects",{body:{projectId:pendingCreate.current}});pendingCreate.current=undefined;await activate(project.projectId,project);setOperation("build");setPreviewAfterBuild(true);setTab("project");setResultIntent(undefined);onProject?.();pendingComposerFocus.current=true;});
   }
   async function submit(intent?:MessageIntent){
     if(active||syncingRun||busy||locked||!ready)return;
