@@ -226,7 +226,7 @@ audit or guarantee of safety, honeypot absence, liquidity, tradeability, or fee 
 
 ## Platform fee policy
 
-The active approval policy requires a **0.3% (30 bps)** platform fee collected by the launch pool on buys and sells, including the initial buy, to `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Operator checks must prove this for the exact submitted contracts before approval. A router-only charge does not satisfy the pool-fee requirement. Read the selected chain's live capabilities before packing.
+The active approval policy requires a **0.3% (30 bps)** platform fee collected by the launch pool on buys and sells, including the initial buy. Bind the full fee policy from live capabilities: new Ethereum launches pay the team wallet automatically, and new Robinhood launches use the published 80/20 fee router. Other chains retain their selected recipient. Operator checks must prove this for the exact submitted contracts before approval. A router-only charge does not satisfy the pool-fee requirement. Read the selected chain's live capabilities before packing.
 
 The `contracts/ethereum-native30-v3` reference kit includes source and Standard JSON compiler inputs for the current Ethereum pool-fee mechanism. Compile with exact Solidity 0.8.26 and its supplied settings. The source tree also retains Native100 kits, but their presence does not activate a 1% policy. Existing immutable contracts and previously signed policies retain their original definitions. Use the current general Custom Launch packing path and the policy returned by live capabilities.
 
@@ -598,7 +598,7 @@ CLI 4.1.3 also supports explicit `profileVersion: "3.6.0"` and selects the exact
 
 Profile 3.6 keeps the 3.3 static admission baseline, complete metadata and three through sixteen arbitrary exact-source targets. It does not require a canonical fee vault, settlement-dataflow closure or the 3.4/3.5 behavior inputs. Use `schemas/programmable-launch-pack-config-v3.6.json` and the additive [3.6 OpenAPI](https://programmable.market/openapi/custom-launch-v3.6.json). Its closed embedded `programmableTradeFeePolicy` hashes to `sha256:5956cdeee628ba84dfa5214efd532011e59c202e4e1c1830b1eca279d58d79d3` using the policy schema, NUL separator and canonical JSON.
 
-CLI 4.1.6 supports both the 3000-ppm (30-bps) policy and the separate 10000-ppm (100-bps) variant. Fresh packs must bind the policy returned by capabilities. The live Ethereum profile currently selects the 30-bps `programmable.ethereum-routed-native-fee.v2` policy. Programmable trade collection uses the complete capability policy and separate per-trade evidence. The Native30 pool-fee waiver requires the matching runtime and actual accrual for the exact trade. An applicant assertion, a custom 0.3% transfer or a getter cannot waive the routed fee. Launch admission does not establish fee collection or guarantee external trade fees. Historical signed obligations and exact retries retain their original interpretation. Direct HTTP clients use the same V3 contract without this CLI.
+CLI 4.1.6 supports both the 3000-ppm (30-bps) policy and the separate 10000-ppm (100-bps) variant. Fresh packs must bind the policy returned by capabilities. The historical Ethereum profile selected the 30-bps `programmable.ethereum-routed-native-fee.v2` policy. New requests must bind the complete current policy from live capabilities, including `programmable.automatic-platform-fees.v1` when selected. Programmable trade collection uses the complete capability policy and separate per-trade evidence. The Native30 pool-fee waiver requires the matching runtime and actual accrual for the exact trade. An applicant assertion, a custom 0.3% transfer or a getter cannot waive the routed fee. Launch admission does not establish fee collection or guarantee external trade fees. Historical signed obligations and exact retries retain their original interpretation. Direct HTTP clients use the same V3 contract without this CLI.
 
 ### CLI 4.1.4 signing window
 
@@ -606,7 +606,7 @@ Fresh Ethereum profile 3.6 packs use the 24-hour successor router. Approved laun
 
 ### Ethereum treasury policy
 
-The `programmable.ethereum-routed-native-fee.v2` policy sends the 30 bps platform share to
+The historical `programmable.ethereum-routed-native-fee.v2` policy sends the 30 bps platform share to
 `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Fresh automatic packs use the policy returned by
 current API capabilities. Exact retries retain the policy in their original request.
 
