@@ -30,7 +30,9 @@ describe("selected canonical protection source context", () => {
   it.each(profiles)("supplies the complete original chain $chain kit in a bounded model view", ({ chain, kit, path }) => {
     const sources = canonicalGeneralSourceCatalog(undefined, chain);
     const automaticLaunchSources = Object.fromEntries(Object.entries(automaticKit.sources).filter(([name]) =>
-      name.startsWith("src/automatic-platform-fees-v1/") && !name.endsWith("/RobinhoodPlatformFeeRouterV1.sol")));
+      (chain===1||chain===4663
+        ? name.startsWith("src/automatic-platform-fees-v1/") && !name.endsWith("/RobinhoodPlatformFeeRouterV1.sol")
+        : name.endsWith("/IProgrammablePlatformFeeRouterV1.sol"))));
     const automaticSourcesV2=Object.fromEntries(Object.entries(automaticKitV2.sources).filter(([name])=>name.startsWith("src/automatic-platform-fees-v2/")));
     const expected = {...kit.sources,...automaticLaunchSources,...automaticSourcesV2};
     expect(sources).toEqual(expected);
