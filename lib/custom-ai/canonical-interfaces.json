@@ -64,7 +64,7 @@
       {
         "source": "src/automatic-platform-fees-v2/AutomaticProtectedNative30HookV2.sol",
         "contract": "AutomaticProtectedNative30HookV2",
-        "sourceSha256": "844b18e8c3abceaf3019858c43cbee7b4f75e05b9bf05fe9b0eb84a1c3159367",
+        "sourceSha256": "d777da803c9106c847b2221f6c82556992e60819db07ae7cc9cf58bc4566ab65",
         "constructor": "address,(address,uint24,int24,uint160,address,address,uint16,uint16,address,uint24),address,address,bytes32,address[6],address,bytes32",
         "functions": [
           "function CANONICAL_POOL_MANAGER() view returns (address)",
@@ -117,7 +117,7 @@
       {
         "source": "src/automatic-platform-fees-v2/AutomaticNativeFeeVaultV2.sol",
         "contract": "AutomaticNativeFeeVaultV2",
-        "sourceSha256": "53e2632bf0120a6adfd7a1d8577c62c172d850b80af465cacdf1727207fb32c8",
+        "sourceSha256": "7e931bfb213722db94a0811e0913b3198805da1f84cca84babb09bd5716163b4",
         "constructor": "address,address,address,bytes32",
         "functions": [
           "function AUTOMATIC_PAYOUT_GAS() view returns (uint256)",
@@ -149,7 +149,7 @@
       {
         "source": "src/automatic-platform-fees-v2/AutomaticLaunchProtectionModuleV2.sol",
         "contract": "AutomaticLaunchProtectionModuleV2",
-        "sourceSha256": "ab44fe3aa7fd8ebba58bba2180cb9639d71ee7f875e9eed048e27f4123323f19",
+        "sourceSha256": "70d1957285edb1919b0b68b6349519489799b8d7a7ef1e5590aaa18c5dcb8c63",
         "constructor": "address,address,address,address,bytes32,uint16,address[6]",
         "functions": [
           "function DECAY_SECONDS() view returns (uint256)",
