@@ -39,7 +39,7 @@ describe("saved project context",()=>{
   const original=source(),before=JSON.stringify(original.project);
   const result=modelDesignContext({generalProject:original,canonicalSources:canonicalGeneralSourceCatalog(original.project,8453)},true);
   expect(result.generalProject?.sources?.[path].content).toBe(content);
-  expect(result.generalProject?.dependencyView?.format).toBe("code-without-comments-v1");
+  expect(result.generalProject?.dependencyView?.format).toBe("library-declarations-and-policy-source-v1");
   expect(JSON.stringify(result).length).toBeLessThan(120000);
   expect(JSON.stringify(original.project)).toBe(before);
  });
