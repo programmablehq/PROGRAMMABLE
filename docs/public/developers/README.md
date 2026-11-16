@@ -1,11 +1,11 @@
 # Developers
 
-Use the guide for your task and network: Ethereum Mainnet (`1`), Robinhood Chain (`4663`), Base (`8453`) or HyperEVM (`999`). Base and HyperEVM support Custom Launch; Module Mode remains on Ethereum and Robinhood.
+Use the guide for your task and network: Ethereum Mainnet (`1`), Robinhood Chain (`4663`), Base (`8453`), HyperEVM (`999`) or Elysium (`99901`). Base, HyperEVM and Elysium support Custom Launch; Module Mode remains on Ethereum and Robinhood.
 
 | Task | Guide |
 | --- | --- |
 | Launch your own contracts | [Custom Launch quickstart](custom-launch-quickstart.md) |
-| Launch on Base or HyperEVM | [Base](base-custom-launch.md) · [HyperEVM](hyperevm-custom-launch.md) |
+| Launch on Base, HyperEVM or Elysium | [Base](base-custom-launch.md) · [HyperEVM](hyperevm-custom-launch.md) · [Elysium](https://programmable.market/developers/elysium-custom-launch-api-v1.md) |
 | Check request fields and errors | [Custom Launch API](custom-launch.md) |
 | Add coins to a terminal, wallet or explorer | [Index launches](indexing.md) |
 | Find schemas, ABIs and client releases | [API reference](machine-readable.md) |

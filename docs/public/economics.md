@@ -19,11 +19,11 @@ These percentages apply to trades, not an allocation of the coin's token supply.
 
 ## Custom launches
 
-New Custom Launch approvals on Ethereum Mainnet, Robinhood, Base and HyperEVM require a **0.3% (30 bps)** platform fee on buys and sells through the launch pool, including the initial buy. The submitted contracts must enforce this fee. Project fees and liquidity-provider fees are separate.
+New Custom Launch approvals on Ethereum, Robinhood, Base, HyperEVM and Elysium require a **0.3% (30 bps)** platform fee on pool buys and sells, including the initial buy. The submitted contracts enforce this fee. Creator and liquidity-provider fees remain separate.
 
-New Ethereum launches send the normal platform fee as ETH to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. New Robinhood launches use the automatic fee router, which pays 20% as ETH to the same wallet and reserves 80% for V4 purchases delivered there. The [fee reference](reference/fee-versions.md) describes these routes and the rules retained by earlier contracts.
+When capabilities select `programmable.automatic-platform-fees.v2`, the hook sends platform fees and the additional opening surcharge automatically. Ethereum and Base pay 100% as ETH to `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62`. HyperEVM and Elysium pay 100% as HYPE to that address. Robinhood uses the existing router: 20% is paid as ETH and 80% is reserved for bounded V4 purchases delivered to the same wallet.
 
-The [Base](developers/base-custom-launch.md#protection-and-fees) and [HyperEVM](developers/hyperevm-custom-launch.md) guides describe their protection and fee requirements. Use each chain's live capabilities to identify the selected fee policy.
+Purchases run in batches when gas, price and liquidity limits permit. Delivery to the team wallet is separate from burning tokens. If a payout cannot complete, its backed claim remains available for retry. Earlier immutable contracts retain their recorded destinations and claim paths. See the [fee reference](reference/fee-versions.md).
 
 Before approval, Programmable records buy and sell checks for the exact submitted source and configuration, including the fee asset, assessment base, fixed recipient, backing and claim path. The Ethereum Native30 reference contracts use the gross native ETH leg and round up per trade. External routes depend on that hook's enforcement. A launch stamp establishes origin; it does not prove fee enforcement or payment. Existing contracts and versioned API profiles retain their recorded rates. The [fee reference](reference/fee-versions.md) lists the rates for Native20, earlier Module Mode contracts and Ethereum launches.
 
@@ -52,7 +52,7 @@ Fee tracking covers these Programmable wallets together on Ethereum and Robinhoo
 | --- | --- |
 | `0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62` | Automatic Ethereum Custom Launch payouts, Robinhood native payouts and purchased V4 |
 | `0xB7ec61e7f5a981F8C89E3788E61cE5EB2428A001` | Robinhood automatic Custom Launch fee router and V4 purchase reserve |
-| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Earlier immutable fee contracts, other selected routes and opening-protection surcharges |
+| `0xD88539d3c4C460136a733A3Fd60cf6BF269079da` | Earlier immutable fee contracts and other selected routes |
 | `0x39544A7023081B56D7405c1af0bFaf72da7e24F6` | V4 liquidity fees and the project's burn wallet |
 | `0x4957f49620AFf3Adbbe8195a4f633E49cc93376c` | Fees from earlier Ethereum contracts |
 
