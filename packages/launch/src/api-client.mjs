@@ -65,7 +65,7 @@ import {
   MAX_API_RESOURCE_RESPONSE_BYTES,
   readApiResponse,
 } from "./api-response.mjs";
-import { validateDirectNativePermitWindow } from "./profile-direct-native-v1.mjs";
+import { validateDirectNativePermitWindow, validateEmbeddedDirectNativeProfile } from "./profile-direct-native-v1.mjs";
 import { validateLaunchFile } from "./validate.mjs";
 import {
   assertV4DeploymentDescriptorDigest,
@@ -2348,7 +2348,15 @@ function assertPreflightV4Field(condition, field) {
 function assertProfile36RequestMatchesCapabilities(request, capabilities) {
   if (["8453","999","99901"].includes(request?.chainId)) {
     assertEvmCapabilitiesResponse(capabilities, request.chainId);
-    assertCapabilitiesField(canonicalizeJson(request.launchProfile) === canonicalizeJson(capabilities.profile), "profile.exactBaseBindings");
+    const profile=validateEmbeddedDirectNativeProfile(request.launchProfile);
+    const historical=capabilities.automaticPlatformFees?.policyId==="programmable.automatic-platform-fees.v2"
+      && !profile.programmableTradeFeePolicy.policyVersion.endsWith(".v2");
+    // The same submission operation also replays accepted requests and refreshes
+    // their transport window. Only the authenticated server knows that history.
+    // Keep exact canonical historical bytes eligible for that server decision;
+    // fresh builders still select the current profile from capabilities.
+    assertCapabilitiesField(profile.chainId===request.chainId && (historical
+      || canonicalizeJson(profile)===canonicalizeJson(capabilities.profile)), "profile.exactBaseBindings");
     return;
   }
   if (request?.launchProfile?.profileVersion !== DIRECT_NATIVE_PROFILE_VERSION_V36) return;

@@ -672,7 +672,7 @@
     },
     {
       "path": "packages/launch/src/api-client.mjs",
-      "sha256": "sha256:d3963fbe357811b4f9612b30f3287bced959f77ad2dd5a1cede95f2648409b2b"
+      "sha256": "sha256:b4afb63ff9ebd08a3ebbfc234667b49eb4981c754727e64bbdb856eb4da55c7e"
     },
     {
       "path": "packages/launch/src/api-response.mjs",
