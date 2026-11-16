@@ -103,7 +103,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
   return <section className={styles.workspace} id="launch-workspace" tabIndex={-1} aria-label="Your launches">
     <div className={styles.toolbar}><label>Chain <select value={chain} onChange={event => setChain(event.target.value)}><option value="all">All chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option><option value="8453">Base</option><option value="999">HyperEVM</option><option value="99901">Elysium</option></select></label>
       <button type="button" className={shared.secondaryButton} onClick={retry} disabled={loading}>Refresh launches</button></div>
-    {error ? <DeveloperIssue message={error} retry={retry} connect={props.openWallet} /> : null}
+    {error ? <DeveloperIssue message={error} retry={retry} connect={props.openWallet} chainId={props.initialLaunchChainId ?? undefined} /> : null}
     <p role="status">{loading ? "Loading your launches…" : visible.length ? `${visible.length} ${visible.length === 1 ? "launch" : "launches"}` : error ? "Some launches could not be loaded. Your saved requests are kept." : "No launch requests yet."}</p>
     <ul className={styles.list}>{visible.map(item => <li key={`${item.source}:${item.id}`}><button type="button" className={styles.card} onClick={() => open(item)}>
       <span className={styles.image}>{item.image && !failedImages.includes(item.image) ? <NextImage src={item.image} alt="" width={48} height={48} unoptimized referrerPolicy="no-referrer" onError={() => setFailedImages(current => [...current, item.image!])} /> : (item.symbol || item.name).slice(0, 2)}</span>

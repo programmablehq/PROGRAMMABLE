@@ -29,6 +29,15 @@ describe("developer setup and diagnostics", () => {
     expect(developerRecovery("HTTP 401").owner).toBe("Your action");
     expect(developerRecovery("HTTP 503").owner).toBe("Programmable");
   });
+  it("keeps session and missing-launch statuses in copied support details", () => {
+    for (const status of [401, 404]) {
+      const details = safeDeveloperDetails(`${status} Wallet request failed: private-response-body`, "99901");
+      expect(details).toContain(`HTTP: ${status}`);
+      expect(details).toContain("Chain: 99901");
+      expect(details).not.toContain("private-response-body");
+    }
+    expect(safeDeveloperDetails("Request failed at block 401")).not.toContain("HTTP:");
+  });
   it("connection checks use only allowlisted public endpoints and cannot authorize a key", async () => {
     const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ schemaVersion: "programmable.custom-launch-capabilities.v1", chain: { id: "1" }, profile: { productionLaunchAuthorized: true } })));
     vi.stubGlobal("fetch", fetcher);
