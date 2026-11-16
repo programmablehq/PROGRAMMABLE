@@ -748,13 +748,13 @@ description = "Exact public V4 token and deployed runtime binding in the automat
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "secret"
-paths = ['^contracts/src/automatic-platform-fees-v1/RobinhoodPlatformFeeRouterV1\.sol$', '^packages/launch/contracts/automatic-platform-fees-v1/standard-json\.json$']
+paths = ['^contracts/src/automatic-platform-fees-v1/RobinhoodPlatformFeeRouterV1\.sol$', '^packages/launch/contracts/automatic-platform-fees-v1/standard-json\.json$', '^packages/launch/contracts/automatic-platform-fees-v2/standard-json\.json$']
 regexes = ['^0x(?:C60bA256B44334A0Cd2C7242E98B88f031abB006|3a59d82f4d4bce7c9f370476a284e1ef549ed3d20a3b9ec7af5560011c9c1458)$']
 
 [[allowlists]]
-description = "Exact existing public chain funding contracts carried into CLI 4.4.2 metadata"
+description = "Exact existing public chain funding contracts carried into CLI 4.4.2 and 4.4.3 metadata"
 targetRules = ["generic-api-key"]
 condition = "AND"
 regexTarget = "secret"
-paths = ['^docs/operations/releases/custom-launch-v4\.4\.2/cli-release-binding\.json$']
+paths = ['^docs/operations/releases/custom-launch-v4\.4\.2/cli-release-binding\.json$', '^docs/operations/releases/custom-launch-v4\.4\.3/cli-release-binding\.json$']
 regexes = ['^0x(?:8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c|bA876237B0F021A6c6D852d6c26E107997cC5E81|5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353|e2e18bc11f218432ca1aabc44b53cce54a78c77ae2d76093a577e0564a77aa04)$']
