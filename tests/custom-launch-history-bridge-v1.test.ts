@@ -459,6 +459,16 @@ describe("developer launch history same-origin bridge", () => {
     fetchBackend.mockResolvedValue(new Response(null, { status: 404 }));
   });
 
+  it.each(["8453", "999", "99901"])("reports a missing chain %s wallet route instead of an empty history", async chainId => {
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=${chainId}`,
+    ));
+    expect(response.status).toBe(503);
+    expect((await response.json()).error.code).toBe("launch_history_unavailable");
+    expect(fetchBackend).toHaveBeenCalledTimes(1);
+    expect((fetchBackend.mock.calls[0][0] as URL).pathname).toBe(`/v4/chains/${chainId}/wallet-admin/custom-launches`);
+  });
+
   function bridge() {
     return createDeveloperLaunchHistoryBridgeV1({
       authenticator: { authenticate },

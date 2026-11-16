@@ -474,9 +474,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
               AbortSignal.timeout(timeoutMs),
             ]),
           });
-          // During route-isolated rollouts, a missing additive list is an
-          // empty lane. Earlier history must remain available independently.
-          if (version !== "v1" && backend.status === 404) {
+          // Optional legacy versions may be absent. A missing route on an
+          // active EVM chain is an error, not proof of an empty wallet history.
+          if (query.chainId === "1" && version !== "v1" && backend.status === 404) {
             return Object.freeze({
               version,
               launches: Object.freeze([] as DeveloperCustomLaunch[]),
