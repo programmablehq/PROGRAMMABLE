@@ -415,7 +415,7 @@ describe("Alchemy incremental launch registry", () => {
       payload: registry, contentHash: keccak256(toBytes(JSON.stringify(registry))) };
     const etag = '"8e8ed5b7c65cfe481ae32dc684e98710"';
     blobMocks.get.mockImplementation(async () => ({ statusCode: 200,
-      stream: new Response(JSON.stringify(saved)).body, blob: { etag } }));
+      stream: new Response(JSON.stringify(saved)).body, headers: new Headers(), blob: { etag } }));
     const before = await readAlchemyLaunchRegistry(deployment, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR, { scope: "router" });
     process.env.VERCEL_GIT_COMMIT_SHA = "b".repeat(40);
     const after = await readAlchemyLaunchRegistry(deployment, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR, { scope: "router" });
@@ -448,6 +448,7 @@ describe("Alchemy incremental launch registry", () => {
     blobMocks.get.mockResolvedValueOnce({
       statusCode: 200,
       stream: new Response(JSON.stringify(envelope())).body,
+      headers: new Headers(),
       blob: { etag: '"8e8ed5b7c65cfe481ae32dc684e98710"' },
     });
 
@@ -463,6 +464,7 @@ describe("Alchemy incremental launch registry", () => {
   it("rejects a weak representation ETag as an object version", async () => {
     blobMocks.get.mockResolvedValueOnce({ statusCode: 200,
       stream: new Response(JSON.stringify(envelope())).body,
+      headers: new Headers(),
       blob: { etag: 'W/"8e8ed5b7c65cfe481ae32dc684e98710"' } });
     await expect(readAlchemyLaunchRegistry(deployment, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR)).rejects.toThrow("ETag");
   });

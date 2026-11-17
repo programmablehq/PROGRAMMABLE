@@ -1,6 +1,7 @@
 import "server-only";
 
 import { after } from "next/server";
+import { getRevalidatedPrivateBlob } from "../server/private-blob-read-cache";
 
 import { canonicalTokenExploreEntryV1 } from "../explore-entry-v1";
 import type {
@@ -398,13 +399,9 @@ async function readDurableRouterCustomIdentitySnapshotRecordV1() {
   if (!token) throw new Error(
     "Router Custom durable snapshot storage is not configured",
   );
-  const { get } = await import("@vercel/blob");
-  const result = await get(ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH, {
-    access: "private",
-    token,
-    useCache: false,
-    headers: { "accept-encoding": "identity" },
-  });
+  const result = await getRevalidatedPrivateBlob(
+    ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH, { token }, ROUTER_CUSTOM_SNAPSHOT_MAXIMUM_BYTES,
+  );
   if (!result || result.statusCode !== 200 || !result.stream) {
     throw new Error("Router Custom durable snapshot is unavailable");
   }

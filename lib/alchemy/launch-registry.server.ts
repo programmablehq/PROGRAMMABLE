@@ -1,4 +1,5 @@
 import "server-only";
+import { getRevalidatedPrivateBlob } from "../server/private-blob-read-cache";
 
 import {
   isAddress,
@@ -540,13 +541,9 @@ export async function readAlchemyLaunchRegistry(
   const token = resolveDurableExploreBlobToken();
   if (!token) throw new Error("Alchemy launch registry storage is not configured");
   const repositoryCommit = requiredRepositoryCommit();
-  const { get } = await import("@vercel/blob");
-  const result = await get(registryPath(repositoryCommit, options), {
-    access: "private",
-    token,
-    useCache: false,
-    headers: { "accept-encoding": "identity" },
-  });
+  const result = await getRevalidatedPrivateBlob(
+    registryPath(repositoryCommit, options), { token }, 16 * 1_024 * 1_024,
+  );
   if (!result || result.statusCode !== 200 || !result.stream) {
     return {
       registry: {
