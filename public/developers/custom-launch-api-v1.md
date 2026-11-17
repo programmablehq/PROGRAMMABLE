@@ -17,6 +17,8 @@ For pending reviews, provider errors and delayed indexing, follow the [launch st
 
 Start with [Launch through the API](https://programmable.market/docs/developers/custom-launch-quickstart) for network selection, API keys, fees, funding, submission and recovery. This document is the detailed reference for the supported request versions. Use the selected API's schema and client together.
 
+For new Robinhood projects, follow the current [Custom Launch Plan workflow](https://programmable.market/docs/developers/custom-launch) and read [Custom Launch capabilities](https://api.programmable.market/v4/chains/4663/custom-launch-capabilities) before packing. Select the advertised plan interface and its complete automatic fee policy. The MultiRole V2 and older V4 sections below describe their own versioned request bindings; preserve those bindings when reading or recovering an existing launch.
+
 ## Shared token and hook: MultiRole V2
 
 On Robinhood chain 4663, a token and hook that share one physical contract use the separate MultiRole V2 lane.
