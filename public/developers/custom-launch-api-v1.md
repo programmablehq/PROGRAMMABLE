@@ -38,9 +38,32 @@ The 4.1 funding and CLI instructions below apply to that existing profile; Multi
 
 ## Fees and analytics
 
-New approvals require contracts that collect **30 bps (0.3%)** for the platform on pool buys and sells, including the initial buy. The recipient is `0xD88539d3c4C460136a733A3Fd60cf6BF269079da`. Passing operator checks must bind the exact review and subject; reports for other rates and website-only surcharges do not qualify. The Ethereum Native30 reference source is available in the [public repository](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts).
+New approvals on Ethereum, Robinhood, Base, HyperEVM and Elysium require the launch pool contracts to collect **30 bps (0.3%)** for Programmable on buys and sells, including the initial buy. Before building, read the selected chain's live capabilities and implement the complete `automaticPlatformFees` policy, including `teamWallet` and any supplied router address and runtime hash. Passing operator checks must bind the exact review and subject. Creator fees are additional; a website-only surcharge does not establish the required pool fee.
 
-New Custom Launches use a versioned policy: Programmable-routed trades on Ethereum and Robinhood charge **30 bps (0.3%)** for the platform, separately from creator and pool fees. External routing is a separate capability and does not imply this fee is hook-enforced everywhere. Historical Robinhood Native20 contracts retain their deployed 20 bps fee model. The [fees guide](https://programmable.market/docs/economics) defines the calculation and claim path. The [Dune dashboard](https://dune.com/programmablehq/analytics) reports finalized Custom Launch stamps, creator rewards in ETH and protocol revenue in ETH. Fee totals include unclaimed accruals from supported native fee events; gas, liquidity, withdrawals and historical fee models without those events are excluded. The dashboard refreshes every 24 hours.
+When `programmable.automatic-platform-fees.v2` is active, Ethereum and Base pay the platform share as ETH to `teamWallet`; HyperEVM and Elysium pay HYPE. Robinhood uses the published router, which pays 20% as ETH to that wallet and reserves 80% for bounded V4 purchases delivered there. The additional opening surcharge follows the same route with separate accounting. Read the [current fee and funding requirements](https://programmable.market/docs/developers/custom-launch#fees-funding-and-liquidity) before choosing contract recipients.
+
+Historical Native20 and Native30 deployments and unchanged request retries retain their recorded rates and recipients. The [Ethereum Native30 reference source](https://github.com/programmablehq/PROGRAMMABLE/tree/production/packages/launch/contracts/ethereum-native30-v3) describes its original fixed-recipient mechanism. New submissions need source and configuration matching the current capability policy, or equivalent exact-source fee evidence.
+
+The [fees guide](https://programmable.market/docs/economics) explains collection and payouts. The [Dune dashboard](https://dune.com/programmablehq/analytics) reports finalized Custom Launch stamps, creator rewards in ETH and protocol revenue in ETH. Fee totals include unclaimed accruals from supported native fee events; gas, liquidity, withdrawals and historical fee models without those events are excluded. The dashboard refreshes every 24 hours.
+
+## Source publication and compiler metadata
+
+Keep the original Standard JSON input, source contents, compiler version, settings and constructor arguments together. Post-launch source publication checks that identity and independently compiled runtime against the finalized deployment. A completed provider verification job or a provider `match` badge alone does not establish `source_verified`.
+
+For a new metadata-free Robinhood Custom Launch Plan, set both metadata fields before compiling and packing:
+
+```json
+{
+  "metadata": {
+    "appendCBOR": false,
+    "bytecodeHash": "none"
+  }
+}
+```
+
+This is the `metadata` member of the existing Standard JSON `settings`; retain all other compiler settings and source dependencies. The post-finality publisher can corroborate a metadata-free provider `match` only after the full source, build, constructor, creation and runtime bindings pass. Ordinary builds with metadata hashes still require the provider's exact match.
+
+The combination `bytecodeHash: "none"` and `appendCBOR: true` retains a CBOR payload without a source metadata hash. In the current Robinhood publication path, a provider `match` for that format remains `SOURCE_NOT_EXACT_MATCH`. Select the intended format before deployment. For an existing reviewed or deployed plan, preserve its original bytes and receipts and follow the [recovery guide](/developers/custom-launch-recovery-v1.md); changing compiler settings creates a different build and needs its own review and deployment evidence. Keep source publication pending until the required evidence is present.
 
 ## Start with the launch details
 
