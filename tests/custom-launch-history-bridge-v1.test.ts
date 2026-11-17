@@ -485,6 +485,104 @@ describe("developer launch history same-origin bridge", () => {
     });
   }
 
+  it("starts independent history versions before a slow version finishes", async () => {
+    let finishFirst!: (response: Response) => void;
+    const first = new Promise<Response>(resolve => { finishFirst = resolve; });
+    fetchBackend.mockImplementation((url: URL) => url.pathname.startsWith("/v1/")
+      ? first : Promise.resolve(new Response(null, { status: 404 })));
+    const pending = bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}`,
+    ));
+    await vi.waitFor(() => expect(fetchBackend).toHaveBeenCalledTimes(4));
+    finishFirst(backendJson({ launches: [], nextCursor: null }));
+    const response = await pending;
+    expect(response.status).toBe(200);
+    expect((await response.json()).launches).toEqual([]);
+  });
+
+  it("recovers one timed-out read with a fresh wallet-bound assertion", async () => {
+    fetchBackend.mockRejectedValueOnce(new DOMException("slow upstream", "TimeoutError"))
+      .mockResolvedValueOnce(backendJsonV3({ launches: [], nextCursor: null }));
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+    ));
+    expect(response.status).toBe(200);
+    expect(fetchBackend).toHaveBeenCalledTimes(2);
+    const requests = fetchBackend.mock.calls.map(([, init]) => init as RequestInit);
+    expect(requests.every(init => init.method === "GET")).toBe(true);
+    const headers = requests.map(init => new Headers(init.headers));
+    expect(headers.map(value => value.get("x-programmable-wallet-address")))
+      .toEqual([WALLET, WALLET]);
+    expect(headers[1]!.get("x-programmable-bff-assertion-nonce"))
+      .not.toBe(headers[0]!.get("x-programmable-bff-assertion-nonce"));
+  });
+
+  it("stops after the single read retry and preserves a correlated error", async () => {
+    fetchBackend.mockRejectedValue(new DOMException("slow upstream", "TimeoutError"));
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+    ));
+    expect(fetchBackend).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(503);
+    expect((await correlatedError(response)).body.error.code).toBe("launch_history_unavailable");
+  });
+
+  it.each([401, 403, 404, 429, 503])("does not retry an upstream HTTP %s response", async status => {
+    fetchBackend.mockResolvedValue(new Response(null, { status }));
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+    ));
+    expect(fetchBackend).toHaveBeenCalledTimes(1);
+    expect(response.status).not.toBe(200);
+  });
+
+  it("does not retry when the caller aborts with a timeout reason", async () => {
+    const controller = new AbortController();
+    fetchBackend.mockImplementationOnce(async () => {
+      const reason = new DOMException("caller left", "TimeoutError");
+      controller.abort(reason);
+      throw reason;
+    });
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+      { signal: controller.signal },
+    ));
+    expect(fetchBackend).toHaveBeenCalledTimes(1);
+    expect(response.status).toBe(503);
+  });
+
+  it("includes authentication time in the total history-read budget", async () => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      authenticate.mockImplementationOnce(async () => {
+        now += 2_001;
+        return { privyUserId: "did:privy:test-user", privySessionId: "session-1", wallets: [WALLET] };
+      });
+      const response = await bridge().list(new Request(
+        `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+      ));
+      expect(response.status).toBe(503);
+      expect(fetchBackend).not.toHaveBeenCalled();
+    } finally { clock.mockRestore(); }
+  });
+
+  it("skips a retry when its remaining request budget is exhausted", async () => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      fetchBackend.mockImplementationOnce(async () => {
+        now += 1_751;
+        throw new DOMException("slow upstream", "TimeoutError");
+      });
+      const response = await bridge().list(new Request(
+        `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&chainId=99901`,
+      ));
+      expect(response.status).toBe(503);
+      expect(fetchBackend).toHaveBeenCalledTimes(1);
+    } finally { clock.mockRestore(); }
+  });
+
   it("returns the exact wallet history and preserves its prepared wallet transaction", async () => {
     fetchBackend.mockResolvedValueOnce(backendJson({
       launches: [launch()],
