@@ -430,6 +430,10 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       if (request.method !== "GET") {
         return errorResponse(405, "method_not_allowed", "GET");
       }
+      // Leave room inside the route's ten-second limit for parsing and reply.
+      // Authentication and a possible retry consume the same request budget.
+      const deadline = Date.now() + Math.min(8_000, timeoutMs * 2);
+      const cancelled = new AbortController();
       try {
         requireJsonResponse(request);
         const query = exactHistoryQuery(request);
@@ -458,22 +462,37 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           if (cursorState?.cursor) {
             backendUrl.searchParams.set("cursor", cursorState.cursor);
           }
-          const backend = await input.fetchBackend(backendUrl, {
-            method: "GET",
-            headers: walletAdminHeaders(
-              principal,
-              walletAddress,
-              "GET",
-              backendUrl,
-              Buffer.alloc(0),
-            ),
-            cache: "no-store",
-            redirect: "error",
-            signal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(timeoutMs),
-            ]),
-          });
+          const fetchPage = async (retry = true): Promise<Response> => {
+            request.signal.throwIfAborted();
+            cancelled.signal.throwIfAborted();
+            const remaining = deadline - Date.now();
+            if (remaining <= 0) {
+              throw new DOMException("Wallet history read deadline exceeded", "TimeoutError");
+            }
+            try {
+              return await input.fetchBackend(backendUrl, {
+                method: "GET",
+                // Every attempt needs a new signed nonce. A timed-out GET may
+                // already have reached the backend and consumed the first one.
+                headers: walletAdminHeaders(
+                  principal, walletAddress, "GET", backendUrl, Buffer.alloc(0),
+                ),
+                cache: "no-store",
+                redirect: "error",
+                signal: AbortSignal.any([
+                  request.signal,
+                  cancelled.signal,
+                  AbortSignal.timeout(Math.min(timeoutMs, remaining)),
+                ]),
+              });
+            } catch (error) {
+              if (retry && error instanceof Error && error.name === "TimeoutError"
+                && !request.signal.aborted && !cancelled.signal.aborted
+                && deadline - Date.now() >= 250) return fetchPage(false);
+              throw error;
+            }
+          };
+          const backend = await fetchPage();
           // Optional legacy versions may be absent. A missing route on an
           // active EVM chain is an error, not proof of an empty wallet history.
           if (query.chainId === "1" && version !== "v1" && backend.status === 404) {
@@ -547,10 +566,12 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             done: nextCursor === null,
           });
         };
-        const v1 = await readVersion("v1");
-        const v2 = await readVersion("v2");
-        const v3 = await readVersion("v3");
-        const v4 = await readVersion("v4");
+        // The independent, already authenticated GETs must not stack four
+        // separate upstream timeouts inside one short website invocation.
+        const [v1, v2, v3, v4] = await Promise.all([
+          readVersion("v1"), readVersion("v2"),
+          readVersion("v3"), readVersion("v4"),
+        ]);
         const launches = Object.freeze([
           ...v1.launches,
           ...v2.launches,
@@ -567,6 +588,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           nextCursor,
         });
       } catch (error) {
+        cancelled.abort(error);
         return mappedError(error);
       }
     },
