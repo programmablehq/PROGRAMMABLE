@@ -145,6 +145,7 @@ describe("finalized Router Custom public projection", () => {
     const body = JSON.stringify({ schemaVersion: "programmable.router-custom-identity-snapshot-envelope.v1",
       binding: LAUNCH_STAMP_ROUTER_BINDING, snapshot });
     mocks.blobGet.mockResolvedValue({ statusCode: 200, stream: new Response(body).body,
+      headers: new Headers(),
       blob: { size: Buffer.byteLength(body), etag: `"${"ab".repeat(16)}"` } });
     vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_test");
     const result = await readSavedRouterCustomIdentitySnapshotV1();
@@ -458,6 +459,7 @@ describe("finalized Router Custom public projection", () => {
     mocks.blobGet.mockResolvedValue({
       statusCode: 200,
       stream: new Response(body).body,
+      headers: new Headers(),
       blob: {
         size: Buffer.byteLength(body, "utf8"),
         etag: `"${"ab".repeat(16)}"`,

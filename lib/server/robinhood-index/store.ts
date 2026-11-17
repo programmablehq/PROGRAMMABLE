@@ -1,5 +1,6 @@
 import { parseSnapshot, type RobinhoodSnapshot } from "./model";
 import { BoundedBodyErrorV1, readBoundedUtf8BodyV1 } from "../custom-launch/bounded-utf8-body-v1";
+import { getRevalidatedPrivateBlob } from "../private-blob-read-cache";
 
 const PATH = "website-index/robinhood/launches-v1.json";
 const MAX_BYTES = 16 * 1024 * 1024;
@@ -16,11 +17,15 @@ export function indexStore(signal?: AbortSignal): IndexStore {
     async read() {
       signal?.throwIfAborted();
       const deadline = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(5_000)]);
-      const { get } = await import("@vercel/blob");
       // A compressed response has a weak representation ETag, which cannot
       // authorize an object overwrite. Get body and strong ETag atomically.
-      const result = await get(PATH, { access: "private", token, useCache: false, abortSignal: deadline,
-        headers: { "accept-encoding": "identity" } });
+      let result;
+      try {
+        result = await getRevalidatedPrivateBlob(PATH, { token, abortSignal: deadline }, MAX_BYTES);
+      } catch (error) {
+        if (error instanceof BoundedBodyErrorV1 && error.code === "too-large") throw new Error("Robinhood index size exceeded");
+        throw error;
+      }
       if (!result) return null;
       if (result.statusCode !== 200 || !result.stream) throw new Error("Robinhood index read failed");
       const etag = result.blob.etag.trim();

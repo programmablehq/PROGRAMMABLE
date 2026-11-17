@@ -1,7 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 const storage = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+const nextCache = vi.hoisted(() => ({
+  entries: new Map<string, { value: Promise<unknown>; tags: string[] }>(),
+  revalidateTag: vi.fn(),
+}));
 vi.mock("@vercel/blob", () => storage);
+vi.mock("next/cache", () => ({
+  unstable_cache: (read: () => Promise<unknown>, key: string[], options: { tags: string[] }) => () => {
+    const id = JSON.stringify(key), existing = nextCache.entries.get(id);
+    if (existing) return existing.value;
+    const value = read(); nextCache.entries.set(id, { value, tags: options.tags });
+    return value;
+  },
+  revalidateTag: nextCache.revalidateTag }));
 import { approvedLaunchPresentationFromReview, readApprovedLaunchPresentations, rememberApprovedLaunchPresentation, rememberApprovedLaunchResource } from "@/lib/server/approved-launch-presentation";
 
 const token = `0x${"11".repeat(20)}`, hook = `0x${"22".repeat(20)}`, creator = `0x${"33".repeat(20)}`, quote = `0x${"00".repeat(20)}`;
@@ -17,12 +29,32 @@ const files = new Map<string,string>();
 beforeEach(() => {
   vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN","test-blob-token");
   files.clear(); vi.clearAllMocks();
+  nextCache.entries.clear();
+  nextCache.revalidateTag.mockImplementation((tag: string) => {
+    for (const [key, value] of nextCache.entries) if (value.tags.includes(tag)) nextCache.entries.delete(key);
+  });
   storage.get.mockImplementation(async (key: string) => files.has(key) ? { statusCode: 200, blob: { etag: `"${"0".repeat(32)}"` },
     stream: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(files.get(key)!)); controller.close(); } }) } : null);
   storage.put.mockImplementation(async (key: string, body: string) => { files.set(key,body); return {}; });
 });
 
 describe("approved public launch presentation", () => {
+  it("shares missing lookups across server instances and refreshes the exact entry after approval", async () => {
+    const otherCreator = `0x${"77".repeat(20)}`;
+    const otherReview = { ...review, controller: otherCreator,
+      request: { ...review.request, controller: { address: otherCreator } } };
+    const row = approvedLaunchPresentationFromReview(otherReview)!;
+    expect((await readApprovedLaunchPresentations([row])).size).toBe(0);
+    expect(storage.get).toHaveBeenCalledTimes(1);
+    vi.resetModules();
+    const freshInstance = await import("@/lib/server/approved-launch-presentation");
+    expect((await freshInstance.readApprovedLaunchPresentations([row])).size).toBe(0);
+    expect(storage.get).toHaveBeenCalledTimes(1);
+    await freshInstance.rememberApprovedLaunchPresentation(otherReview);
+    expect(nextCache.revalidateTag).toHaveBeenCalledWith(expect.stringMatching(/^approved-presentation:/), { expire: 0 });
+    expect((await freshInstance.readApprovedLaunchPresentations([row])).get(token)?.imageUrl)
+      .toBe("https://project.example/logo.png");
+  });
   it("copies only public display fields and resolves the approved pool's exact components", () => {
     const row = approvedLaunchPresentationFromReview(review)!;
     expect(row).toMatchObject({ chainId: 4663, tokenAddress: token, hookAddress: hook, creator,

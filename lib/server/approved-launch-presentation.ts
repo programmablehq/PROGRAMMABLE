@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+import { revalidateTag, unstable_cache } from "next/cache";
 import { get, put } from "@vercel/blob";
 import { encodeAbiParameters, keccak256 } from "viem";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
@@ -112,6 +114,17 @@ function identityKey(row: ApprovedPresentationIdentity, chainId = row.chainId) {
 const path = (key: string) => `website-index/approved-presentation/v1/${key}.json`;
 const token = () => process.env.OPS_BLOB_READ_WRITE_TOKEN?.trim() || process.env.BLOB_READ_WRITE_TOKEN?.trim();
 const cache = new Map<string, { expires: number; value: Promise<ApprovedLaunchPresentation | null> }>();
+const presentationTag = (key: string) => `approved-presentation:${createHash("sha256").update(key).digest("hex")}`;
+
+/** Share public display metadata, including confirmed misses, across instances. */
+function loadPublicPresentation(key: string) {
+  const credential = token();
+  if (!credential) return Promise.resolve(null);
+  const source = createHash("sha256").update(credential).digest("hex");
+  return unstable_cache(async () => (await load(key)).row,
+    ["approved-public-presentation-v2", source, key],
+    { revalidate: 300, tags: [presentationTag(key)] })();
+}
 
 async function load(key: string): Promise<{ row: ApprovedLaunchPresentation | null; etag?: string }> {
   const credential = token();
@@ -148,7 +161,9 @@ export async function rememberApprovedLaunchPresentation(review: unknown) {
       await put(path(key), JSON.stringify(row), { token: credential, access: "private", addRandomSuffix: false,
         contentType: "application/json", allowOverwrite: Boolean(prior.etag), ...(prior.etag ? { ifMatch: prior.etag } : {}), cacheControlMaxAge: 60,
         abortSignal: AbortSignal.timeout(5000) });
-      cache.delete(key); return;
+      cache.delete(key);
+      revalidateTag(presentationTag(key), { expire: 0 });
+      return;
     } catch (error) { if (attempt === 1) throw error; }
   }
 }
@@ -170,7 +185,7 @@ export async function readApprovedLaunchPresentations(rows: readonly ApprovedPre
     const key = identityKey(row, row.chainId ?? chainId); if (!key) return null;
     let current = cache.get(key);
     if (!current || current.expires <= Date.now()) {
-      const value = load(key).then(result => result.row).catch(() => null);
+      const value = loadPublicPresentation(key).catch(() => null);
       current = { expires: Date.now() + 300_000, value }; cache.set(key,current);
       if (cache.size > 256) cache.delete(cache.keys().next().value!);
     }
