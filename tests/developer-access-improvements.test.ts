@@ -47,6 +47,21 @@ describe("developer setup and diagnostics", () => {
     expect((await GET(new Request("https://programmable.market/api/developer/connection?chainId=https://attacker"))).status).toBe(400);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    ["99901", "active", false, "unavailable"],
+    ["999", "active", undefined, "unavailable"],
+    ["8453", "active", true, "active"],
+    ["8453", "canary", false, "canary"],
+    ["99901", "disabled", false, "disabled"],
+  ] as const)("reports chain %s mode %s with public authorization %s as %s", async (chainId, mode, publicLaunchAuthorized, expected) => {
+    const capabilities = { schemaVersion: "programmable.custom-launch-capabilities.v1", chain: { id: chainId }, mode, publicLaunchAuthorized };
+    const fetcher = vi.fn().mockResolvedValue(Response.json(capabilities));
+    vi.stubGlobal("fetch", fetcher);
+    const response = await GET(new Request(`https://programmable.market/api/developer/connection?chainId=${chainId}`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ chainId, reachable: true, createState: expected, authorizesKey: false });
+    expect(fetcher.mock.calls[0][0]).toBe(`https://api.programmable.market/v4/chains/${chainId}/capabilities`);
+  });
   it("does not treat an unrelated or failed response as available", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ chainId: "1", availability: { operations: { create: { state: "active" } } } }))));
     expect((await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"))).status).toBe(503);
