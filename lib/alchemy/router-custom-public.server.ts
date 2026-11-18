@@ -428,7 +428,7 @@ async function readDurableRouterCustomIdentitySnapshotRecordV1(signal?: AbortSig
 }
 
 async function readDurableRouterCustomIdentitySnapshotV1() {
-  return (await readDurableRouterCustomIdentitySnapshotRecordV1()).snapshot;
+  return (await readDurableRouterCustomIdentitySnapshotRecordV1(AbortSignal.timeout(ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS))).snapshot;
 }
 
 /** Public reads consume the verified saved identities without running the updater. */
@@ -547,7 +547,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   const readSavedRecord: () => Promise<{ snapshot: RouterCustomIdentitySnapshotV1; etag: string | null }> =
     dependencies.readDurableSnapshot
       ? async () => ({ snapshot: await readDurableSnapshot(), etag: null })
-      : readDurableRouterCustomIdentitySnapshotRecordV1;
+      : () => readDurableRouterCustomIdentitySnapshotRecordV1(AbortSignal.timeout(ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS));
   const persistDurableSnapshot = dependencies.persistDurableSnapshot ??
     persistDurableRouterCustomIdentitySnapshotV1;
   const currentReadTimeoutMs = dependencies.currentReadTimeoutMs ??

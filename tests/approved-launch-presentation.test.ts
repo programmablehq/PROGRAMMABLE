@@ -104,6 +104,22 @@ describe("approved public launch presentation", () => {
     } finally { release(); vi.useRealTimers(); }
   });
 
+  it("releases stalled origin reads after the response and recovers the same identity", async () => {
+    const row = approvedLaunchPresentationFromReview(review)!;
+    await rememberApprovedLaunchPresentation(review);
+    storage.get.mockImplementationOnce(() => new Promise(() => {}));
+    vi.useFakeTimers();
+    try {
+      const result = readApprovedLaunchPresentations([row]);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect((await result).size).toBe(0);
+      const background = nextCache.after.mock.calls[0]![0]();
+      await vi.advanceTimersByTimeAsync(5000);
+      await background;
+      expect((await readApprovedLaunchPresentations([row])).get(token)?.imageUrl).toBe(row.imageUrl);
+    } finally { vi.useRealTimers(); }
+  });
+
   it("shares missing lookups across server instances and refreshes the exact entry after approval", async () => {
     const otherCreator = `0x${"77".repeat(20)}`;
     const otherReview = { ...review, controller: otherCreator,

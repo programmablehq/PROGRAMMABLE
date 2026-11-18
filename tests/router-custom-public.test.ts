@@ -151,6 +151,7 @@ describe("finalized Router Custom public projection", () => {
       blob: { size: Buffer.byteLength(body), etag: `"${"ab".repeat(16)}"` } });
     vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_test");
     const result = await readSavedRouterCustomIdentitySnapshotV1();
+    expect(mocks.blobGet.mock.calls[0]?.[1]?.abortSignal).toBeInstanceOf(AbortSignal);
     expect(result.entries).toEqual(snapshot.entries);
     expect(result.status).toBe("last-known-good");
     expect(mocks.readAlchemyRouterCustomIdentitySourceV1).not.toHaveBeenCalled();
