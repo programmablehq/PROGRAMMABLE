@@ -3,6 +3,7 @@ import { isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereu
 import { presentEthereumToken } from "@/lib/server/ethereum-explore";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { getAddress, isAddress, type Hex } from "viem";
 
 import { TokenIndexResetView } from "@/components/token-index-reset-view";
@@ -29,10 +30,11 @@ import { readCodexMarkets } from "@/lib/server/codex-market";
 type TokenPageSearchParams = Promise<
   Record<string, string | string[] | undefined>
 >;
-async function customAITokenPage(address:string,chain:unknown) {
+// Metadata and the page render share one verified public lookup in this request.
+const customAITokenPage = cache(async (address: string, chain: unknown) => {
   const chainId=chain === "1" ? 1 : chain === undefined || chain === "4663" ? 4663 : null;
   return chainId ? readCustomAIToken(chainId,address) : null;
-}
+});
 
 export async function generateMetadata({
   params,
