@@ -248,8 +248,10 @@ export function RobinhoodLaunchesView({
   return <IndexedLaunchList key={selectedChain} chainId={selectedChain} embedded={embedded} enabled={hydrated} />;
 }
 
-export function UnifiedLaunchesView({ embedded = false }: { embedded?: boolean }) {
-  return <IndexedLaunchList chainId="all" embedded={embedded} enabled />;
+type ExploreEntry = { q: string; mode: "all" | "custom" };
+
+export function UnifiedLaunchesView({ embedded = false, entry }: { embedded?: boolean; entry?: ExploreEntry }) {
+  return <IndexedLaunchList key={entry && JSON.stringify([entry.mode, entry.q])} entry={entry} chainId="all" embedded={embedded} enabled />;
 }
 
 type ProfileListOptions = {
@@ -265,7 +267,7 @@ export function UnifiedProfileLaunches(props: ProfileListOptions) {
   return <IndexedLaunchList key={props.account.toLowerCase()} chainId="all" embedded enabled profile={props} />;
 }
 
-function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: boolean; enabled: boolean; chainId: ExploreScope; profile?: ProfileListOptions }) {
+function IndexedLaunchList({ embedded, enabled, chainId, profile, entry }: { embedded: boolean; enabled: boolean; chainId: ExploreScope; profile?: ProfileListOptions; entry?: ExploreEntry }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(!embedded);
   const readEnabled = enabled && (!embedded || inView);
@@ -292,9 +294,10 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
   const profileAccount = profile?.account;
   const refreshInterval = profileAccount ? 30_000 : REFRESH_MS;
   const cacheKey = profile ? `profile:${profile.account.toLowerCase()}` : chainId;
-  const defaultRequest = { page: 1, q: "", ...defaultFilters };
-  const [initial] = useState(() => readRememberedSnapshot(cacheKey) ?? readPageSnapshot(cacheKey, defaultRequest));
-  const [search, setSearch] = useState(initial?.request.q ?? "");
+  const defaultRequest = { page: 1, q: "", ...defaultFilters, ...entry };
+  // A link or native form identifies a specific search. Reuse only that request's results.
+  const [initial] = useState(() => (entry ? null : readRememberedSnapshot(cacheKey)) ?? readPageSnapshot(cacheKey, defaultRequest));
+  const [search, setSearch] = useState(initial?.request.q ?? defaultRequest.q);
   const [request, setRequest] = useState<Request>(initial?.request ?? defaultRequest);
   const requestRef = useRef(request);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(initial);
@@ -514,7 +517,8 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
 
       <section className={styles.body} aria-labelledby={headingId}>
         <div className={styles.toolbar} role="group" aria-label={profile ? "Launches controls" : "Explore controls"}>
-          {!profile ? <><form className={styles.search} role="search" onSubmit={submitSearch}>
+          {!profile ? <><form className={styles.search} role="search" action="/explore" method="get" onSubmit={submitSearch}>
+            {request.mode === "custom" && <input type="hidden" name="model" value="custom" />}
             <Search aria-hidden="true" size={18} />
             <label className="sr-only" htmlFor={searchId}>Search {chainName} launches by name, symbol or address</label>
             <input

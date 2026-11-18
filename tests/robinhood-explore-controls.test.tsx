@@ -9,6 +9,7 @@ vi.mock("@/components/view-chain", () => {
 vi.mock("next/navigation", () => ({ usePathname: () => "/explore/robinhood", useRouter: () => ({ push: vi.fn() }) }));
 import { readLaunchListResponse, RobinhoodLaunchesView, UnifiedLaunchesView } from "@/components/robinhood-launches-view";
 import { ChainMark } from "@/components/chain-mark";
+import ExplorePage from "@/app/explore/page";
 
 describe("Explore request identity", () => {
   const request = { page: 2, q: "coin", sort: "newest" as const, mode: "module" as const };
@@ -76,6 +77,17 @@ describe("Explore request identity", () => {
 });
 
 describe("Explore toolbar and loading structure", () => {
+  it("renders a submitted search and the Custom Launch record filter on first load", async () => {
+    const entry = await ExplorePage({ searchParams: Promise.resolve({ q: " HEIST ", model: "custom" }) });
+    expect(entry.props.entry).toEqual({ q: "HEIST", mode: "custom" });
+    const html = renderToStaticMarkup(entry);
+    expect(html).toContain('action="/explore"');
+    expect(html).toContain('value="HEIST"');
+    expect(html).toContain('name="model" value="custom"');
+    const invalid = await ExplorePage({ searchParams: Promise.resolve({ q: ["one", "two"] }) });
+    expect(invalid.props.entry).toBeUndefined();
+  });
+
   it("renders one catalog without a chain selector, even when the wallet context starts on Robinhood", () => {
     const html = renderToStaticMarkup(<UnifiedLaunchesView />);
     expect(html).toContain("Search Programmable launches by name, symbol or address");
