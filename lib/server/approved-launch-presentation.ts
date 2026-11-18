@@ -123,11 +123,19 @@ const directoryReads = new Map<string, Promise<string[] | null>>();
 const displayBudgetMs = 1_500;
 const originBudgetMs = 5_000;
 
+function withinPresentationBudget<T>(work: Promise<T>, waitMs: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new DOMException("Presentation read expired", "TimeoutError")), waitMs);
+  });
+  return Promise.race([work, deadline]).finally(() => clearTimeout(timer));
+}
+
 // Next can start simultaneous background refreshes for the same key in different requests.
 function shareOriginRead<T>(pending: Map<string, Promise<T>>, id: string, read: () => Promise<T>): Promise<T> {
   const previous = pending.get(id);
   if (previous) return previous;
-  const work = read().finally(() => { if (pending.get(id) === work) pending.delete(id); });
+  const work = withinPresentationBudget(read(), originBudgetMs).finally(() => { if (pending.get(id) === work) pending.delete(id); });
   if (pending.size < 256) pending.set(id, work);
   return work;
 }
@@ -221,9 +229,11 @@ export async function readApprovedLaunchPresentations(rows: readonly ApprovedPre
     }
   }
   const entries: Array<readonly [string, CoinMetadata] | undefined> = [];
+  const fillBudgetMs = displayBudgetMs + originBudgetMs;
+  const fillDeadline = Date.now() + fillBudgetMs;
   const work = Promise.all(requests.map(async ({ row, chain, key }, index) => {
     const directory = await directories.get(chain);
-    if (directory && !directory.has(path(key))) return;
+    if (Date.now() >= fillDeadline || (directory && !directory.has(path(key)))) return;
     const metadata = await loadPublicPresentation(key, credential, store).catch(() => null);
     if (!metadata || metadata.routerLaunchId && !same(metadata.routerLaunchId, row.launchStampProvenance?.launchId ?? row.launchId ?? "")) return;
     entries[index] = [row.tokenAddress.toLowerCase(), { imageUrl: metadata.imageUrl, description: metadata.description, links: metadata.links }];
@@ -235,8 +245,13 @@ export async function readApprovedLaunchPresentations(rows: readonly ApprovedPre
       timer = setTimeout(() => resolve(false), displayBudgetMs);
     })]);
     if (!finished) {
-      // Keep uncached reads alive on Vercel. Standalone readers have no request lifecycle.
-      try { after(async () => { await work; }); } catch { /* The bounded reads are already running. */ }
+      // The framework cache can stall outside the Blob client's own timeout.
+      try {
+        after(async () => {
+          try { await withinPresentationBudget(work, Math.max(0, fillDeadline - Date.now())); }
+          catch { console.warn("Approved presentation cache fill exceeded its deadline", { count: requests.length }); }
+        });
+      } catch { /* Standalone readers have no request lifecycle. */ }
     }
   } finally { clearTimeout(timer); }
   return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined));
