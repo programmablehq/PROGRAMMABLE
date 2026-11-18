@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const storage = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn() }));
+const storage = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), list: vi.fn() }));
 const nextCache = vi.hoisted(() => ({
-  entries: new Map<string, { value: Promise<unknown>; tags: string[] }>(),
-  revalidateTag: vi.fn(),
+  entries: new Map<string, { value: unknown; tags: string[] }>(),
+  revalidateTag: vi.fn(), after: vi.fn(),
 }));
 vi.mock("@vercel/blob", () => storage);
+vi.mock("next/server", () => ({ after: nextCache.after }));
 vi.mock("next/cache", () => ({
-  unstable_cache: (read: () => Promise<unknown>, key: string[], options: { tags: string[] }) => () => {
+  unstable_cache: (read: () => Promise<unknown>, key: string[], options: { tags: string[] }) => async () => {
     const id = JSON.stringify(key), existing = nextCache.entries.get(id);
     if (existing) return existing.value;
-    const value = read(); nextCache.entries.set(id, { value, tags: options.tags });
+    const value = await read(); nextCache.entries.set(id, { value, tags: options.tags });
     return value;
   },
   revalidateTag: nextCache.revalidateTag }));
@@ -36,9 +37,73 @@ beforeEach(() => {
   storage.get.mockImplementation(async (key: string) => files.has(key) ? { statusCode: 200, blob: { etag: `"${"0".repeat(32)}"` },
     stream: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode(files.get(key)!)); controller.close(); } }) } : null);
   storage.put.mockImplementation(async (key: string, body: string) => { files.set(key,body); return {}; });
+  storage.list.mockImplementation(async ({ prefix }: { prefix: string }) => ({
+    hasMore: false, blobs: [...files.keys()].filter(key => key.startsWith(prefix)).map(pathname => ({ pathname })),
+  }));
 });
 
+function explorePage() {
+  const row = approvedLaunchPresentationFromReview(review)!;
+  return [row, ...[1, 2, 3, 4, 5].map(n => ({ ...row, tokenAddress: `0x${String(n).padStart(40, "0")}` }))];
+}
+
 describe("approved public launch presentation", () => {
+  it("skips missing objects on a page and makes a new approval visible to another instance", async () => {
+    const page = explorePage();
+    expect((await readApprovedLaunchPresentations(page)).size).toBe(0);
+    expect(storage.list).toHaveBeenCalledTimes(1);
+    expect(storage.get).not.toHaveBeenCalled();
+    await rememberApprovedLaunchPresentation(review);
+    storage.get.mockClear();
+    vi.resetModules();
+    const other = await import("@/lib/server/approved-launch-presentation");
+    expect((await other.readApprovedLaunchPresentations(page)).get(token)?.imageUrl).toBe(page[0].imageUrl);
+    expect(storage.list).toHaveBeenCalledTimes(2);
+    expect(storage.get).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["partial", "unavailable"])("reads exact records when the directory is %s", async reason => {
+    const page = explorePage();
+    await rememberApprovedLaunchPresentation(review);
+    storage.get.mockClear();
+    if (reason === "partial") storage.list.mockResolvedValueOnce({ hasMore: true, blobs: [] });
+    else storage.list.mockRejectedValueOnce(new Error("storage offline"));
+    expect((await readApprovedLaunchPresentations(page)).get(token)?.imageUrl).toBe(page[0].imageUrl);
+    expect(storage.get).toHaveBeenCalledTimes(page.length);
+  });
+
+  it("recovers a cold exact read immediately after a temporary origin error", async () => {
+    const row = approvedLaunchPresentationFromReview(review)!;
+    await rememberApprovedLaunchPresentation(review);
+    storage.get.mockRejectedValueOnce(new Error("temporary storage timeout"));
+    expect((await readApprovedLaunchPresentations([row])).size).toBe(0);
+    expect((await readApprovedLaunchPresentations([row])).get(token)?.imageUrl).toBe(row.imageUrl);
+    expect(storage.list).not.toHaveBeenCalled();
+  });
+
+  it("shares a slow origin read across requests and finishes caching after the display deadline", async () => {
+    const row = approvedLaunchPresentationFromReview(review)!;
+    await rememberApprovedLaunchPresentation(review);
+    const get = storage.get.getMockImplementation()!;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    storage.get.mockClear().mockImplementation(async (...args) => { await gate; return get(...args); });
+    vi.useFakeTimers();
+    try {
+      const first = readApprovedLaunchPresentations([row]);
+      const second = readApprovedLaunchPresentations([row]);
+      await vi.advanceTimersByTimeAsync(1500);
+      expect((await first).size).toBe(0);
+      expect((await second).size).toBe(0);
+      expect(storage.get).toHaveBeenCalledTimes(1);
+      expect(nextCache.after).toHaveBeenCalledTimes(2);
+      release();
+      await Promise.all(nextCache.after.mock.calls.map(([finish]) => finish()));
+      expect((await readApprovedLaunchPresentations([row])).get(token)?.imageUrl).toBe(row.imageUrl);
+      expect(storage.get).toHaveBeenCalledTimes(1);
+    } finally { release(); vi.useRealTimers(); }
+  });
+
   it("shares missing lookups across server instances and refreshes the exact entry after approval", async () => {
     const otherCreator = `0x${"77".repeat(20)}`;
     const otherReview = { ...review, controller: otherCreator,

@@ -2,7 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { revalidateTag, unstable_cache } from "next/cache";
-import { get, put } from "@vercel/blob";
+import { after } from "next/server";
+import { get, list, put } from "@vercel/blob";
 import { encodeAbiParameters, keccak256 } from "viem";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
 import type { CoinMetadata } from "@/lib/coin-metadata";
@@ -111,25 +112,44 @@ function identityKey(row: ApprovedPresentationIdentity, chainId = row.chainId) {
     || !HASH.test(row.poolId ?? "") || !ADDRESS.test(creator ?? "")) return null;
   return `${chainId}/${row.tokenAddress.toLowerCase()}-${row.hookAddress!.toLowerCase()}-${row.poolId!.toLowerCase()}-${creator!.toLowerCase()}`;
 }
-const path = (key: string) => `website-index/approved-presentation/v1/${key}.json`;
+const directoryRoot = "website-index/approved-presentation/v1/";
+const path = (key: string) => `${directoryRoot}${key}.json`;
 const token = () => process.env.OPS_BLOB_READ_WRITE_TOKEN?.trim() || process.env.BLOB_READ_WRITE_TOKEN?.trim();
-const cache = new Map<string, { expires: number; value: Promise<ApprovedLaunchPresentation | null> }>();
+const storeKey = (credential: string) => createHash("sha256").update(credential).digest("hex");
 const presentationTag = (key: string) => `approved-presentation:${createHash("sha256").update(key).digest("hex")}`;
+const directoryTag = (chain: number) => `approved-presentation-directory:${chain}`;
+const recordReads = new Map<string, Promise<ApprovedLaunchPresentation | null>>();
+const directoryReads = new Map<string, Promise<string[] | null>>();
+const displayBudgetMs = 1_500;
+const originBudgetMs = 5_000;
 
-/** Share public display metadata, including confirmed misses, across instances. */
-function loadPublicPresentation(key: string) {
-  const credential = token();
-  if (!credential) return Promise.resolve(null);
-  const source = createHash("sha256").update(credential).digest("hex");
-  return unstable_cache(async () => (await load(key)).row,
-    ["approved-public-presentation-v2", source, key],
+// Next can start simultaneous background refreshes for the same key in different requests.
+function shareOriginRead<T>(pending: Map<string, Promise<T>>, id: string, read: () => Promise<T>): Promise<T> {
+  const previous = pending.get(id);
+  if (previous) return previous;
+  const work = read().finally(() => { if (pending.get(id) === work) pending.delete(id); });
+  if (pending.size < 256) pending.set(id, work);
+  return work;
+}
+
+function loadPublicPresentation(key: string, credential: string, store: string) {
+  return unstable_cache(() => shareOriginRead(recordReads, `${store}:${key}`, async () => (await load(key, credential, originBudgetMs)).row),
+    ["approved-public-presentation-v2", store, key],
     { revalidate: 300, tags: [presentationTag(key)] })();
 }
 
-async function load(key: string): Promise<{ row: ApprovedLaunchPresentation | null; etag?: string }> {
-  const credential = token();
-  if (!credential) return { row: null };
-  const result = await get(path(key), { token: credential, access: "private", useCache: false, headers: { "accept-encoding": "identity" }, abortSignal: AbortSignal.timeout(1500) });
+async function listedPresentations(chain: number, credential: string, store: string): Promise<Set<string> | null> {
+  const prefix = `${directoryRoot}${chain}/`;
+  const paths = await unstable_cache(() => shareOriginRead(directoryReads, `${store}:${chain}`, async () => {
+    const page = await list({ prefix, limit: 256, token: credential, abortSignal: AbortSignal.timeout(displayBudgetMs) });
+    if (page.hasMore !== false || !page.blobs.every(blob => blob.pathname.startsWith(prefix))) return null;
+    return page.blobs.map(blob => blob.pathname);
+  }), ["approved-presentation-directory-v1", store, String(chain)], { revalidate: 300, tags: [directoryTag(chain)] })();
+  return paths && new Set(paths);
+}
+
+async function load(key: string, credential: string, timeoutMs: number): Promise<{ row: ApprovedLaunchPresentation | null; etag?: string }> {
+  const result = await get(path(key), { token: credential, access: "private", useCache: false, headers: { "accept-encoding": "identity" }, abortSignal: AbortSignal.timeout(timeoutMs) });
   if (!result) return { row: null };
   if (result.statusCode !== 200 || !result.stream) throw new Error("Presentation unavailable");
   const reader = result.stream.getReader(), chunks: Uint8Array[] = []; let length = 0;
@@ -155,14 +175,17 @@ export async function rememberApprovedLaunchPresentation(review: unknown) {
   if (!row || !credential) return;
   const key = identityKey(row)!;
   for (let attempt = 0; attempt < 2; attempt++) {
-    const prior = await load(key);
+    const prior = await load(key, credential, displayBudgetMs);
     if (prior.row && Date.parse(prior.row.approvedAt) >= Date.parse(row.approvedAt)) return;
     try {
       await put(path(key), JSON.stringify(row), { token: credential, access: "private", addRandomSuffix: false,
         contentType: "application/json", allowOverwrite: Boolean(prior.etag), ...(prior.etag ? { ifMatch: prior.etag } : {}), cacheControlMaxAge: 60,
         abortSignal: AbortSignal.timeout(5000) });
-      cache.delete(key);
+      const store = storeKey(credential);
+      recordReads.delete(`${store}:${key}`);
+      directoryReads.delete(`${store}:${row.chainId}`);
       revalidateTag(presentationTag(key), { expire: 0 });
+      revalidateTag(directoryTag(row.chainId), { expire: 0 });
       return;
     } catch (error) { if (attempt === 1) throw error; }
   }
@@ -181,17 +204,40 @@ export async function rememberApprovedLaunchResource(resource: unknown) {
 /** Callers must supply a receipt-backed/canonical identity; lookup data cannot add a coin to the index. */
 export async function readApprovedLaunchPresentations(rows: readonly ApprovedPresentationIdentity[], chainId?: 1 | 4663): Promise<Map<string, CoinMetadata>> {
   if (rows.length > 50) throw new Error("Too many presentation identities");
-  const entries = await Promise.all(rows.map(async row => {
-    const key = identityKey(row, row.chainId ?? chainId); if (!key) return null;
-    let current = cache.get(key);
-    if (!current || current.expires <= Date.now()) {
-      const value = loadPublicPresentation(key).catch(() => null);
-      current = { expires: Date.now() + 300_000, value }; cache.set(key,current);
-      if (cache.size > 256) cache.delete(cache.keys().next().value!);
+  const credential = token();
+  if (!credential) return new Map();
+  const store = storeKey(credential);
+  const requests = rows.flatMap(row => {
+    const chain = row.chainId ?? chainId;
+    if (chain !== 1 && chain !== 4663) return [];
+    const key = identityKey(row, chain);
+    return key ? [{ row, chain, key }] : [];
+  });
+  const directories = new Map<number, Promise<Set<string> | null>>();
+  for (const chain of [1, 4663]) {
+    // Six is the smallest Explore page. Token detail stays a single exact read.
+    if (requests.filter(request => request.chain === chain).length >= 6) {
+      directories.set(chain, listedPresentations(chain, credential, store).catch(() => null));
     }
-    const metadata = await current.value;
-    if (!metadata || metadata.routerLaunchId && !same(metadata.routerLaunchId, row.launchStampProvenance?.launchId ?? row.launchId ?? "")) return null;
-    return [row.tokenAddress.toLowerCase(), { imageUrl: metadata.imageUrl, description: metadata.description, links: metadata.links }] as const;
+  }
+  const entries: Array<readonly [string, CoinMetadata] | undefined> = [];
+  const work = Promise.all(requests.map(async ({ row, chain, key }, index) => {
+    const directory = await directories.get(chain);
+    if (directory && !directory.has(path(key))) return;
+    const metadata = await loadPublicPresentation(key, credential, store).catch(() => null);
+    if (!metadata || metadata.routerLaunchId && !same(metadata.routerLaunchId, row.launchStampProvenance?.launchId ?? row.launchId ?? "")) return;
+    entries[index] = [row.tokenAddress.toLowerCase(), { imageUrl: metadata.imageUrl, description: metadata.description, links: metadata.links }];
   }));
-  return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null));
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const finished = await Promise.race([work.then(() => true), new Promise<false>(resolve => {
+      timer = setTimeout(() => resolve(false), displayBudgetMs);
+    })]);
+    if (!finished) {
+      // Keep uncached reads alive on Vercel. Standalone readers have no request lifecycle.
+      try { after(async () => { await work; }); } catch { /* The bounded reads are already running. */ }
+    }
+  } finally { clearTimeout(timer); }
+  return new Map(entries.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined));
 }
