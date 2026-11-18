@@ -9,7 +9,7 @@ export type MessageIntent={
   revisionId?:string;nameNeeded:boolean;
   request?:{projectId:string;revisionId:string;operation:ProjectRun["operation"];prompt:string;idempotencyKey:string;budgetUnits:number};
 };
-export type ResultIntent={projectId:string;runId:string;preview:boolean};
+export type ResultIntent={projectId:string;runId:string;preview:boolean;messageId?:string};
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i;
 const revision=/^sha256:[a-f0-9]{64}$/;
 const modes=new Set(["build","plan","test","deploy"]);

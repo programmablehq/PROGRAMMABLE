@@ -264,7 +264,7 @@
     "@vercel/oidc": "3.8.1",
     "@vercel/sandbox": "3.9.1",
     "lucide-react": "1.26.0",
-    "next": "16.4.2",
+    "next": "16.4.6",
     "pg": "8.22.0",
     "postgres": "3.4.7",
     "react": "19.2.8",
@@ -272,7 +272,8 @@
     "server-only": "0.0.1",
     "sharp": "0.35.5",
     "undici": "8.12.2",
-    "viem": "2.55.5"
+    "viem": "2.55.5",
+    "unstorage": "file:packages/walletconnect-storage-runtime"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",
@@ -285,7 +286,7 @@
     "ajv-formats": "^3.0.1",
     "esbuild": "0.28.1",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.4.2",
+    "eslint-config-next": "16.4.6",
     "minimatch": "file:packages/minimatch-compat",
     "parse5": "^8.0.1",
     "typescript": "5.9.3",
@@ -338,6 +339,9 @@
     },
     "@uniswap/v3-staker": {
       "@openzeppelin/contracts": "3.4.2-solc-0.7"
+    },
+    "@walletconnect/keyvaluestorage@1.1.1": {
+      "unstorage": "$unstorage"
     }
   }
 }

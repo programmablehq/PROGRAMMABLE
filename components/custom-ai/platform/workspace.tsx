@@ -79,7 +79,9 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
       if(controller.signal.aborted)return;
       setProjects(result.projects);
       for(const [id,text] of Object.entries(cached?.drafts??{}).slice(0,101))if(typeof text==="string"&&text.length<=24000&&!containsInlineCredential(text))drafts.current.set(id,text);
-      const savedIntent=readMessageIntent(pending);pendingMessage.current=savedIntent;setHasPending(Boolean(savedIntent));
+      const journal=readMessageIntent(pending);
+      const acknowledged=journal && cached?.result?.projectId===journal.projectId && cached.result.messageId===journal.id;
+      const savedIntent=acknowledged?undefined:journal;pendingMessage.current=savedIntent;setHasPending(Boolean(savedIntent));
       const choice=entry.current?undefined:savedIntent?result.projects.find(p=>p.projectId===savedIntent.projectId)?.projectId:
         cached?.selected&&result.projects.some(p=>p.projectId===cached.selected)?cached.selected:result.projects[0]?.projectId;
       setSelected(choice);setInput(savedIntent?.prompt??entry.current?.content??drafts.current.get(choice??newDraft)??"");
@@ -156,11 +158,12 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   },[cacheKey]);
   function focusContent(){requestAnimationFrame(()=>main.current?.focus());}
   function rememberDraft(){if(containsInlineCredential(input))drafts.current.delete(selected??newDraft);else drafts.current.set(selected??newDraft,input);}
-  async function saveSelection(id?:string){
-    cacheVersion.current++;await persistWorkspace({selected:id,drafts:Object.fromEntries(drafts.current),operation,preview:previewAfterBuild,result:resultIntent}).catch(()=>undefined);
+  async function saveSelection(id?:string,result=resultIntent){
+    cacheVersion.current++;await persistWorkspace({selected:id,drafts:Object.fromEntries(drafts.current),operation,preview:previewAfterBuild,result}).catch(()=>undefined);
   }
-  async function activate(id?:string,loaded?:ProjectRevision){
-    rememberDraft();generation.current++;await saveSelection(id);
+  async function activate(id?:string,loaded?:ProjectRevision,submitted?:ResultIntent){
+    if(!submitted)rememberDraft();
+    generation.current++;await saveSelection(id,submitted??resultIntent);
     if(loaded)setProjects(current=>[{projectId:loaded.projectId,revisionId:loaded.revisionId,title:loaded.document.title,updatedAt:loaded.createdAt},...current.filter(p=>p.projectId!==id)]);
     setProject(loaded);setRuns([]);setSyncingRun(undefined);setInput(drafts.current.get(id??newDraft)??"");setError("");setSelected(id);setNotice("");setHistoryOpen(false);setMobilePane("chat");
     if(id&&id===selected&&!loaded)await refresh();
@@ -183,11 +186,18 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
       saved??={version:1,id:crypto.randomUUID(),projectId:project?.projectId??crypto.randomUUID(),prompt,operation,preview:previewAfterBuild,
         revisionId:project?.revisionId,nameNeeded:!project||(runs.length===0&&project.document.title==="New project")};
       const run=await sendWorkspaceMessage(saved,api,()=>aiRequest<AIUsage>("/usage",scopedHeaders),value=>savePending(value));
-      await savePending(undefined);drafts.current.delete(saved.projectId);drafts.current.delete(newDraft);
-      setResultIntent({projectId:saved.projectId,runId:run.runId,preview:saved.preview&&saved.operation==="build"});
+      const receipt={projectId:saved.projectId,runId:run.runId,messageId:saved.id,preview:saved.preview&&saved.operation==="build"};
+      drafts.current.delete(saved.projectId);
+      if(!selected)drafts.current.delete(newDraft);
+      setInput("");setResultIntent(receipt);
+      // Persist the acknowledgement and cleared draft before exposing the saved
+      // run or retiring its retry journal. A pagehide can race the next render.
+      if(selected!==saved.projectId)await activate(saved.projectId,undefined,receipt);
+      else await saveSelection(saved.projectId,receipt);
+      await savePending(undefined);
       onProject?.();
-      if(selected!==saved.projectId){await activate(saved.projectId);setRuns([run]);}else await refresh();
-      setInput("");follow.current=true;accepted.current?.(saved.projectId);
+      if(selected!==saved.projectId)setRuns([run]);else await refresh();
+      follow.current=true;accepted.current?.(saved.projectId);
     });
   }
   useEffect(()=>{

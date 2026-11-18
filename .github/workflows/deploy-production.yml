@@ -309,7 +309,6 @@ jobs:
 
       - name: Resolve Custom V2 expectations before deployment
         id: custom-v2-policy
-        if: needs.release-gate.outputs.verified_custom_v2 == 'true'
         env:
           REQUESTED_REGISTRY_LIVE: ${{ inputs.custom_v2_registry_live }}
           REQUESTED_GENERIC_READY: ${{ inputs.custom_v2_generic_public_read_enabled }}

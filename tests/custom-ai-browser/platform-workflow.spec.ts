@@ -22,7 +22,10 @@ test("creates, runs and edits a real persisted project, then isolates another ac
 test("keeps one queued request through refresh and stops that saved run",async({page,request})=>{
   await request.post(`${origin}/fixture/pause`,{data:{paused:true}});await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();
   const prompt="Wait for my next step.";await page.getByRole("textbox",{name:"Message your project"}).fill(prompt);await page.getByRole("button",{name:"Send",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeVisible();
-  await page.reload();await expect(page.getByRole("region",{name:"Project chat"}).getByText(prompt,{exact:true})).toHaveCount(1);await page.getByRole("button",{name:"Stop",exact:true}).click();await expect(page.getByRole("region",{name:"Project chat"}).getByText("Stopped · progress saved",{exact:true}).last()).toBeVisible();await request.post(`${origin}/fixture/pause`,{data:{paused:false}});
+  await page.reload();
+  await expect(page.getByRole("region",{name:"Project chat"}).getByText(prompt,{exact:true})).toHaveCount(1);
+  await expect(page.getByRole("textbox",{name:"Message your project"})).toHaveValue("");
+  await page.getByRole("button",{name:"Stop",exact:true}).click();await expect(page.getByRole("region",{name:"Project chat"}).getByText("Stopped · progress saved",{exact:true}).last()).toBeVisible();await request.post(`${origin}/fixture/pause`,{data:{paused:false}});
 });
 test("reviews and revokes a connection without exposing its private key",async({page})=>{
   await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();

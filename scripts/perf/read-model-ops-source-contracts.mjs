@@ -260,7 +260,8 @@ function hasExactStaticHandler(source, operation) {
 }
 
 function customLaunchCronIsBound(source, cron, overrides) {
-  if (!cron || cron.id !== "custom-launch-generic-v2-projector") return false;
+  if (!cron || cron.id !== "custom-launch-generic-v2-projector" ||
+    cron.schedulePolicy !== "when-generic-v2-configured") return false;
   const route = source(cron.route?.path);
   const runtime = source(cron.runtime?.path);
   const registryReader = source(cron.registryReader?.path);
@@ -648,7 +649,8 @@ export function evaluateReadModelOperationsSourceContracts(
     "ops-cron-exact-set",
     Array.isArray(activeCrons) &&
       activeCrons.length === ACTIVE_CRONS.length &&
-      crons?.size === ACTIVE_CRONS.length + 3 &&
+      crons !== null &&
+      crons.size === 4 + Number(crons.has("/api/ops/custom-launch/generic-v2-projector")) &&
       crons.get("/api/ops/robinhood-index") === "* * * * *" &&
       crons.get("/api/ops/custom-ai-index") === "* * * * *" &&
       crons.get(PROJECT_RUNTIME_CRON.path) === PROJECT_RUNTIME_CRON.schedule &&
@@ -656,7 +658,8 @@ export function evaluateReadModelOperationsSourceContracts(
         activeCrons[index]?.id === expected.id &&
         activeCrons[index]?.path === expected.path &&
         activeCrons[index]?.schedule === expected.schedule &&
-        crons.get(expected.path) === expected.schedule
+        (crons.get(expected.path) === expected.schedule ||
+          (expected.id === "custom-launch-generic-v2-projector" && !crons.has(expected.path)))
       ),
     "Vercel schedules the exact existing jobs and the isolated project runtime; retired index workers stay disabled",
   );
