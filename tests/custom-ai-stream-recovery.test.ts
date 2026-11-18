@@ -53,4 +53,37 @@ describe("saved request recovery", () => {
     expect(events).toContainEqual({type:"phase",phase:"checking"});
     expect(fetcher.mock.calls[1][0]).toContain("view=status");expect(fetcher.mock.calls.every(([,options])=>options?.method==="GET")).toBe(true);
   });
+  it("recovers a running reply after a throttled status read without resending the message", async () => {
+    vi.useFakeTimers();
+    const hash = "b".repeat(64);
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: input.id, request: input, payloadHash: hash, state: "running" }))
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { "Retry-After": "8" } }))
+      .mockResolvedValueOnce(Response.json({ id: input.id, payloadHash: hash, state: "completed", result: { reply: "Recovered" } }));
+    vi.stubGlobal("fetch", fetcher);
+    const outcome = resumeAIChat(input, async () => ({}), new AbortController().signal)
+      .then(result => ({ result }), error => ({ error }));
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(await outcome).toEqual({ result: { reply: "Recovered" } });
+    expect(fetcher.mock.calls.map(([url, options]) => [url, options?.method])).toEqual([
+      [`/api/custom-ai?id=${input.id}`, "GET"],
+      [`/api/custom-ai?id=${input.id}&view=status`, "GET"],
+      [`/api/custom-ai?id=${input.id}&view=status`, "GET"],
+    ]);
+  });
+  it.each([[503, 4], [403, 2]])("bounds status reads after HTTP %i", async (status, expectedCalls) => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({ id: input.id, request: input, state: "running", payloadHash: "b".repeat(64) }))
+      .mockImplementation(async () => new Response(null, { status }));
+    vi.stubGlobal("fetch", fetcher);
+    const result = expect(resumeAIChat(input, async () => ({}), new AbortController().signal))
+      .rejects.toMatchObject({ status, requestState: undefined });
+    await vi.runAllTimersAsync();
+    await result;
+    expect(fetcher).toHaveBeenCalledTimes(expectedCalls);
+    expect(fetcher.mock.calls.every(([, options]) => options?.method === "GET")).toBe(true);
+  });
 });

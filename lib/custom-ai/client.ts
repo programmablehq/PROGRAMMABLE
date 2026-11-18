@@ -98,6 +98,8 @@ const readReply = (input: ChatRequest, headers: AISessionHeaders, signal: AbortS
 async function followSavedReply(initial: SavedReply, input: ChatRequest, headers: AISessionHeaders, signal: AbortSignal,
   onProgress?: (event: ChatProgress) => void): Promise<ChatResult> {
   let job=initial,delay=2000,boundHash:string|undefined;
+  let consecutiveReadErrors = 0;
+  let retryAfterMs = 0;
   const deadline=Date.now()+450_000;
   for (;;) {
     signal.throwIfAborted();
@@ -112,16 +114,34 @@ async function followSavedReply(initial: SavedReply, input: ChatRequest, headers
     } else if(!boundHash||job.payloadHash!==boundHash)throw new AIRequestError("The saved reply belongs to another request. Your current design is kept.",409,0,"context");
     if (job.state === "completed" && job.result) return job.result;
     if (job.state !== "running") throw new AIRequestError("The saved reply could not be read. Your design is kept.",502,0,"response");
-    if (Date.now() >= deadline) throw new AIRequestError("This request is still saved. Reconnect to check its result.",503);
-    const age=Date.now()-(job.heartbeatAt??0),fresh=age>=-5000&&age<45000;
-    onProgress?.({type:"phase",phase:fresh&&job.phase&&CHAT_PHASES.includes(job.phase)?job.phase:"reconnecting"});
+    const waitMs = Math.max(delay, retryAfterMs);
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) throw new AIRequestError("This request is still saved. Reconnect to check its result.",503);
+    const age = Date.now() - (job.heartbeatAt ?? 0);
+    const fresh = age >= -5000 && age < 45000;
+    const phase = consecutiveReadErrors === 0 && fresh && job.phase && CHAT_PHASES.includes(job.phase)
+      ? job.phase : "reconnecting";
+    onProgress?.({ type: "phase", phase });
     await new Promise<void>((resolve,reject)=>{
       const abort=()=>{clearTimeout(timer);reject(new DOMException("Aborted","AbortError"));};
-      const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},delay);
+      const timer=setTimeout(()=>{signal.removeEventListener("abort",abort);resolve();},Math.min(waitMs, remainingMs));
       signal.addEventListener("abort",abort,{once:true});if(signal.aborted)abort();
     });
+    if (Date.now() >= deadline) throw new AIRequestError("This request is still saved. Reconnect to check its result.",503);
     delay=Math.min(10000,delay*1.5);
-    job=await readReply(input,headers,signal,Boolean(boundHash));
+    try {
+      job = await readReply(input, headers, signal, Boolean(boundHash));
+      consecutiveReadErrors = 0;
+      retryAfterMs = 0;
+    } catch (error) {
+      signal.throwIfAborted();
+      const transient = error instanceof TypeError || error instanceof AIRequestError
+        && !error.requestState && [408, 429, 500, 502, 503, 504].includes(error.status);
+      if (!transient || consecutiveReadErrors >= 2) throw error;
+      retryAfterMs = error instanceof AIRequestError ? error.retryAfterMs : 0;
+      if (retryAfterMs >= deadline - Date.now()) throw error;
+      consecutiveReadErrors++;
+    }
   }
 }
 
