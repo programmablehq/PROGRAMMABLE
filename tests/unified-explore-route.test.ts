@@ -11,11 +11,16 @@ describe("Unified Explore HTTP contract", () => {
     expect(read).toHaveBeenCalledExactlyOnceWith(1, "", { sort: "highest", mode: "all" }, 10);
     expect(response.headers.get("cache-control")).toBe("public, max-age=0, s-maxage=60, stale-while-revalidate=120");
   });
-  it.each(["chain=invalid", "page=0", "sort=highest&sort=newest", "pageSize=500", "mode=classic"])
+  it.each(["chain=invalid", "page=0", "sort=highest&sort=newest", "pageSize=500", "mode=classic", "matchesOnly=yes", "matchesOnly=true&matchesOnly=false"])
     ("does not accept a chain filter or ambiguous request: %s", async query => {
       expect((await GET(new Request(`https://website.invalid/api/explore/launches?${query}`))).status).toBe(400);
       expect(read).not.toHaveBeenCalled();
     });
+  it("accepts match-only searches without the presentation pin", async () => {
+    const response = await GET(new Request("https://website.invalid/api/explore/launches?q=HEIST&chain=4663&matchesOnly=true"));
+    expect(response.status).toBe(200);
+    expect(read).toHaveBeenCalledExactlyOnceWith(1, "HEIST", { chain: 4663, sort: "highest", mode: "all", matchesOnly: true }, 10);
+  });
   it.each([1, 4663, 8453])("accepts a global chain filter for %s", async chain => {
     const response = await GET(new Request(`https://website.invalid/api/explore/launches?chain=${chain}`));
     expect(response.status).toBe(200);

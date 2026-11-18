@@ -1,6 +1,7 @@
 "use client";
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
+import { launchHistoryRefreshTimeoutMs } from "@/lib/custom-launch-history-timeouts";
 import { launchStatusFingerprint, launchStatusUpdateMessage } from "@/lib/custom-launch-status-update";
 import { settleSequentially } from "@/lib/settle-sequentially";
 
@@ -61,14 +62,16 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
   useEffect(() => { credentials.current = { getAccessToken, getIdentityToken }; }, [getAccessToken, getIdentityToken]);
   const request = useCallback(async (source: UniversalLaunchSource, id?: string, init?: RequestInit, suffix = "", cursor?: string,
     sharedTokens?: readonly [string | null, string | null]) => {
-    if (!init?.method && Date.now() < readCooldown.current) throw new HistoryReadError("Status reads will resume automatically.", 429, readCooldown.current - Date.now());
+    const read = !init?.method || init.method === "GET";
+    if (read && Date.now() < readCooldown.current) throw new HistoryReadError("Status reads will resume automatically.", 429, readCooldown.current - Date.now());
     const loaders = credentials.current;
     const [access, identityToken] = sharedTokens ?? await Promise.all([loaders.getAccessToken(), loaders.getIdentityToken()]);
     if (!access) throw new Error("Sign in again to load your launch history.");
     const query = new URLSearchParams({ walletAddress: account, source });
     if (cursor) query.set("cursor", cursor);
+    const timeout = AbortSignal.timeout(read ? launchHistoryRefreshTimeoutMs : suffix === "/resolve-send" ? 55_000 : 15_000);
     const response = await fetch(`/api/developer/custom-launch-plans${id ? `/${encodeURIComponent(id)}` : ""}${suffix}?${query}`, {
-      ...init, cache: "no-store", redirect: "error", signal: init?.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(suffix === "/resolve-send" ? 55000 : 15000)]) : AbortSignal.timeout(15000),
+      ...init, cache: "no-store", redirect: "error", signal: init?.signal ? AbortSignal.any([init.signal, timeout]) : timeout,
       headers: { Accept: "application/json", Authorization: `Bearer ${access}`,
         ...(identityToken ? { "X-Privy-Identity-Token": identityToken } : {}), ...(init?.body ? { "Content-Type": "application/json" } : {}) },
     });
@@ -169,7 +172,7 @@ export function DeveloperUniversalLaunchHistory(props: Props) {
         setEntries(current => current.map(candidate => identity(candidate) === identity(entry) ? updated : candidate));
       }
     }
-  });
+  }, 20_000, false, sources.length * launchHistoryRefreshTimeoutMs);
   async function more(source: UniversalLaunchSource) {
     const cursor = cursors[source]; if (!cursor) return;
     setLoading(true);

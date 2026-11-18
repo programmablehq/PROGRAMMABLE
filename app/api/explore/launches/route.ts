@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   if (!params.has("sort")) params.set("sort", "highest");
   if (!params.has("pageSize")) params.set("pageSize", "10");
-  const query = parseRobinhoodExploreQuery(params);
+  const query = parseRobinhoodExploreQuery(params, { allowMatchesOnly: true });
   if (!query) return Response.json({ error: "invalid_query" }, { status: 400, headers: { "cache-control": "no-store" } });
   const result = await readUnifiedLaunches(query.page, query.q, query.filters, query.pageSize);
   // A verified nonempty fallback is still useful for navigation. Share it

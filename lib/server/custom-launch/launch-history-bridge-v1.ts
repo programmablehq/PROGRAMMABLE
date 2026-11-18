@@ -357,51 +357,53 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
     });
   };
 
-  const fetchHistoryRead = async (
+  const historyDeadline = () =>
+    Date.now() + Math.min(MAXIMUM_HISTORY_READ_DURATION_MS, readTimeoutMs * 2);
+
+  const withHistoryReadBudget = async <T,>(
     request: Request,
-    principal: AuthenticatedWalletPrincipalV1,
-    walletAddress: `0x${string}`,
-    backendUrl: URL,
     deadline: number,
+    attempt: (signal: AbortSignal) => Promise<T>,
     cancelled?: AbortSignal,
     retry = true,
-  ): Promise<Response> => {
+  ): Promise<T> => {
     request.signal.throwIfAborted();
     cancelled?.throwIfAborted();
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
       throw new DOMException("Wallet history read deadline exceeded", "TimeoutError");
     }
+    const timeout = AbortSignal.timeout(Math.min(readTimeoutMs, remaining));
+    const signal = AbortSignal.any([request.signal, ...(cancelled ? [cancelled] : []), timeout]);
     try {
-      return await input.fetchBackend(backendUrl, {
-        method: "GET",
-        // A timed-out read may have consumed its assertion. Every attempt
-        // reauthenticates the same wallet with a fresh signed nonce.
-        headers: walletAdminHeaders(
-          principal, walletAddress, "GET", backendUrl, Buffer.alloc(0),
-        ),
-        cache: "no-store",
-        redirect: "error",
-        signal: AbortSignal.any([
-          request.signal,
-          ...(cancelled ? [cancelled] : []),
-          AbortSignal.timeout(Math.min(readTimeoutMs, remaining)),
-        ]),
-      });
+      return await attempt(signal);
     } catch (error) {
-      if (retry && error instanceof Error && error.name === "TimeoutError"
-        && !request.signal.aborted && !cancelled?.aborted
-        && deadline - Date.now() >= 250) {
-        return fetchHistoryRead(
-          request, principal, walletAddress, backendUrl, deadline, cancelled, false,
-        );
+      if (retry && (timeout.aborted || (error instanceof Error && error.name === "TimeoutError"))
+        && !request.signal.aborted && !cancelled?.aborted && deadline - Date.now() >= 250) {
+        return withHistoryReadBudget(request, deadline, attempt, cancelled, false);
       }
       throw error;
     }
   };
 
+  const fetchHistoryRead = (
+    request: Request,
+    principal: AuthenticatedWalletPrincipalV1,
+    walletAddress: `0x${string}`,
+    backendUrl: URL,
+    deadline: number,
+    cancelled?: AbortSignal,
+  ) => withHistoryReadBudget(request, deadline, signal => input.fetchBackend(backendUrl, {
+    method: "GET",
+    headers: walletAdminHeaders(principal, walletAddress, "GET", backendUrl, Buffer.alloc(0)),
+    cache: "no-store",
+    redirect: "error",
+    signal,
+  }), cancelled);
+
   return Object.freeze({
     async universal(request: Request, launchId?: string, stepId?: string, transactionHint?: "v2" | "v3") {
+      const deadline = historyDeadline();
       try {
         requireJsonResponse(request);
         if (transactionHint !== undefined && transactionHint !== "v2" && transactionHint !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
@@ -437,17 +439,23 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           body = Buffer.from(JSON.stringify(value));
         }
         const method = write ? "POST" as const : "GET" as const;
-        const headers = walletAdminHeaders(principal, controller, method, url, body);
-        if (source === "custom_launch_plan_v1") headers.set("Programmable-Launch-Response-Version", "1.2");
-        const backend = await input.fetchBackend(url, { method,
-          headers,
-          ...(write ? { body } : {}), cache: "no-store", redirect: "error",
-          signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]) });
-        if (!backend.ok) return mappedBackendError(backend).then(mappedError);
-        const resource = jsonRecord(await readBoundedBackendJson(backend,
-          source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_BODY_BYTES : MAXIMUM_BACKEND_V4_BODY_BYTES,
-          source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_DEPTH : 16));
-        if (write) return jsonResponse(backend.status, resource);
+        const fetchResource = async (signal: AbortSignal) => {
+          // Every GET attempt signs a fresh nonce for the same controller and response version.
+          const headers = walletAdminHeaders(principal, controller, method, url, body);
+          if (source === "custom_launch_plan_v1") headers.set("Programmable-Launch-Response-Version", "1.2");
+          const backend = await input.fetchBackend(url, {
+            method, headers, ...(write ? { body } : {}), cache: "no-store", redirect: "error", signal,
+          });
+          if (!backend.ok) throw await mappedBackendError(backend);
+          const resource = jsonRecord(await readBoundedBackendJson(backend,
+            source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_BODY_BYTES : MAXIMUM_BACKEND_V4_BODY_BYTES,
+            source === "custom_launch_plan_v1" ? MAXIMUM_BACKEND_PLAN_DEPTH : 16));
+          return { status: backend.status, resource };
+        };
+        const { status, resource } = write
+          ? await fetchResource(AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]))
+          : await withHistoryReadBudget(request, deadline, fetchResource);
+        if (write) return jsonResponse(status, resource);
         const resources = launchId ? [resource] : source === "custom_launch_plan_v1" ? resource.plans : resource.launches;
         if (!Array.isArray(resources) || resources.length > (launchId ? 1 : 5)) throw new BackendContractErrorV1();
         const entries = resources.map(candidate => {
@@ -478,7 +486,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       }
       // Chain reconciliation can exceed five seconds. Keep authentication,
       // all versions and one possible retry inside the route's shared budget.
-      const deadline = Date.now() + Math.min(MAXIMUM_HISTORY_READ_DURATION_MS, readTimeoutMs * 2);
+      const deadline = historyDeadline();
       const cancelled = new AbortController();
       try {
         requireJsonResponse(request);
@@ -615,7 +623,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       if (request.method !== "GET") {
         return errorResponse(405, "method_not_allowed", "GET");
       }
-      const deadline = Date.now() + Math.min(MAXIMUM_HISTORY_READ_DURATION_MS, readTimeoutMs * 2);
+      const deadline = historyDeadline();
       try {
         requireJsonResponse(request);
         if (!UUID.test(launchId)) {

@@ -1,5 +1,6 @@
 import "server-only";
 import { readUnifiedLaunches } from "@/lib/server/unified-explore";
+import { EXPLORE_MAX_QUERY_LENGTH } from "@/lib/robinhood-explore-filters";
 import { MODELS } from "./claude.server";
 import { CustomAIError } from "./types";
 import { configuredProvider, researchAvailable } from "./provider-config.server";
@@ -51,12 +52,31 @@ Never execute code, make transactions, assert a smart contract is safe or treat 
 
 export async function readCatalogKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {
   signal?.throwIfAborted();
+  const query = lookup.query.trim();
+  if (query.length > EXPLORE_MAX_QUERY_LENGTH) {
+    return { status: "query-too-long", facts: { maxLength: EXPLORE_MAX_QUERY_LENGTH,
+      message: "Search with the token name, ticker or contract address." }, sources: [] };
+  }
+  const result = await readUnifiedLaunches(1, query, {
+    sort: "highest", mode: "all", chain: lookup.chainId, matchesOnly: true,
+  }, 6);
   const retrievedAt = new Date().toISOString();
-    const result = await readUnifiedLaunches(1, lookup.query, { sort: "highest", mode: "all", chain: lookup.chainId }, 6);
-    return { status: result.status, facts: { updatedAt: result.updatedAt, sources: result.sources,
-      items: result.items.map(item => ({ chainId: item.chainId, address: item.tokenAddress, name: item.name, symbol: item.symbol })),
+  const params = new URLSearchParams({ q: query, chain: String(lookup.chainId), pageSize: "6", matchesOnly: "true" });
+  const catalogUrl = `https://programmable.market/api/explore/launches?${params}`;
+  const items = result.items.map(item => ({
+    chainId: item.chainId, address: item.tokenAddress, name: item.name, symbol: item.symbol,
+    url: `https://programmable.market/token/${item.tokenAddress}?chain=${item.chainId}`,
+  }));
+  return {
+    status: result.status,
+    facts: {
+      updatedAt: result.updatedAt, sources: result.sources, catalogUrl, items,
       markets: result.presentations.map(item => ({ chainId: item.chainId, address: item.tokenAddress, market: item.market })),
-    }, sources: [{ title: "Programmable launch catalog", url: `https://programmable.market/api/explore/launches?q=${encodeURIComponent(lookup.query)}&chain=${lookup.chainId}&pageSize=6`, retrievedAt }] };
+    },
+    sources: items.length
+      ? items.map(item => ({ title: `${item.name || item.symbol || item.address} · Programmable`, url: item.url, retrievedAt }))
+      : [{ title: "Programmable launch catalog", url: catalogUrl, retrievedAt }],
+  };
 }
 
 export async function readContractKnowledge(lookup: KnowledgeLookup, signal?: AbortSignal): Promise<KnowledgeResult> {

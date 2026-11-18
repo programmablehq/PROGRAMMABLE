@@ -41,6 +41,16 @@ describe("Unified Explore catalog", () => {
     expect(selectUnifiedExplorePage(catalog, 1, "no match", { sort: "newest" }, new Map(), 10).page.matchingItems).toBe(0);
   });
 
+  it("returns only matching identities for catalog searches, including a matching pinned token", () => {
+    const pinned = { ...row(1), symbol: "V4", tokenAddress: PINNED_ROBINHOOD_TOKEN };
+    const heist = { ...row(2), name: "HEIST", symbol: "HEIST" };
+    const search = (query: string) => selectUnifiedExplorePage([pinned, heist], 1, query,
+      { sort: "highest", matchesOnly: true }, new Map(), 6);
+    expect(search("HEIST").items).toEqual([heist]);
+    expect(search("$V4").items).toEqual([pinned]);
+    expect(search("missing")).toMatchObject({ items: [], page: { totalItems: 0, matchingItems: 0 } });
+  });
+
   it("puts unknown or invalid market values after measured values without inventing zero", () => {
     const catalog = [row(1), row(2, 1), row(3)];
     const values = new Map([[exploreIdentityKey(catalog[0]), NaN], [exploreIdentityKey(catalog[1]), 10]]);

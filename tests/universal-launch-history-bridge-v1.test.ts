@@ -1,14 +1,14 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-import { createDeveloperLaunchHistoryBridgeV1 } from "@/lib/server/custom-launch/launch-history-bridge-v1";
+import { createDeveloperLaunchHistoryBridgeV1, type DeveloperLaunchHistoryBackendFetchV1 } from "@/lib/server/custom-launch/launch-history-bridge-v1";
 import { controller, component, hash, recordFixture } from "./fixtures/universal-launch-v1";
 
 function context(body: unknown) {
-  const fetchBackend = vi.fn(async () => Response.json(body));
+  const fetchBackend = vi.fn<DeveloperLaunchHistoryBackendFetchV1>(async () => Response.json(body));
   const bridge = createDeveloperLaunchHistoryBridgeV1({ authenticator: { authenticate: async () => ({ privyUserId: "did:privy:controller", privySessionId: "session", wallets: [controller] }) },
     backendBaseUrl: "https://backend.example", websiteToken: "t".repeat(43), bffAssertionKeyV2: "k".repeat(43), fetchBackend,
-    assertionNow: () => new Date("2026-09-09T11:00:00.000Z"), assertionNonce: () => Buffer.alloc(16, 7).toString("base64url") });
+    assertionNow: () => new Date("2026-09-09T11:00:00.000Z") });
   return { bridge, fetchBackend };
 }
 const request = (source = "custom_launch_plan_v1", body?: unknown, wallet = controller) => new Request(
@@ -45,6 +45,34 @@ describe("additive controller history bridge", () => {
     const excessive = { ...record, admissionEvidence: { trace } };
     fetchBackend.mockImplementationOnce(async () => Response.json(mode === "list" ? { plans: [excessive], nextCursor: null } : excessive));
     expect((await bridge.universal(request(), mode === "detail" ? record.planId : undefined)).status).toBe(503);
+  });
+  it.each(["list", "detail"])("recovers a slow plan %s with a new controller assertion", async mode => {
+    const record = recordFixture();
+    const { bridge, fetchBackend } = context(mode === "list" ? { plans: [record], nextCursor: null } : record);
+    fetchBackend.mockRejectedValueOnce(new DOMException("Slow plan read", "TimeoutError"));
+    const timeouts = vi.spyOn(AbortSignal, "timeout");
+    try {
+      const response = await bridge.universal(request(), mode === "detail" ? record.planId : undefined);
+      expect(response.status).toBe(200);
+      expect((await response.json()).launches[0].resource).toEqual(record);
+      expect(timeouts.mock.calls[0][0]).toBeGreaterThan(6_000);
+      expect(fetchBackend).toHaveBeenCalledTimes(2);
+      const headers = fetchBackend.mock.calls.map(([, init]) => new Headers(init?.headers));
+      for (const header of headers) {
+        expect(header.get("Programmable-Launch-Response-Version")).toBe("1.2");
+        expect(header.get("X-Programmable-Wallet-Address")).toBe(controller);
+      }
+      expect(headers[1].get("X-Programmable-Bff-Assertion-Nonce"))
+        .not.toBe(headers[0].get("X-Programmable-Bff-Assertion-Nonce"));
+    } finally { timeouts.mockRestore(); }
+  });
+  it("sends a step proof only once when its response times out", async () => {
+    const { bridge, fetchBackend } = context({});
+    fetchBackend.mockRejectedValueOnce(new DOMException("Slow proof response", "TimeoutError"));
+    const body = { schemaVersion: "programmable.custom-launch-plan-step-proof.v1", transactionHash: hash };
+    const response = await bridge.universal(request("custom_launch_plan_v1", body), recordFixture().planId, "configure");
+    expect(response.status).toBe(503);
+    expect(fetchBackend).toHaveBeenCalledTimes(1);
   });
   it("preserves plan resource bytes and reuses signed wallet-admin authority", async () => {
     const record = recordFixture();

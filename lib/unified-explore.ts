@@ -32,7 +32,7 @@ export function selectUnifiedExplorePage<T extends UnifiedExploreIdentity>(
     && (!q || [row.name, row.symbol, row.tokenAddress, row.hookAddress]
       .some(value => value?.normalize("NFC").toLowerCase().includes(q)));
   const matchingItems = catalog.filter(matches).length;
-  const pinned = catalog.find(row => isPinnedRobinhoodToken(row.tokenAddress, row.chainId));
+  const pinned = filters.matchesOnly ? undefined : catalog.find(row => isPinnedRobinhoodToken(row.tokenAddress, row.chainId));
   const metric = (row: T) => {
     const value = values.get(exploreIdentityKey(row));
     return value !== undefined && Number.isFinite(value) && value >= 0 ? value : null;
