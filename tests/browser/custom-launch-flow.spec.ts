@@ -84,18 +84,17 @@ test("pending review cannot prepare or sign", async ({ page }) => {
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
-test("a renewed expired permit resumes preparation and keeps reading without a wallet send", async ({ page }) => {
+test("an expired graph permit shows its review and allows an explicit receipt check", async ({ page }) => {
   await page.clock.install();
   await page.goto(origin + "?scenario=renewed-permit&chainId=99901&launchId=80000000-0000-4000-8000-000000099901");
-  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(1);
-  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.legacyReads)).toBeGreaterThan(1);
-  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+  await expect(page.getByText("The transaction permit expired.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Project review: Approved/)).toBeVisible();
   const reads = await page.evaluate(() => window.__customLaunchFixture.legacyReads);
-  await page.evaluate(() => { window.__customLaunchFixture.legacyRecovered = true; });
   await page.clock.fastForward(20000);
+  expect(await page.evaluate(() => window.__customLaunchFixture.legacyReads)).toBe(reads);
+  await page.getByRole("button", { name: "Check on-chain status" }).click();
   await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.legacyReads)).toBeGreaterThan(reads);
-  await expect(page.getByText("Received", { exact: true })).toBeVisible();
-  expect(await page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(1);
+  expect(await page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(0);
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 

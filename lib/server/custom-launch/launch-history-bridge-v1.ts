@@ -629,7 +629,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         if (!UUID.test(launchId)) {
           throw new BrowserRequestErrorV1(404, "launch_not_found");
         }
-        const walletInput = exactWalletQuery(request);
+        const walletInput = exactWalletQuery(request, true);
         const principal = await input.authenticator.authenticate(request);
         const walletAddress = requireLinkedWallet(
           principal,
@@ -648,6 +648,13 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
                 }`,
             backendBaseUrl,
           );
+          if (walletInput.overview && version === "v3") {
+            const expectedOwner = walletAddress.toLowerCase();
+            const overviewBudget = AbortSignal.timeout(3_000);
+            const overview = await expiredGraphOverview(backendUrl, launchId.toLowerCase(),
+              expectedOwner, walletInput.chainId, url => fetchHistoryRead(request, principal, walletAddress, url, deadline, overviewBudget));
+            if (overview) return overview;
+          }
           const backend = await fetchHistoryRead(
             request, principal, walletAddress, backendUrl, deadline,
           );
@@ -913,10 +920,10 @@ function exactHistoryQuery(request: Request) {
   });
 }
 
-function exactWalletQuery(request: Request) {
+function exactWalletQuery(request: Request, allowOverview = false) {
   const search = new URL(request.url).searchParams;
   for (const key of search.keys()) {
-    if (key !== "walletAddress" && key !== "version" && key !== "chainId") {
+    if (key !== "walletAddress" && key !== "version" && key !== "chainId" && !(allowOverview && key === "view")) {
       throw new BrowserRequestErrorV1(400, "request_schema_invalid");
     }
     if (search.getAll(key).length !== 1) {
@@ -925,6 +932,10 @@ function exactWalletQuery(request: Request) {
   }
   const walletAddress = search.get("walletAddress");
   const versionValue = search.get("version");
+  const overview = search.has("view");
+  if (overview && (search.get("view") !== "overview" || versionValue !== "v3")) {
+    throw new BrowserRequestErrorV1(400, "request_schema_invalid");
+  }
   const chainId = search.get("chainId") ?? "1";
   if (chainId !== "1" && chainId !== "8453" && chainId !== "999" && chainId !== "99901" || chainId !== "1" && versionValue !== "v3") throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   if (
@@ -936,9 +947,70 @@ function exactWalletQuery(request: Request) {
       && versionValue !== "v4")
   ) throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   return Object.freeze({
-    walletAddress, chainId,
+    walletAddress, chainId, overview,
     version: versionValue as BackendHistoryVersion | null,
   });
+}
+
+// Expired signed permits can require a historical receipt scan across both RPCs.
+// A dashboard overview can use the recorded, non-executable wallet entry. Explicit
+// reconciliation and transaction preparation still request the full resource.
+async function expiredGraphOverview(
+  detailUrl: URL, launchId: string, owner: string, chainId: "1" | "8453" | "999" | "99901",
+  read: (url: URL) => Promise<Response>,
+): Promise<DeveloperCustomLaunch | null> {
+  const statusUrl = new URL(detailUrl);
+  statusUrl.searchParams.set("view", "status");
+  const optionalRead = async (url: URL, limit: number) => {
+    try {
+      const response = await read(url);
+      if (response.status === 404 || response.status === 429 || response.status >= 500) {
+        await response.body?.cancel();
+        return null;
+      }
+      if (!response.ok) throw await mappedBackendError(response);
+      return jsonRecord(await readBoundedBackendJson(response, limit));
+    } catch (error) {
+      if (error instanceof Error && error.name === "TimeoutError") return null;
+      throw error;
+    }
+  };
+  const status = await optionalRead(statusUrl, 4096);
+  if (!status) return null;
+  if (status.schemaVersion !== "programmable.wallet-launch-status.v1" || status.kind !== "graph-v3"
+    || status.resourceId !== launchId || status.chainId !== chainId || status.controller !== owner
+    || status.launchReady !== false || status.rawRequestSha256 !== null
+    || typeof status.requestHash !== "string" || !REQUEST_HASH.test(status.requestHash)) {
+    throw new BackendContractErrorV1();
+  }
+  if (status.status !== "failed" || status.errorCode !== "PERMIT_EXPIRED") return null;
+  const createdAt = requiredTimestamp(status.createdAt);
+  // The wallet index sorts by millisecond and request ID. Seek to the original
+  // millisecond even when the launch is many pages back. A tie or a changed
+  // record falls through to the authoritative detail read.
+  const listUrl = new URL(detailUrl);
+  listUrl.pathname = listUrl.pathname.slice(0, listUrl.pathname.lastIndexOf("/"));
+  const cursor = { createdAt: new Date(Date.parse(createdAt) + 1).toISOString(), launchId: "00000000-0000-1000-8000-000000000000" };
+  listUrl.searchParams.set("limit", "1");
+  listUrl.searchParams.set("cursor", Buffer.from(JSON.stringify(cursor)).toString("base64url"));
+  const page = await optionalRead(listUrl, MAXIMUM_BACKEND_LIST_BODY_BYTES);
+  if (!page) return null;
+  if (page.schemaVersion !== CUSTOM_LAUNCH_LIST_SCHEMA_V3 || !Array.isArray(page.launches) || page.launches.length > 1) {
+    throw new BackendContractErrorV1();
+  }
+  if (!page.launches.length) return null;
+  const row = jsonRecord(page.launches[0]);
+  if (row.requestId !== launchId || row.status !== "failed") return null;
+  if (row.launchId !== launchId || (row.chainId ?? "1") !== chainId || row.requestHash !== status.requestHash
+    || row.output !== null || Date.parse(requiredTimestamp(row.createdAt)) !== Date.parse(createdAt)) {
+    throw new BackendContractErrorV1();
+  }
+  const launch = parseLaunch(row, owner, "v3", { requireAuthorizedArtifactBinding: true, chainId });
+  if (launch.routeId !== "custom-launch:create:v3") throw new BackendContractErrorV1();
+  if (launch.manualReview && (launch.manualReview.chainId !== chainId || launch.manualReview.controller.toLowerCase() !== owner)) {
+    throw new BackendContractErrorV1();
+  }
+  return launch.failure?.code === "PERMIT_EXPIRED" ? launch : null;
 }
 
 function parsePageSize(value: string) {

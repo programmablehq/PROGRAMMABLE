@@ -28,6 +28,10 @@ export function launchOverviewItem(resource: Record<string, unknown>, source: La
     status = "Ready to launch"; next = "Review the transaction and sign";
   }
   if (["failed", "cancelled"].includes(raw)) { status = raw === "failed" ? "Needs attention" : "Cancelled"; next = "Open launch for details"; }
+  if (source === "legacy" && version === "v3" && raw === "failed" && object(resource.failure).code === "PERMIT_EXPIRED") {
+    status = "Transaction permit expired";
+    next = "Open the request for its review and recovery options";
+  }
   return { id, source, chainId, version, name: typeof publication.name === "string" && publication.name ? publication.name : "Custom launch",
     symbol: typeof publication.symbol === "string" ? publication.symbol.replace(/^\$+/u, "") : "", image: safePublicImageUrl(publication.imageUrl) ?? null,
     createdAt: typeof resource.createdAt === "string" ? resource.createdAt : "", status, next };
