@@ -78,6 +78,14 @@ export async function readRobinhoodToken(address: string) {
   } catch { return { status: "unavailable" as const, updatedAt: null, token: null }; }
 }
 
+/** Committed Foundation rows have passed both providers and the source's finalized cursor. */
+export async function hasFinalizedRobinhoodFoundationReceipt(address: string, transactionHash: string) {
+  const token = address.toLowerCase(), hash = transactionHash.toLowerCase();
+  const sources = moduleModeSnapshots(await readSnapshot());
+  return sources.some(source => source.chainId === 4663 && source.sourceKind === "module-foundation-v1"
+    && source.items.some(row => row.tokenAddress.toLowerCase() === token && row.transactionHash.toLowerCase() === hash));
+}
+
 /** A direct coin visit fetches only that coin's Codex market. */
 export async function readRobinhoodTokenPresentation(address: string) {
   try {

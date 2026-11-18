@@ -11,8 +11,10 @@ the production read model.
   [`GET /api/v2/launches?chainId=1`](https://developers.programmable.family/api/v2/launches?chainId=1)
 - Developer API v2 Ethereum token list
   [`GET /api/v2/token-list?chainId=1`](https://developers.programmable.family/api/v2/token-list?chainId=1)
-- Product Ethereum Explore read model
-  [`GET /api/explore?chain=1`](https://programmable.market/api/explore?chain=1)
+- Ethereum Explore catalog
+  [`GET /api/explore/ethereum`](https://programmable.market/api/explore/ethereum)
+- Robinhood Explore catalog
+  [`GET /api/explore/robinhood`](https://programmable.market/api/explore/robinhood)
 
 These read-only endpoints require no API key and are intended for indexers,
 wallets and trading applications. They publish launch identity, project
@@ -25,18 +27,15 @@ integrations.
 
 ## Explore read-model availability
 
-Ethereum Mainnet (`chainId: 1`) is the active production indexing lane.
+Read the catalog's `status`, `updatedAt`, `items` and pagination fields.
+Existing clients calling `/api/explore?chain=1`, `/api/explore?chain=4663` or
+`/api/explore/token` can receive HTTP 503 with `index_rebuilding`. Follow the
+`Link` response header with `rel="alternate"` to the corresponding catalog or
+token presentation. Read the current query and response formats before migrating.
+[Indexing guide](public/developers/indexing.md)
 
-Robinhood Chain Mainnet (`chainId: 4663`) has a deployed Launch Stamp Router
-and Custom V4 backend routes, but this legacy Product Explore read-model lane is
-not activated. Its
-[`GET /api/explore?chain=4663`](https://programmable.market/api/explore?chain=4663)
-response intentionally remains `not-deployed` with activation stage
-`planned-not-deployed`. That response describes only this Explore lane; it is
-not evidence that the Router or backend is undeployed and is not authoritative
-evidence that no launches exist. Use the
-[Robinhood terminal integration](https://programmable.market/developer-reference/robinhood-terminal-indexer)
-for the exact Router, start block and finalized-feed boundary.
+For the Robinhood Router, start block and finalized-feed details, see the
+[Robinhood terminal integration](https://programmable.market/developer-reference/robinhood-terminal-indexer).
 
 ## Launch models
 
