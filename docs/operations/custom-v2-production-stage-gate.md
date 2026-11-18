@@ -124,6 +124,12 @@ Freshness-only refreshes can therefore advance without being mislabeled as a
 new ranking, while a changed rank, membership, coverage value, or regressing
 timestamp retries the whole bounded pagination once and then fails closed.
 
+The production minute schedule for `/api/ops/custom-launch/generic-v2-projector`
+belongs to Generic V2 reads and Approval V3 projection. When configuring either
+in production, include the minute cron in `vercel.json`. Staging compares the
+schedule against the production environment metadata, including ingress configured
+before public reads. With all of those bindings absent, leave the cron unscheduled.
+
 The Custom V2 probe verifies:
 
 - Registry V2 manifest and readiness in the selected prelaunch/live mode

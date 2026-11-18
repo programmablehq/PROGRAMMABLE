@@ -149,10 +149,6 @@ describe("displayed-coin indexing reset operations", () => {
         schedule: "* * * * *",
       },
       {
-        path: "/api/ops/custom-launch/generic-v2-projector",
-        schedule: "* * * * *",
-      },
-      {
         path: "/api/ops/robinhood-index",
         schedule: "* * * * *",
       },

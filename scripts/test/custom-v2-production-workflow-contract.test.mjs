@@ -116,6 +116,7 @@ test("Custom V2 stage expectations inherit reviewed configuration before any dep
   assert.match(deploy, /[Tt]his does not change configuration/u);
   assert.match(deploy, /[Tt]his does not activate them/u);
   const policy = stepBlock(deploy, "Resolve Custom V2 expectations before deployment");
+  assert.doesNotMatch(policy, /^\s*if:/mu);
   assert.match(policy, /resolve-custom-v2-staging-policy\.mjs/u);
   assert.match(policy, /config\/custom-registry-v2\.deployment\.prelaunch\.json/u);
   assert.match(policy, /vercel-production-env-metadata\.json/u);
@@ -590,9 +591,11 @@ test("the staged reset smoke is separate, bounded, and provider-free", () => {
 
 const projectId = "prj_1234567890abcdef";
 const binding = { key: "PROGRAMMABLE_GENERIC_LAUNCH_READ_BINDING_V2_JSON", type: "sensitive", target: ["production"] };
+const projectorCron = { path: "/api/ops/custom-launch/generic-v2-projector", schedule: "* * * * *" };
 function stagePolicyInput(status = "live", envs = []) {
   return { deploymentSource: { schemaVersion: "programmable.custom-registry-v2-deployment.v1", status,
     generation: "2", chainId: "1", caip2: "eip155:1", publicReadEnabled: status === "live", indexingEnabled: status === "live" },
+  projectConfig: { crons: envs.some(entry => entry.key === binding.key && entry.target.includes("production")) ? [projectorCron] : [] },
   metadataSource: JSON.stringify({ schemaVersion: "programmable.vercel-sensitive-production-metadata.v1",
     vercelProjectId: projectId, target: "production", envs }), projectId };
 }
@@ -611,6 +614,17 @@ test("explicit positive expectations cannot silently enable absent configuration
   assert.throws(() => resolveCustomV2StagingPolicy(stagePolicyInput("prelaunch", [binding])), /requires/);
   assert.deepEqual(resolveCustomV2StagingPolicy({ ...stagePolicyInput("live", [binding]), requestedRegistryLive: true, requestedGenericReady: true }),
     { registryMode: "live", genericMode: "ready" });
+});
+test("schedules Generic reconciliation only for a configured production read or approval path", () => {
+  const disabled = stagePolicyInput();
+  assert.throws(() => resolveCustomV2StagingPolicy({ ...disabled, projectConfig: { crons: [projectorCron] } }), /minute schedule/);
+  const ingress = stagePolicyInput("live", [{ ...binding, key: "PROGRAMMABLE_WEBSITE_APPROVAL_V3_AUDIENCE" }]);
+  assert.throws(() => resolveCustomV2StagingPolicy(ingress), /minute schedule/);
+  assert.equal(resolveCustomV2StagingPolicy({ ...ingress, projectConfig: { crons: [projectorCron] } }).genericMode, "disabled");
+  const ready = stagePolicyInput("live", [binding]);
+  for (const crons of [[], [projectorCron, projectorCron], [{ ...projectorCron, schedule: "0 * * * *" }]]) {
+    assert.throws(() => resolveCustomV2StagingPolicy({ ...ready, projectConfig: { crons } }), /minute schedule/);
+  }
 });
 test("rejects ambiguous bindings, metadata values, or another project", () => {
   for (const envs of [[binding, binding], [{ ...binding, gitBranch: "other" }], [{ ...binding, customEnvironmentIds: ["other"] }], [{ ...binding, value: "forbidden" }]]) {

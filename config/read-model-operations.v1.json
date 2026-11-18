@@ -156,6 +156,7 @@
       "id": "custom-launch-generic-v2-projector",
       "path": "/api/ops/custom-launch/generic-v2-projector",
       "schedule": "* * * * *",
+      "schedulePolicy": "when-generic-v2-configured",
       "authEnvironment": "CRON_SECRET",
       "maximumLifecycleAgeMs": 300000,
       "refreshAfterMs": 60000,

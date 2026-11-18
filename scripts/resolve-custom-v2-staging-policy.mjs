@@ -4,6 +4,15 @@ import { pathToFileURL } from "node:url";
 import { validateBoundVercelProductionMetadata } from "./perf/read-model-deploy-policy.mjs";
 
 const READ_BINDING = "PROGRAMMABLE_GENERIC_LAUNCH_READ_BINDING_V2_JSON";
+const PROJECTOR_PATH = "/api/ops/custom-launch/generic-v2-projector";
+const PROJECTOR_BINDINGS = new Set([
+  READ_BINDING,
+  "PROGRAMMABLE_GENERIC_LAUNCH_READ_MODEL_CONTRACT_V2_JSON",
+  "PROGRAMMABLE_GENERIC_LAUNCH_PROJECTOR_TOKEN",
+  "PROGRAMMABLE_APPROVAL_V3_ARTIFACT_VERIFIER_BINDING_JSON",
+  "PROGRAMMABLE_WEBSITE_APPROVAL_V3_AUDIENCE",
+  "PROGRAMMABLE_WEBSITE_APPROVAL_V3_TARGET_BINDING_HASH",
+]);
 
 function boolean(value) {
   if (value === true || value === "true") return true;
@@ -14,7 +23,7 @@ function boolean(value) {
 // Resolve expectations from the reviewed deployment and value-free production
 // metadata before building. This never changes configuration or activates reads.
 export function resolveCustomV2StagingPolicy({
-  deploymentSource, metadataSource, projectId,
+  deploymentSource, metadataSource, projectId, projectConfig,
   requestedRegistryLive = false, requestedGenericReady = false,
 }) {
   validateBoundVercelProductionMetadata(metadataSource, projectId);
@@ -27,8 +36,8 @@ export function resolveCustomV2StagingPolicy({
     || deploymentSource.indexingEnabled !== (deploymentSource.status === "live")) {
     throw new Error("Reviewed Registry V2 deployment mode is invalid");
   }
-  const bindings = JSON.parse(metadataSource).envs.filter(entry =>
-    entry.key === READ_BINDING && entry.target.includes("production"));
+  const production = JSON.parse(metadataSource).envs.filter(entry => entry.target.includes("production"));
+  const bindings = production.filter(entry => entry.key === READ_BINDING);
   if (bindings.length > 1 || bindings.some(entry => entry.gitBranch
     || entry.customEnvironmentIds?.length)) {
     throw new Error("Generic V2 production binding is ambiguous");
@@ -43,6 +52,14 @@ export function resolveCustomV2StagingPolicy({
   }
   if (boolean(requestedGenericReady) && genericMode !== "ready") {
     throw new Error("Requested ready Generic V2 differs from production configuration");
+  }
+  // Authenticated ingress can use the projector before public reads are active.
+  const projectorConfigured = production.some(entry => PROJECTOR_BINDINGS.has(entry.key) &&
+    !entry.gitBranch && !entry.customEnvironmentIds?.length);
+  if (!Array.isArray(projectConfig?.crons)) throw new Error("Production cron inventory is missing");
+  const jobs = projectConfig.crons.filter(job => job.path === PROJECTOR_PATH);
+  if (jobs.length !== Number(projectorConfigured) || jobs.some(job => job.schedule !== "* * * * *")) {
+    throw new Error("Generic V2 minute schedule does not match the production projector bindings");
   }
   return Object.freeze({ registryMode, genericMode });
 }
@@ -65,6 +82,7 @@ function main(argv) {
   };
   const result = resolveCustomV2StagingPolicy({
     deploymentSource: JSON.parse(read(args["deployment-file"], 65_536)),
+    projectConfig: JSON.parse(read("vercel.json", 65_536)),
     metadataSource: read(args["metadata-file"], 1_000_000), projectId: args["project-id"],
     requestedRegistryLive: args["registry-live"], requestedGenericReady: args["generic-ready"],
   });
