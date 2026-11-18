@@ -1,3 +1,4 @@
+import { launchExecutionProgress } from "./custom-launch-execution-progress";
 import { customLaunchReviewLabel, parseCustomLaunchReview } from "./custom-launch-review";
 import { safePublicImageUrl } from "./safe-public-image-url";
 export type LaunchOverviewSource = "legacy" | "custom_launch_plan_v1" | "multi_role_v2";
@@ -13,20 +14,20 @@ export function launchOverviewItem(resource: Record<string, unknown>, source: La
   const version = source === "legacy" ? String(resource.routeId).split(":").at(-1) as LaunchOverviewItem["version"] : undefined;
   const chainId = source !== "legacy" || version === "v4" ? "4663" : object(resource.manualReview).chainId === "99901" ? "99901" : object(resource.manualReview).chainId === "999" ? "999" : object(resource.manualReview).chainId === "8453" ? "8453" : "1";
   const raw = String(resource.status), steps = Array.isArray(resource.steps) ? resource.steps : [];
-  const final = ["finalized", "publicly_visible", "final"].includes(raw);
-  let status = final ? "Completed" : ["submitted", "sequencer_soft_confirmed", "ethereum_posted"].includes(raw) ? "Confirming" : "Preparing";
-  let next = final ? "Launch completed" : status === "Confirming" ? "Confirmation is tracked automatically" : "Programmable is preparing your launch";
-  if (!final && status !== "Confirming" && resource.manualReview) {
+  const execution = launchExecutionProgress(raw);
+  let status = execution?.status ?? "Preparing";
+  let next = execution?.next ?? "Programmable is preparing your launch";
+  if (!execution && resource.manualReview) {
     const review = parseCustomLaunchReview(resource.manualReview);
     status = customLaunchReviewLabel(review, now);
     next = status === "Approved" ? "Open launch to continue" : status === "Review pending" ? "Programmable is reviewing" : status === "Replaced" ? "Open the successor request" : "Your team: open the review feedback";
     if (status === "Approved" && review.launchRequestedAt) { status = "Preparing"; next = "Preparation continues automatically"; }
   }
-  if (!final && (["authorized", "awaiting_wallet_signature", "wallet_action_required", "wallet_action_ready"].includes(raw)
+  if (!execution && (["authorized", "awaiting_wallet_signature", "wallet_action_required", "wallet_action_ready"].includes(raw)
     || steps.some(step => object(step).status === "wallet_action_ready")) && ["Approved", "Preparing"].includes(status)) {
     status = "Ready to launch"; next = "Review the transaction and sign";
   }
-  if (!final && ["failed", "cancelled"].includes(raw)) { status = raw === "failed" ? "Needs attention" : "Cancelled"; next = "Open launch for details"; }
+  if (["failed", "cancelled"].includes(raw)) { status = raw === "failed" ? "Needs attention" : "Cancelled"; next = "Open launch for details"; }
   return { id, source, chainId, version, name: typeof publication.name === "string" && publication.name ? publication.name : "Custom launch",
     symbol: typeof publication.symbol === "string" ? publication.symbol.replace(/^\$+/u, "") : "", image: safePublicImageUrl(publication.imageUrl) ?? null,
     createdAt: typeof resource.createdAt === "string" ? resource.createdAt : "", status, next };

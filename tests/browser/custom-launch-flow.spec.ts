@@ -15,6 +15,20 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { server.close(); await once(server, "close"); });
 
+test("a verified launch is usable while another history source is pending and after it fails", async ({ page }) => {
+  await page.goto(origin + "?scenario=workspace-progress");
+  const workspace = page.getByRole("region", { name: "Your launches" });
+  const card = workspace.getByRole("button", { name: /Open Signal.*Source verified/ });
+  await expect(card).toBeVisible();
+  await expect(workspace.getByRole("status")).toHaveText("Loading your launches…");
+  await page.evaluate(() => window.dispatchEvent(new Event("finish-history-read")));
+  await expect(workspace.getByRole("status")).toHaveText("4 launches");
+  await card.click();
+  await expect(page.getByRole("heading", { name: "Opening your coin" })).toBeVisible();
+  expect(await page.evaluate(() => window.__customLaunchFixture.navigated)).toBe("");
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+});
+
 for (const [chainId, name] of [["8453", "Base"], ["999", "HyperEVM"], ["99901", "Elysium"]]) {
   test(`owned ${name} launches remain visible in the workspace and direct links`, async ({ page }) => {
     await page.goto(origin + "?scenario=workspace-history");
