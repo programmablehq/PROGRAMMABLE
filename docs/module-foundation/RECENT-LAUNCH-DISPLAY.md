@@ -8,6 +8,8 @@ Explore can show these receipt-confirmed rows before settlement finality. Their 
 
 Canonical indexed identities always take precedence. Records expire after one hour, the store holds at most 64 identities, and updates use conditional writes to preserve concurrent launches. Owner-hidden identities stay hidden. Price feeds are not requested for provisional rows.
 
-The browser deduplicates notifications and uses at most three attempts. The endpoint coalesces identical requests, caps concurrent verification and limits new verification jobs. Explore refreshes only while visible using its existing shared market caches; it does not make individual Codex requests for these new rows.
+On Robinhood, a matching token and transaction in the finalized Foundation index completes the hint immediately. The server can then acknowledge an indexed launch even after its receipt block leaves the public providers' historical read window.
+
+The browser deduplicates notifications, respects the server's retry interval and uses up to three attempts. Reopening a saved launch can retry after a temporary failure. The endpoint coalesces identical requests, caps concurrent verification and limits new verification jobs. Explore refreshes while visible using its shared market caches.
 
 This reduces the delay after receipt confirmation. It does not make transaction mining or settlement finality instantaneous.

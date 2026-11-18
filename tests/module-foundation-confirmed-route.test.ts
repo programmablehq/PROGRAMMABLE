@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
-const { verify, save, find } = vi.hoisted(() => ({ verify: vi.fn(), save: vi.fn(), find: vi.fn() }));
+const { verify, save, find, indexed } = vi.hoisted(() => ({ verify: vi.fn(), save: vi.fn(), find: vi.fn(), indexed: vi.fn() }));
+vi.mock("@/lib/server/robinhood-index/read", () => ({ hasFinalizedRobinhoodFoundationReceipt: indexed }));
 vi.mock("@/lib/server/module-foundation/confirmed-launch", () => ({ confirmFoundationLaunch: verify }));
 vi.mock("@/lib/server/module-foundation/recent-launch-store", () => ({ saveRecentFoundationLaunch: save, findRecentFoundationLaunch: find }));
 const token = `0x${"12".repeat(20)}`, transactionHash = `0x${"34".repeat(32)}`;
@@ -10,6 +11,14 @@ const request = (data: unknown, origin?: string) => new Request("https://program
 });
 beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); save.mockResolvedValue(undefined); find.mockResolvedValue(null); });
 describe("confirmed launch hint", () => {
+  it("acknowledges an already finalized Robinhood receipt without replaying its historical verification", async () => {
+    const { POST } = await import("@/app/api/module-foundation/confirmed/route");
+    indexed.mockResolvedValue(true);
+    expect((await POST(request({ ...body, chainId: 4663 }))).status).toBe(200);
+    expect(indexed).toHaveBeenCalledExactlyOnceWith(token, transactionHash);
+    expect(verify).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
+  });
   it("reuses a persisted receipt after its block was rechecked, including on a fresh server instance", async () => {
     const { POST } = await import("@/app/api/module-foundation/confirmed/route");
     find.mockResolvedValue({ row: { transactionHash } });

@@ -1,6 +1,7 @@
 import { getAddress } from "viem";
 import { confirmFoundationLaunch, type ConfirmedLaunchRequest } from "@/lib/server/module-foundation/confirmed-launch";
 import { findRecentFoundationLaunch, saveRecentFoundationLaunch } from "@/lib/server/module-foundation/recent-launch-store";
+import { hasFinalizedRobinhoodFoundationReceipt } from "@/lib/server/robinhood-index/read";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ const response = (status: number) => Response.json({ status: status === 200 ? "c
   { status, headers: { "cache-control": "no-store", ...(status === 503 ? { "retry-after": String(retrySeconds) } : {}) } });
 
 async function record(input: ConfirmedLaunchRequest) {
+  if (input.chainId === 4663 && await hasFinalizedRobinhoodFoundationReceipt(input.token, input.transactionHash).catch(() => false)) return;
   // Survives server restarts and page reloads. The stored receipt's block is
   // rechecked, but a repeated hint need not repeat every pool/metadata read.
   const existing = await findRecentFoundationLaunch(input.chainId, input.token).catch(() => null);

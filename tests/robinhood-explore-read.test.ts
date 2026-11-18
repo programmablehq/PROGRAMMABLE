@@ -10,7 +10,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ unstable_cache: (callback: unknown) => callback }));
 vi.mock("@/lib/server/robinhood-index/store", () => ({ indexStore: () => ({ read: mocks.read }) }));
 vi.mock("@/lib/server/robinhood-presentation", () => ({ readRobinhoodMarkets: mocks.markets, readRobinhoodPresentations: mocks.presentations }));
-import { readRobinhoodExploreCatalog, readRobinhoodLaunches, readRobinhoodToken, readRobinhoodTokenPresentation } from "@/lib/server/robinhood-index/read";
+import { hasFinalizedRobinhoodFoundationReceipt, readRobinhoodExploreCatalog, readRobinhoodLaunches, readRobinhoodToken, readRobinhoodTokenPresentation } from "@/lib/server/robinhood-index/read";
 
 const hex = (value: number, length: number) => `0x${value.toString(16).padStart(length, "0")}`;
 function token(id: number): RobinhoodLaunch & { poolId: string } {
@@ -27,6 +27,20 @@ function market(row: RobinhoodLaunch & { poolId: string }, value: number): Robin
   return { poolId: row.poolId, priceUsd: null, marketCapUsd: value, liquidityUsd: null, volume24hUsd: null,
     change24hPercent: null, observedAt: new Date().toISOString(), sourceUrl: "https://dexscreener.com/" };
 }
+
+it("matches a receipt only in its finalized Foundation source, with the same token and transaction", async () => {
+  const first = token(10), pending = token(11), otherSource = token(12);
+  mocks.read.mockResolvedValue({ snapshot: {
+    ...saved([otherSource]), moduleModeSources: [
+      { chainId: 4663, sourceKind: "module-foundation-v1", items: [first], pending: { items: [pending] } },
+      { chainId: 4663, sourceKind: "module-engine-v1", items: [otherSource] },
+    ],
+  } });
+  expect(await hasFinalizedRobinhoodFoundationReceipt(first.tokenAddress, first.transactionHash)).toBe(true);
+  for (const [address, hash] of [[first.tokenAddress, pending.transactionHash], [pending.tokenAddress, pending.transactionHash], [otherSource.tokenAddress, otherSource.transactionHash]]) {
+    expect(await hasFinalizedRobinhoodFoundationReceipt(address, hash)).toBe(false);
+  }
+});
 
 beforeEach(() => {
   vi.resetAllMocks();
