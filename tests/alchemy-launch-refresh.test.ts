@@ -42,6 +42,7 @@ vi.mock("../lib/alchemy/launch-registry.server", () => ({
 }));
 
 import { readAlchemyRouterCustomIdentitySourceV1, refreshAlchemyExploreRegistry } from "../lib/alchemy/explore.server";
+import { LAUNCH_STAMP_ROUTER_INITIAL_CURSOR } from "../lib/alchemy/launch-stamp.server";
 import { canonicalTokenExploreEntryV1 } from "../lib/explore-entry-v1";
 import { createOperationalRpcFailover, withOperationalRpcFailover } from "../lib/onchain/operational-rpc-failover.server";
 import type { LauncherToken } from "../lib/tokens";
@@ -126,12 +127,12 @@ describe("Alchemy launch overlay refresh", () => {
       status: "ready",
       envelope: { payload: { model: baseModel } },
     });
-    mocks.readAlchemyLaunchRegistry.mockResolvedValue({
+    mocks.readAlchemyLaunchRegistry.mockImplementation(async (_deployment, _initialCursor, options) => ({
       registry: {
         generatedAt: "2026-08-04T00:00:00.000Z",
         repositoryCommit: "a".repeat(40),
         chainId: 1,
-        cursor: snapshot("100"),
+        cursor: options?.scope === "router" ? LAUNCH_STAMP_ROUTER_INITIAL_CURSOR : snapshot("100"),
         tokens: [],
         launchStampRouter: {
           schemaVersion: "programmable-launch-stamp-router-registry-v1",
@@ -152,7 +153,7 @@ describe("Alchemy launch overlay refresh", () => {
         },
       },
       etag: "registry-etag",
-    });
+    }));
     mocks.writeAlchemyLaunchRegistry.mockResolvedValue({ etag: "next-etag" });
     mocks.advanceLaunchStampRouterSlice.mockImplementation(
       async (_deployment, slice) => ({
@@ -230,14 +231,35 @@ describe("Alchemy launch overlay refresh", () => {
     );
   });
 
-  it("indexes Router Custom launches without waiting for unrelated Classic discovery", async () => {
+  it("returns the verified Router cursor even when Classic storage and discovery are unavailable", async () => {
+    mocks.readDurableExploreModel.mockResolvedValue({
+      status: "unavailable", reason: "invalid", detail: "Classic store read timed out",
+    });
     mocks.advanceExploreLaunchDiscovery.mockRejectedValue(new Error("Retired Classic discovery is unavailable"));
     const result = await readAlchemyRouterCustomIdentitySourceV1();
     expect(result.status).toBe("current");
     expect(result.slice.cursor.blockNumber).toBe("25717611");
     expect(mocks.advanceLaunchStampRouterSlice).toHaveBeenCalledOnce();
     expect(mocks.advanceExploreLaunchDiscovery).not.toHaveBeenCalled();
-    expect(mocks.readAlchemyLaunchRegistry).toHaveBeenCalledWith(deployment, expect.any(Object), { scope: "router" });
+    expect(mocks.readDurableExploreModel).not.toHaveBeenCalled();
+    expect(mocks.readAlchemyLaunchRegistry).toHaveBeenCalledWith(deployment, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR, { scope: "router" });
+    expect(mocks.writeAlchemyLaunchRegistry).not.toHaveBeenCalled();
+  });
+
+  it("persists verified Router progress with the stored version and its own registry binding", async () => {
+    const cursor = { blockNumber: "25717680", blockHash: `0x${"ab".repeat(32)}` };
+    const slice = { cursor, tokens: [customGraphToken] };
+    mocks.advanceLaunchStampRouterSlice.mockResolvedValue({ slice, caughtUp: true, rebuiltAfterReorg: false });
+
+    const result = await readAlchemyRouterCustomIdentitySourceV1();
+
+    expect(result.slice).toMatchObject(slice);
+    expect(mocks.writeAlchemyLaunchRegistry).toHaveBeenCalledExactlyOnceWith(deployment,
+      expect.objectContaining({
+        cursor: LAUNCH_STAMP_ROUTER_INITIAL_CURSOR, tokens: [],
+        launchStampRouter: expect.objectContaining(slice),
+      }),
+      "registry-etag", { scope: "router" });
   });
 
   it("replays the complete refresh on the fixed secondary after primary capacity", async () => {
