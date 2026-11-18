@@ -21,6 +21,7 @@ import "../../../app/surfaces.css";
 // Deliberately local browser fixtures. These exercise the product components and durable journal,
 // never production wallet authority or real onchain execution.
 const mode = new URLSearchParams(window.location.search).get("scenario") ?? "ready";
+const legacyWorkspace = mode === "workspace-history" || mode === "renewed-permit";
 const atomic = mode.startsWith("atomic");
 const base = recordFixture();
 // The API keeps each plan immutable. Reloading this fixture must preserve its exact budgets and calldata too.
@@ -38,7 +39,7 @@ if (atomic) record = atomicRecordFixture(record);
 if (mode === "atomic-mismatch") record = { ...record, steps: [bindStep({ ...record.steps[0], transaction: { ...record.steps[0].transaction, to: component } })] };
 const control = {
   mode, indexed: false, proofCalls: 0, startCalls: 0, navigated: "", requests: [] as { method: string; params: readonly unknown[] }[],
-  mined: false,
+  mined: false, legacyReads: 0, legacyRecovered: false,
   discoverMined: () => { control.mined = true; document.dispatchEvent(new Event("visibilitychange")); },
   sends: () => Number(localStorage.getItem("fixture:launch-sends") ?? 0),
   finalize: () => {
@@ -88,20 +89,31 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
 
 window.fetch = async (input) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
-  if (mode === "workspace-history") {
+  if (legacyWorkspace) {
+    if (url.pathname === "/api/custom-launch-reviews/start") {
+      control.startCalls += 1;
+      return Response.json({ ok: true });
+    }
     if (url.pathname.startsWith("/api/developer/custom-launch-plans")) return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches: [], nextCursor: null });
     if (url.pathname.startsWith("/api/developer/custom-launches")) {
+      control.legacyReads += 1;
       const chainId = url.searchParams.get("chainId") ?? "1";
       const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
       const resource = { schemaVersion: "programmable.custom-launch.v3", routeId: "custom-launch:create:v3", chainId,
-        launchId, requestId: launchId, ownerWallet: controller, onchainLaunchId: null, status: "pending_review",
+        launchId, requestId: launchId, ownerWallet: controller, onchainLaunchId: null,
+        status: mode === "renewed-permit" ? control.legacyRecovered ? "received" : "failed" : "pending_review",
         requestHash: `sha256:${"55".repeat(32)}`, launchProfileVersion: "3.1.0", launchProfileHash: `sha256:${"66".repeat(32)}`,
         launchIntentHash: `sha256:${"77".repeat(32)}`, projectMetadata: null, projectMetadataHash: null, fundingIntentHash: null,
         liquidityIntent: { model: "external-concentrated-liquidity", declaredLaunchState: "liquidity_required", binding: "legacy-v3-default" },
-        createdAt: new Date(now * 1000).toISOString(), updatedAt: new Date(now * 1000).toISOString(), output: null, failure: null,
+        createdAt: new Date(now * 1000).toISOString(), updatedAt: new Date(now * 1000).toISOString(), output: null,
+        failure: mode === "renewed-permit" && !control.legacyRecovered
+          ? { code: "PERMIT_EXPIRED", message: "The previous signing window expired.", retryable: false, remediations: [] } : null,
         manualReview: { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: launchId, chainId, controller,
-          subjectHash: `sha256:${"ab".repeat(32)}`, state: "pending", revision: 1, submittedAt: new Date(now * 1000).toISOString(),
-          approvedAt: null, expiresAt: null, reason: null } };
+          subjectHash: `sha256:${"ab".repeat(32)}`, state: mode === "renewed-permit" ? "approved" : "pending", revision: 2, submittedAt: new Date(now * 1000).toISOString(),
+          approvedAt: mode === "renewed-permit" ? new Date(now * 1000).toISOString() : null,
+          expiresAt: mode === "renewed-permit" ? new Date((now + 86400) * 1000).toISOString() : null, reason: null,
+          launchRequestedAt: mode === "renewed-permit" && control.startCalls ? new Date(now * 1000).toISOString() : null,
+          launchDeadline: mode === "renewed-permit" && control.startCalls ? new Date((now + 86400) * 1000).toISOString() : null } };
       return Response.json(url.pathname.endsWith(launchId) ? resource : { schemaVersion: "programmable.custom-launch-history.v1",
         launches: chainId === "1" ? [] : [resource], nextCursor: null });
     }
@@ -191,7 +203,7 @@ createRoot(document.getElementById("root")!).render(<main className={`${styles.p
       reason: "Please clarify liquidity ownership before approval." } };
   }}>Fixture: request changes</button> : null}
   {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} />
-    : mode === "workspace-history" ? <DeveloperLaunchWorkspace account={controller}
+    : legacyWorkspace ? <DeveloperLaunchWorkspace account={controller}
       initialLaunchId={new URLSearchParams(location.search).get("launchId")}
       initialLaunchChainId={new URLSearchParams(location.search).get("chainId") as "8453" | "999" | "99901" | null}
       getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} openWallet={() => { throw new Error("No wallet action expected"); }}

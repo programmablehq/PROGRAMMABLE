@@ -1338,6 +1338,14 @@ export function walletProjectMetadataRequirementsV1(
   });
 }
 
+export function canResumeExpiredLaunch(
+  launch: Pick<LaunchResource, "status" | "failure" | "manualReview">,
+  now = Date.now(),
+) {
+  return launch.status === "failed" && launch.failure?.code === "PERMIT_EXPIRED"
+    && Boolean(launch.manualReview && customLaunchReviewLabel(launch.manualReview, now) === "Approved");
+}
+
 function requiresCurrentProjectMetadata(launch: LaunchResource) {
   return launch.routeId === "custom-launch:create:v4"
     || launch.launchProfileVersion === "3.3.0"
@@ -1575,6 +1583,14 @@ export function selectMonotonicLaunchResource(
   incoming: LaunchResource,
 ) {
   if (launchResourceKey(current) !== launchResourceKey(incoming)) {
+    return incoming;
+  }
+  if (canResumeExpiredLaunch(current) && incoming.manualReview
+    && incoming.manualReview.reviewId === current.manualReview?.reviewId
+    && incoming.manualReview.subjectHash === current.manualReview.subjectHash
+    && incoming.manualReview.revision >= current.manualReview.revision
+    && customLaunchReviewAllowsSigning(incoming.manualReview)
+    && updatedAtTime(incoming.updatedAt) >= updatedAtTime(current.updatedAt)) {
     return incoming;
   }
   if (terminalStatus(current.status) && current.status !== incoming.status) {
@@ -2836,8 +2852,9 @@ export function DeveloperLaunchHistory({
     if (sendInFlightRef.current || fundingInFlightRef.current || hydrateInFlightRef.current
       || checkInFlightRef.current || refreshing || loadingMore) return;
     // Read the exact visible resources, including records on later history pages.
-    const active = launches.filter(launch => !["failed", "cancelled"].includes(launch.status)
-      && (launch.status !== "finalized" || launch.manualReview?.state === "pending"));
+    const active = launches.filter(launch => canResumeExpiredLaunch(launch)
+      || !["failed", "cancelled"].includes(launch.status)
+        && (launch.status !== "finalized" || launch.manualReview?.state === "pending"));
     for (const launch of active) {
       if (signal.aborted) return;
       if (pollingIds[launchResourceKey(launch)]) continue;
@@ -3730,7 +3747,8 @@ export function DeveloperLaunchHistory({
                   {showReviewStatus
                     ? customLaunchReviewDescription(launch.manualReview!) : statusDescription(launch.status)}
                 </p>
-                {launch.manualReview && !["submitted", "finalized", "failed", "cancelled"].includes(launch.status)
+                {launch.manualReview && (canResumeExpiredLaunch(launch)
+                  || !["submitted", "finalized", "failed", "cancelled"].includes(launch.status))
                   ? <CustomLaunchStartButton key={`${resourceIdentity}:${launch.manualReview.revision}`} review={launch.manualReview} launchId={resourceIdentity} onStarted={refresh} /> : null}
                 {["authorized", "wallet_action_required", "awaiting_wallet_signature", "awaiting_funding_authorization"].includes(launch.status)
                   && (!launch.manualReview || customLaunchReviewAllowsSigning(launch.manualReview)) ? (
