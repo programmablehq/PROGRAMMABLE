@@ -1,4 +1,6 @@
 import "server-only";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { setTimeout as delay } from "node:timers/promises";
 import { unstable_cache } from "next/cache";
 import { createPublicClient, decodeEventLog, formatUnits, http, keccak256, type Address, type Hex, type PublicClient, type Transport } from "viem";
 import { mainnet } from "viem/chains";
@@ -30,6 +32,30 @@ export type ClassicLaunchCatalogV1 = {
 };
 const fail = () => new Error("Canonical Classic launch data is unavailable");
 
+// Cached groups can refresh after the HTTP response. Share the catalog's
+// lifetime across those tasks without putting a signal into a Next cache key.
+const originBudgetMs = 45_000;
+type CatalogWork = { signal: AbortSignal; expires: number; reported?: boolean };
+const catalogWork = new AsyncLocalStorage<CatalogWork>();
+function newCatalogWork(): CatalogWork {
+  return { signal: AbortSignal.timeout(originBudgetMs), expires: Date.now()+originBudgetMs };
+}
+function reportDeadline(work: CatalogWork, phase: string) {
+  if (!work.signal.aborted || work.reported) return;
+  work.reported = true;
+  console.warn("Classic catalog origin deadline reached", { phase, budgetMs: originBudgetMs });
+}
+async function whileActive<T>(signal: AbortSignal, read: () => Promise<T>): Promise<T> {
+  signal.throwIfAborted();
+  let stop!: () => void;
+  const expired = new Promise<never>((_, reject) => {
+    stop = () => reject(signal.reason);
+    signal.addEventListener("abort",stop,{once:true});
+  });
+  try { return await Promise.race([read(),expired]); }
+  finally { signal.removeEventListener("abort",stop); }
+}
+
 let nextRpcReadAt = 0;
 function isRateLimited(error: unknown): boolean {
   const seen = new Set<unknown>();
@@ -42,18 +68,25 @@ function isRateLimited(error: unknown): boolean {
   return false;
 }
 
-function catalogTransport(rpcUrl: string): Transport {
+function catalogTransport(rpcUrl: string, work: CatalogWork): Transport {
   return options => {
-    const transport = http(rpcUrl, { retryCount: 0, timeout: 6_000 })(options);
+    const transport = http(rpcUrl, { retryCount: 0, timeout: 6_000,
+      fetchFn: (url, init) => fetch(url, { ...init, signal: AbortSignal.any([
+        work.signal, AbortSignal.timeout(6_000), ...(init?.signal ? [init.signal] : []),
+      ]) }),
+    })(options);
     return { ...transport, request: async (args, requestOptions) => {
       for (let attempt = 0; ; attempt++) {
+        work.signal.throwIfAborted();
         // Budget individual JSON-RPC calls, including multicall chunks and background refreshes.
         const now = Date.now();
         const at = Math.max(now, nextRpcReadAt);
+        if (at >= work.expires) throw fail();
         // Historical cache hits never enter this transport. Throttle actual
         // log reads here instead of delaying every cached discovery wave.
         nextRpcReadAt = at + (args.method === "eth_getLogs" ? 70 : 35);
-        if (at > now) await new Promise(resolve => setTimeout(resolve, at - now));
+        if (at > now) await delay(at-now, undefined, {signal:work.signal});
+        work.signal.throwIfAborted();
         try { return await transport.request(args, requestOptions); }
         catch (error) {
           if (attempt >= 1 || !isRateLimited(error)) throw error;
@@ -64,17 +97,27 @@ function catalogTransport(rpcUrl: string): Transport {
   };
 }
 
-async function withClient<T>(read: (client: PublicClient) => Promise<T>): Promise<T> {
+async function withClient<T>(read: (client: PublicClient) => Promise<T>, work = catalogWork.getStore() ?? newCatalogWork()): Promise<T> {
   const deployment = getWebsiteReadOnchainDeployment("production");
   if (deployment.status !== "ready") throw fail();
-  return withOperationalRpcFailover(deployment, selected => read(createPublicClient({
-    chain: mainnet, transport: catalogTransport(selected.rpcUrl),
-  }) as PublicClient));
+  return withOperationalRpcFailover(deployment, async selected => {
+    try {
+      return await whileActive(work.signal, () => read(createPublicClient({
+        chain: mainnet, transport: catalogTransport(selected.rpcUrl,work),
+      }) as PublicClient));
+    } catch (error) {
+      if (work.signal.aborted) throw fail();
+      throw error;
+    }
+  });
 }
 
 async function batches<T, R>(values: readonly T[], size: number, read: (values: readonly T[]) => Promise<R[]>): Promise<R[]> {
   const result: R[] = [];
-  for (let i=0;i<values.length;i+=size) result.push(...await read(values.slice(i,i+size)));
+  for (let i=0;i<values.length;i+=size) {
+    catalogWork.getStore()?.signal.throwIfAborted();
+    result.push(...await read(values.slice(i,i+size)));
+  }
   return result;
 }
 
@@ -88,17 +131,22 @@ export async function readClassicCatalogGroups<T, R>(
 
 /** Cache immutable launch provenance separately from the current chain boundary. */
 let hydrationQueue = Promise.resolve();
-async function withHydrationSlot<T>(read: () => Promise<T>): Promise<T> {
-  const previous = hydrationQueue;
-  let release!: () => void;
-  hydrationQueue = new Promise<void>(resolve => { release = resolve; });
-  await previous;
-  try { return await read(); }
-  finally { release(); }
+const hydrating = new Map<string, Promise<CanonicalTokenExploreEntry[]>>();
+function withHydrationSlot<T>(read: () => Promise<T>): Promise<T> {
+  const work = catalogWork.getStore() ?? newCatalogWork();
+  const job = hydrationQueue.then(() => catalogWork.run(work, () => whileActive(work.signal,read)));
+  // Each slot follows its predecessor, including when its waiting request expires.
+  hydrationQueue = job.then(() => undefined, () => undefined);
+  return whileActive(work.signal,() => job).catch(error => {
+    reportDeadline(work,"metadata");
+    throw error;
+  });
 }
 export const readClassicCatalogGroup = unstable_cache(async (serialized: string) => {
+  const active=hydrating.get(serialized);
+  if (active) return active;
   const proofs = parseClassicLaunchLogs(JSON.parse(serialized) as ClassicRawLog[]);
-  return withHydrationSlot(() => withClient(async client => {
+  const job=withHydrationSlot(() => withClient(async client => {
     const blocks = [...new Set(proofs.map(proof=>proof.launchBlockNumber!))];
     const headers = await batches(blocks, 50, batch=>Promise.all(batch.map(blockNumber=>client.getBlock({ blockNumber:BigInt(blockNumber), includeTransactions:false }))));
     const headersByNumber = new Map(headers.map(header=>[String(header.number),header]));
@@ -143,7 +191,9 @@ export const readClassicCatalogGroup = unstable_cache(async (serialized: string)
       });
     });
     return metadata;
-  }));
+  })).finally(() => { hydrating.delete(serialized); });
+  hydrating.set(serialized,job);
+  return job;
 }, ["canonical-classic-hydration-v3",CLASSIC_CATALOG_RELEASE], {revalidate:300});
 
 type Candidate = ClassicLaunchCandidate;
@@ -162,7 +212,7 @@ async function readLogWindow(from: string, to: string): Promise<ClassicRawLog[]>
 // Fixed historical ranges are shared across pages and server instances. Only the tail is refreshed.
 const historicalLogs = unstable_cache(readLogWindow, ["canonical-classic-rpc-logs-v1", CLASSIC_CATALOG_RELEASE], { revalidate: 3_600 });
 
-async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
+async function readCurrent(setPhase: (phase: string) => void): Promise<ClassicLaunchCatalogV1> {
   const anchor = await withClient(async client => {
     const [chainId, head] = await Promise.all([client.getChainId(), client.getBlockNumber({ cacheTime: 0 })]);
     if (chainId !== 1 || head < BigInt(release.confirmations)) throw fail();
@@ -182,8 +232,11 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
     return anchor;
   });
   const observedAt = new Date().toISOString();
-  const { candidates, logs } = await discoverClassicRpcLaunches(anchor.number, (from, to) =>
-    to - from + 1n === CLASSIC_RPC_LOG_WINDOW ? historicalLogs(String(from), String(to)) : readLogWindow(String(from), String(to)));
+  setPhase("logs");
+  const { candidates, logs } = await discoverClassicRpcLaunches(anchor.number, (from, to) => {
+    catalogWork.getStore()?.signal.throwIfAborted();
+    return to - from + 1n === CLASSIC_RPC_LOG_WINDOW ? historicalLogs(String(from), String(to)) : readLogWindow(String(from), String(to));
+  });
   if (candidates.some(candidate => BigInt(candidate.block) > anchor.number)
     || new Set(candidates.map(candidate => candidate.token)).size !== candidates.length) throw fail();
   candidates.sort((a,b) => a.block-b.block || a.token.localeCompare(b.token));
@@ -201,10 +254,12 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
   const groups = chunks.map(chunk => chunk.flatMap(candidate => byToken.get(candidate.token)!));
   // Complete canonical getLogs groups already prove successful transaction events;
   // hydrate additionally checks each recorded block hash against the node's headers.
+  setPhase("metadata");
   const entries = await readClassicCatalogGroups(groups, group =>
     readClassicCatalogGroup(JSON.stringify(group))
   );
   if (!entries.some(entry => entry.tokenAddress.toLowerCase() === CLASSIC_MAIN_TOKEN)) throw fail();
+  setPhase("anchor-recheck");
   await withClient(async client => {
     const [head, current] = await Promise.all([client.getBlockNumber({cacheTime:0}), client.getBlock({blockNumber:anchor.number,includeTransactions:false})]);
     const lag = head-anchor.number;
@@ -219,10 +274,19 @@ async function readCurrent(): Promise<ClassicLaunchCatalogV1> {
 
 let cached: {catalog:ClassicLaunchCatalogV1;at:number}|undefined;
 let pending: Promise<ClassicLaunchCatalogV1>|undefined;
+function refreshCatalog() {
+  const work = newCatalogWork();
+  let phase = "anchor";
+  return catalogWork.run(work, () => whileActive(work.signal, () => readCurrent(value => { phase=value; })))
+    .catch(error => {
+      reportDeadline(work,phase);
+      throw error;
+    });
+}
 export async function readClassicLaunchCatalogV1(options:ReadOptions={}): Promise<ClassicLaunchCatalogV1> {
   if (options.signal?.aborted || options.deadlineMs!==undefined && (!Number.isFinite(options.deadlineMs)||options.deadlineMs<=Date.now())) throw fail();
   if (cached && Date.now()-cached.at<15_000) return cached.catalog;
-  pending ??= readCurrent().then(catalog=>{cached={catalog,at:Date.now()};return catalog;}).finally(()=>{pending=undefined;});
+  pending ??= refreshCatalog().then(catalog=>{cached={catalog,at:Date.now()};return catalog;}).finally(()=>{pending=undefined;});
   const operation=pending;
   let timer:ReturnType<typeof setTimeout>|undefined;
   let abort:(()=>void)|undefined;

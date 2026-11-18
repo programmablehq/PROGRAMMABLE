@@ -64,6 +64,27 @@ function client(overrides: { name?: unknown; blockHash?: string } = {}) {
 beforeEach(() => { rpc.clients = []; });
 
 describe("Classic catalog metadata RPC recovery", () => {
+  it("shares an origin read, drops expired queued work and frees the slot for the next request", async () => {
+    const expiry=new AbortController();
+    const budget=vi.spyOn(AbortSignal,"timeout").mockReturnValue(expiry.signal);
+    const stuck=client();
+    stuck.getBlock.mockImplementation(() => new Promise(() => {}));
+    rpc.clients=[stuck];
+    const group=logs();
+    try {
+      const jobs=Promise.allSettled([readClassicCatalogGroup(group),readClassicCatalogGroup(group),readClassicCatalogGroup(group+" ")]);
+      await vi.waitFor(() => expect(stuck.getBlock).toHaveBeenCalledOnce());
+      expiry.abort();
+      expect((await jobs).map(job=>job.status)).toEqual(["rejected","rejected","rejected"]);
+      expect(stuck.multicall).not.toHaveBeenCalled();
+    } finally { budget.mockRestore(); }
+    const recovered=client();
+    rpc.clients=[recovered];
+    const [first,second]=await Promise.all([readClassicCatalogGroup(group),readClassicCatalogGroup(group)]);
+    expect(first).toEqual(second);
+    expect(recovered.getBlock).toHaveBeenCalledOnce();
+  });
+
   it("uses the secondary when multicall reports a required metadata transport failure", async () => {
     const primary = client();
     const secondary = client();
