@@ -134,11 +134,12 @@ export async function readEthereumIndexHealth() {
 export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10,
   dependencies?: Dependencies, onTiming?: (durations: { catalog: number; confirmingWait: number; enrichment: number }) => void) {
   const started = performance.now();
-  const observations = readConfirmingEthereumLaunches().catch(() => []);
+  // The receipt observer covers Custom and Module launches, both in the Custom category.
+  const observations = filters.mode === "classic" ? null : readConfirmingEthereumLaunches().catch(() => []);
   const catalog = await readEthereumExploreCatalog(dependencies);
   const catalogReady = performance.now();
-  const observed = await observations;
-  const observationsReady = performance.now();
+  const observed = observations ? await observations : [];
+  const confirmingWait = observations ? Math.round(performance.now() - catalogReady) : 0;
   const q = query.normalize("NFC").trim().replace(/^\$/, "").toLowerCase();
   const visible = publicExploreCatalogEntriesV1(catalog.entries).filter((entry): entry is CanonicalTokenExploreEntry => entry.exploreKind === "token" && isPublicExploreIdentityV1(entry));
   const indexed = new Set(catalog.entries.map(entry => entry.tokenAddress.toLowerCase()));
@@ -171,7 +172,7 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
     readCodexTokenMetadata(selectedIdentities.map(entry => entry.tokenAddress), 1),
     readApprovedLaunchPresentations(selectedIdentities,1),
   ]);
-  onTiming?.({ catalog: Math.round(catalogReady - started), confirmingWait: Math.round(observationsReady - catalogReady),
+  onTiming?.({ catalog: Math.round(catalogReady - started), confirmingWait,
     enrichment: Math.round(performance.now() - enrichmentStarted) });
   return {
     chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,

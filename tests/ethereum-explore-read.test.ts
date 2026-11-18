@@ -26,6 +26,13 @@ const source = (entries: CanonicalTokenExploreEntry[], status: "current" | "last
   async () => ({ entries, status, generatedAt: "2026-09-09T02:00:00.000Z" });
 const unavailable = async (): Promise<never> => { throw new Error("source unavailable"); };
 
+function confirmingCustomLaunch() {
+  return { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
+    category: "custom" as const, mode: "custom" as const, tokenAddress: hex(7,40), name: "New coin", symbol: "NEW",
+    hookAddress: hex(8,40), launchId: hex(9,64), creator: hex(10,40), transactionHash: hex(11,64), blockHash: hex(12,64),
+    blockNumber: "123", poolId: hex(13,64), quoteAsset: hex(0,40), launchedAt: "2026-10-14T20:05:35Z", decimals: 18 };
+}
+
 describe("Ethereum verified Explore adapter", () => {
   it("checks canonical index health without waiting for presentation metadata", async () => {
     vi.mocked(readClassicLaunchCatalogV1).mockResolvedValue({
@@ -47,10 +54,7 @@ describe("Ethereum verified Explore adapter", () => {
   });
 
   it("keeps a fresh receipt's public presentation available without promoting it to a canonical token", async () => {
-    const launch = { chainId: 1 as const, confirmation: "confirming" as const, observationExpiresAt: Date.now() + 30_000,
-      category: "custom" as const, mode: "custom" as const, tokenAddress: hex(7,40), name: "New coin", symbol: "NEW",
-      hookAddress: hex(8,40), launchId: hex(9,64), creator: hex(10,40), transactionHash: hex(11,64), blockHash: hex(12,64),
-      blockNumber: "123", poolId: hex(13,64), quoteAsset: hex(0,40), launchedAt: "2026-10-14T20:05:35Z", decimals: 18 };
+    const launch = confirmingCustomLaunch();
     vi.mocked(readConfirmingEthereumLaunches).mockResolvedValueOnce([launch]);
     vi.mocked(readCodexTokenMetadata).mockResolvedValueOnce(new Map([[launch.tokenAddress, {
       name: null, symbol: null,
@@ -135,6 +139,22 @@ describe("Ethereum verified Explore adapter", () => {
     const result = await readEthereumLaunches(1,"",{sort:"newest"},10,{classic:source([entry(1)]),custom:unavailable});
     expect(result.status).toBe("partial"); expect(result.items).toHaveLength(1);
     expect(result.sources).toEqual({classic:"current",custom:"unavailable"});
+  });
+  it("only consults unfinalized Custom receipts for views that can display them", async () => {
+    const launch = confirmingCustomLaunch();
+    const scan = vi.mocked(readConfirmingEthereumLaunches).mockClear();
+    scan.mockResolvedValueOnce([launch]).mockResolvedValueOnce([launch]);
+    const readers = { classic: unavailable, custom: unavailable };
+    const timing = vi.fn();
+    const classic = await readEthereumLaunches(1, "", { sort: "newest", mode: "classic" }, 6, readers, timing);
+    expect(scan).not.toHaveBeenCalled();
+    expect(classic).toMatchObject({ status: "unavailable", items: [] });
+    expect(timing).toHaveBeenCalledWith(expect.objectContaining({ confirmingWait: 0 }));
+    for (const mode of ["custom", "all"] as const) {
+      const result = await readEthereumLaunches(1, "", { sort: "newest", mode }, 6, readers);
+      expect(result).toMatchObject({ status: "partial", items: [{ launchId: launch.launchId, confirmation: "confirming" }] });
+    }
+    expect(scan).toHaveBeenCalledTimes(2);
   });
   it("never labels an unavailable or saved source as an empty ready index", async () => {
     const unavailableResult=await readEthereumLaunches(1,"",{sort:"newest"},10,{classic:unavailable,custom:unavailable});
