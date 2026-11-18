@@ -20,8 +20,10 @@ export function exploreIndexResetJson(body: unknown) {
   });
 }
 
-export function tokenDataIndexResetResponse() {
-  return exploreIndexResetJson(TOKEN_DATA_INDEX_RESET_BODY);
+export function tokenDataIndexResetResponse(alternate?: string) {
+  const response = exploreIndexResetJson(TOKEN_DATA_INDEX_RESET_BODY);
+  if (alternate) response.headers.set("Link", `<${alternate}>; rel="alternate"; type="application/json"`);
+  return response;
 }
 
 export function tokenChartIndexResetResponse(input: Readonly<{

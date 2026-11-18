@@ -131,13 +131,18 @@ export async function readEthereumIndexHealth() {
   return { status: catalog.status, updatedAt: catalog.updatedAt };
 }
 
-export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10, dependencies?: Dependencies) {
+export async function readEthereumLaunches(page = 1, query = "", filters = ETHEREUM_EXPLORE_FILTERS, pageSize: 6 | 8 | 10 | 50 = 10,
+  dependencies?: Dependencies, onTiming?: (durations: { catalog: number; confirmingWait: number; enrichment: number }) => void) {
+  const started = performance.now();
   const observations = readConfirmingEthereumLaunches().catch(() => []);
   const catalog = await readEthereumExploreCatalog(dependencies);
+  const catalogReady = performance.now();
+  const observed = await observations;
+  const observationsReady = performance.now();
   const q = query.normalize("NFC").trim().replace(/^\$/, "").toLowerCase();
   const visible = publicExploreCatalogEntriesV1(catalog.entries).filter((entry): entry is CanonicalTokenExploreEntry => entry.exploreKind === "token" && isPublicExploreIdentityV1(entry));
   const indexed = new Set(catalog.entries.map(entry => entry.tokenAddress.toLowerCase()));
-  const confirming = liveLaunchObservations(await observations).filter(row => !indexed.has(row.tokenAddress.toLowerCase()) && isPublicExploreIdentityV1(row, 1)
+  const confirming = liveLaunchObservations(observed).filter(row => !indexed.has(row.tokenAddress.toLowerCase()) && isPublicExploreIdentityV1(row, 1)
     && !PUBLIC_EXPLORE_CATALOG_EXCLUSIONS_V1.some(hidden => hidden.tokenAddress.toLowerCase() === row.tokenAddress.toLowerCase() && hidden.launchId.toLowerCase() === row.launchId.toLowerCase()));
   const rows = [...visible.map(entry => ({
     launchId: entry.launchStampProvenance?.launchId ?? entry.id,
@@ -160,11 +165,14 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   const keys = new Set(selected.map(row => row.tokenAddress.toLowerCase()));
   const selectedCanonical = visible.filter(entry => keys.has(entry.tokenAddress.toLowerCase()));
   const selectedIdentities = [...selectedCanonical, ...confirming.filter(entry => keys.has(entry.tokenAddress.toLowerCase()))];
+  const enrichmentStarted = performance.now();
   const [markets, metadata, approved] = await Promise.all([
     readCodexMarkets(selectedIdentities, 1, { universe: [...visible, ...confirming] }).catch(() => new Map<string, RobinhoodCoinMarket>()),
     readCodexTokenMetadata(selectedIdentities.map(entry => entry.tokenAddress), 1),
     readApprovedLaunchPresentations(selectedIdentities,1),
   ]);
+  onTiming?.({ catalog: Math.round(catalogReady - started), confirmingWait: Math.round(observationsReady - catalogReady),
+    enrichment: Math.round(performance.now() - enrichmentStarted) });
   return {
     chainId: catalog.chainId, status: catalog.status === "unavailable" && confirming.length ? "partial" as const : catalog.status, sources: catalog.sources, sourceEvidence: catalog.sourceEvidence, updatedAt: catalog.updatedAt,
     items: selected,

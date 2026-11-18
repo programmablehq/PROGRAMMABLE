@@ -42,6 +42,12 @@ const exploreIndexResetResponseHeaders = {
   },
 } as const;
 
+const exploreIndexAlternateHeaders = {
+  ...exploreIndexResetResponseHeaders,
+  Link: { description: "An alternate JSON resource on the selected chain. Follow its URL using its own response schema.",
+    schema: { type: "string" } },
+} as const;
+
 export const programmablePublicOpenApi = {
   openapi: "3.1.0",
   info: {
@@ -207,7 +213,7 @@ export const programmablePublicOpenApi = {
               component("ExploreIndexResetError"),
               "Explore token indexing is intentionally reset.",
             ),
-            headers: exploreIndexResetResponseHeaders,
+            headers: exploreIndexAlternateHeaders,
           },
         },
       },
@@ -246,7 +252,7 @@ export const programmablePublicOpenApi = {
               component("ExploreIndexResetError"),
               "Explore token indexing is intentionally reset.",
             ),
-            headers: exploreIndexResetResponseHeaders,
+            headers: exploreIndexAlternateHeaders,
           },
         },
       },

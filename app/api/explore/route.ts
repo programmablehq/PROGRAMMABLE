@@ -132,5 +132,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  return tokenDataIndexResetResponse();
+  const catalog = chain === 4663 ? "/api/explore/robinhood" : "/api/explore/ethereum";
+  const term = query.normalize("NFC").replace(INVISIBLE_OR_CONTROL, "").trim().replace(/^\$/u, "").trim();
+  return tokenDataIndexResetResponse(term && term.length <= 128 ? `${catalog}?${new URLSearchParams({ q: term })}` : catalog);
 }

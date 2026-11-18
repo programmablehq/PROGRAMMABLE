@@ -38,5 +38,6 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  return tokenDataIndexResetResponse();
+  const chain = chainValue === "4663" ? "robinhood" : "ethereum";
+  return tokenDataIndexResetResponse(`/api/explore/${chain}/presentation?token=${input.toLowerCase()}`);
 }
