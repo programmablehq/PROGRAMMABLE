@@ -1,5 +1,6 @@
 "use client";
 import { CustomLaunchProgress } from "./custom-launch-progress";
+import { launchHistoryRefreshTimeoutMs } from "@/lib/custom-launch-history-timeouts";
 import { DeveloperIssue } from "./developer-issue";
 import { CustomLaunchCompletion } from "./custom-launch-completion";
 import { launchFeedback } from "@/lib/launch-feedback";
@@ -264,7 +265,6 @@ const dateFormatter = new Intl.DateTimeFormat("en", {
 });
 const submittedPollIntervalMs = 12_000;
 const authorizedPollIntervalMs = 4_000;
-const launchHistoryRefreshTimeoutMs = 30_000;
 const launchHistoryRefreshTimeoutReason = "launch-history-refresh-timeout";
 const transactionHashPattern = /^0x[0-9a-fA-F]{64}$/u;
 const sha256Pattern = /^sha256:[0-9a-f]{64}$/u;

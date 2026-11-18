@@ -21,7 +21,9 @@ import "../../../app/surfaces.css";
 // Deliberately local browser fixtures. These exercise the product components and durable journal,
 // never production wallet authority or real onchain execution.
 const mode = new URLSearchParams(window.location.search).get("scenario") ?? "ready";
-const legacyWorkspace = mode === "workspace-history" || mode === "renewed-permit";
+const legacyWorkspace = mode === "workspace-history" || mode === "workspace-progress" || mode === "workspace-retry" || mode === "renewed-permit";
+const delayedHistory = mode === "workspace-progress"
+  ? new Promise<void>(resolve => window.addEventListener("finish-history-read", () => resolve(), { once: true })) : null;
 const atomic = mode.startsWith("atomic");
 const base = recordFixture();
 // The API keeps each plan immutable. Reloading this fixture must preserve its exact budgets and calldata too.
@@ -53,6 +55,10 @@ const control = {
 };
 declare global { interface Window { __customLaunchFixture: typeof control } }
 window.__customLaunchFixture = control;
+if (mode === "workspace-progress") {
+  control.finalize();
+  record = { ...record, status: "source_verified" };
+}
 if (mode === "manual-review") record = { ...record, status: "accepted", steps: [],
   manualReview: { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: "20000000-0000-4000-8000-000000000001",
     subjectHash: `sha256:${"ab".repeat(32)}`, chainId: "4663", controller, state: "pending", revision: 1,
@@ -87,17 +93,28 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
   if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
 }
 
-window.fetch = async (input) => {
+window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
   if (legacyWorkspace) {
     if (url.pathname === "/api/custom-launch-reviews/start") {
       control.startCalls += 1;
       return Response.json({ ok: true });
     }
-    if (url.pathname.startsWith("/api/developer/custom-launch-plans")) return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches: [], nextCursor: null });
+    if (url.pathname.startsWith("/api/developer/custom-launch-plans")) {
+      if (delayedHistory && url.searchParams.get("source") === "multi_role_v2") {
+        await delayedHistory;
+        return Response.json({ error: { code: "TEMPORARILY_UNAVAILABLE" } }, { status: 503 });
+      }
+      const launches = delayedHistory ? [{ sourceVersion: "custom_launch_plan_v1", controller, resource: record }] : [];
+      return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches, nextCursor: null });
+    }
     if (url.pathname.startsWith("/api/developer/custom-launches")) {
       control.legacyReads += 1;
       const chainId = url.searchParams.get("chainId") ?? "1";
+      if (mode === "workspace-retry" && chainId === "8453") {
+        await new Promise(resolve => setTimeout(resolve, 16_000));
+        init?.signal?.throwIfAborted();
+      }
       const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
       const resource = { schemaVersion: "programmable.custom-launch.v3", routeId: "custom-launch:create:v3", chainId,
         launchId, requestId: launchId, ownerWallet: controller, onchainLaunchId: null,
@@ -204,6 +221,7 @@ createRoot(document.getElementById("root")!).render(<main className={`${styles.p
   }}>Fixture: request changes</button> : null}
   {mode.startsWith("legacy-indexing") ? <CustomLaunchCompletion chainId={mode.endsWith("-1")?"1":"4663"} launchId={`0x${"9".repeat(64)}`} controller={controller} transactionHash={hash} />
     : legacyWorkspace ? <DeveloperLaunchWorkspace account={controller}
+      sendUniversalLaunchWalletAction={sendWallet}
       initialLaunchId={new URLSearchParams(location.search).get("launchId")}
       initialLaunchChainId={new URLSearchParams(location.search).get("chainId") as "8453" | "999" | "99901" | null}
       getAccessToken={async () => "fixture-session"} getIdentityToken={async () => null} openWallet={() => { throw new Error("No wallet action expected"); }}

@@ -5,8 +5,8 @@ import { DeveloperLaunchHistory, parseHistoryPage, parseLaunch, type DeveloperLa
 import { DeveloperUniversalLaunchHistory, parseEntries } from "./developer-universal-launch-history";
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
+import { launchHistoryRefreshTimeoutMs } from "@/lib/custom-launch-history-timeouts";
 import { launchOverviewItem, mergeLaunchOverview, type LaunchOverviewItem, type LaunchOverviewSource } from "@/lib/developer-launch-overview";
-import { settleSequentially } from "@/lib/settle-sequentially";
 import shared from "./developer-api-keys.module.css";
 import styles from "./developer-launch-workspace.module.css";
 type Props = DeveloperLaunchHistoryProps & {
@@ -34,7 +34,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
     if (cursor) query.set("cursor", cursor);
     if (legacy) query.set(id ? "version" : "limit", id ? source === "legacy" && props.initialLaunchChainId === "4663" ? "v4" : "v3" : "5");
     const response = await fetch(`/api/developer/${legacy ? "custom-launches" : "custom-launch-plans"}${id ? `/${encodeURIComponent(id)}` : ""}?${query}`, {
-      cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+      cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(launchHistoryRefreshTimeoutMs)]) });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       if (id && response.status === 404) return { source, items: [], nextCursor: null };
@@ -66,19 +66,28 @@ export function DeveloperLaunchWorkspace(props: Props) {
       const id = !deepLinkDone.current ? props.initialLaunchId : null;
       const requestedSources = sources.filter(source => (!more || more[source]) && (!id || (props.initialLaunchChainId === "99901" ? source === "elysium" : props.initialLaunchChainId === "999" ? source === "hyperevm" : props.initialLaunchChainId === "8453"
         ? source === "base" : source !== "base" && source !== "hyperevm" && source !== "elysium" && (props.initialLaunchChainId !== null || source === "legacy"))));
-      const results = await settleSequentially(requestedSources, source => read(source, headers, signal, more?.[source], id));
-      if (signal.aborted) return;
-      const successful = results.flatMap(result => result.status === "fulfilled" ? [result.value] : []);
-      const found = successful.flatMap(result => result.items);
-      setItems(current => mergeLaunchOverview(current, found));
-      setCursors(current => ({ ...current, ...Object.fromEntries(successful.map(result => [result.source, result.nextCursor])) }));
-      const failures = results.flatMap(result => result.status === "rejected" ? [result.reason instanceof Error ? result.reason.message : "API_UNAVAILABLE"] : []);
-      setError(failures.join("; "));
-      if (id) {
-        const match = found.find(item => item.id === id);
-        if (match) { setSelected(match); deepLinkDone.current = true; }
-        else if (!failures.length) setError("404 This launch was not found for the connected wallet");
+      const failures: string[] = [];
+      for (const source of requestedSources) {
+        if (signal.aborted) return;
+        try {
+          const page = await read(source, headers, signal, more?.[source], id);
+          if (signal.aborted) return;
+          if (page.items.length) setItems(current => mergeLaunchOverview(current, page.items));
+          setCursors(current => ({ ...current, [source]: page.nextCursor }));
+          const match = id && page.items.find(item => item.id === id);
+          if (match) {
+            deepLinkDone.current = true;
+            setSelected(match);
+            setError("");
+            return;
+          }
+        } catch (caught) {
+          if (signal.aborted) return;
+          failures.push(caught instanceof Error ? caught.message : "API_UNAVAILABLE");
+          if (!id) setError(failures.join("; "));
+        }
       }
+      setError(id && !failures.length ? "404 This launch was not found for the connected wallet" : failures.join("; "));
     } catch (caught) { if (!signal.aborted) setError(caught instanceof Error ? caught.message : "API_UNAVAILABLE"); }
     finally { if (inFlight.current === signal) inFlight.current = null; if (!signal.aborted) setLoading(false); }
   }, [read, props.initialLaunchId, props.initialLaunchChainId]);
@@ -87,7 +96,8 @@ export function DeveloperLaunchWorkspace(props: Props) {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, refresh]);
-  useLaunchStatusPolling(props.account, !loading && !selected, signal => load(signal));
+  // The refresh reads one source at a time. Each read keeps its own bounded deadline.
+  useLaunchStatusPolling(props.account, !loading && !selected, signal => load(signal), 20_000, false, sources.length * launchHistoryRefreshTimeoutMs);
   function retry() { setRefresh(value => value + 1); }
   function open(item: LaunchOverviewItem) {
     deepLinkDone.current = true; setSelected(item); const url = new URL(window.location.href); url.searchParams.set("launchId", item.id); url.searchParams.set("chainId", item.chainId);

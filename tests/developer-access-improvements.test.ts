@@ -69,4 +69,16 @@ describe("unified launch overview", () => {
     const item = launchOverviewItem({ planId: id, status: "finalized", manualReview: { state: "pending" } }, "custom_launch_plan_v1", Date.now());
     expect(item.status).toBe("Completed"); expect(item.next).toBe("Launch completed");
   });
+  it.each([
+    ["broadcast", "Confirming"], ["mined", "Confirming"],
+    ["source_verified", "Source verified"], ["indexed", "Indexed"],
+  ])("shows the execution state %s after the signing window expires", (raw, expected) => {
+    const review = { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: id, chainId: "4663",
+      controller: `0x${"1".repeat(40)}`, subjectHash: `sha256:${"2".repeat(64)}`, state: "approved", revision: 2,
+      submittedAt: "2026-01-01T00:00:00Z", approvedAt: "2026-01-01T01:00:00Z", launchRequestedAt: "2026-01-01T01:05:00Z",
+      expiresAt: "2026-01-02T01:00:00Z", reason: null };
+    const resource = { planId: id, status: raw, steps: [{ status: "wallet_action_ready" }], manualReview: review };
+    const item = launchOverviewItem(resource, "custom_launch_plan_v1", Date.parse("2026-01-03T00:00:00Z"));
+    expect(item.status).toBe(expected);
+  });
 });
