@@ -59,7 +59,7 @@ describe("authenticated private Blob revalidation", () => {
   it("never substitutes saved data for denied access, missing objects or an unbound 304", async () => {
     const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(response())
       .mockRejectedValueOnce(new Error("Access denied")).mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(unchanged());
+      .mockResolvedValueOnce(unchanged()).mockResolvedValueOnce(unchanged());
     const read = createPrivateBlobReadCache({ getBlob });
     await text(await read(path, options, 1024));
     await expect(read(path, options, 1024)).rejects.toThrow("Access denied");
@@ -75,8 +75,50 @@ describe("authenticated private Blob revalidation", () => {
     await text(await read(path, { token: "another-owner" }, 1024));
     await text(await read(path, options, 512));
     expect(getBlob.mock.calls.slice(0,3).every(call => call[1]?.ifNoneMatch === undefined)).toBe(true);
-    getBlob.mockResolvedValueOnce(unchanged(versionB));
+    getBlob.mockResolvedValueOnce(unchanged(versionB)).mockResolvedValueOnce(unchanged(versionB));
     await expect(read(path, options, 1024)).rejects.toThrow("no matching authenticated body");
+  });
+
+  it.each([false, true])("recovers an unbound 304 with a fresh authenticated body (warm cache: %s)", async warm => {
+    const getBlob = vi.fn<typeof get>();
+    if (warm) getBlob.mockResolvedValueOnce(response());
+    getBlob.mockResolvedValueOnce(unchanged(versionB)).mockResolvedValueOnce(response("current", versionB));
+    const read = createPrivateBlobReadCache({ getBlob });
+    if (warm) await text(await read(path, options, 1024));
+    expect(await text(await read(path, options, 1024))).toBe("current");
+    const attempts = getBlob.mock.calls.slice(warm ? 1 : 0);
+    expect(attempts).toHaveLength(2);
+    expect(attempts[1]![1]).toMatchObject({ token: options.token, access: "private", useCache: false });
+    expect(attempts[1]![1]?.ifNoneMatch).toBeUndefined();
+    expect(attempts[1]![1]?.abortSignal).toBe(attempts[0]![1]?.abortSignal);
+  });
+
+  it("does not substitute the old body when the unconditional recovery is denied", async () => {
+    const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(response())
+      .mockResolvedValueOnce(unchanged(versionB)).mockRejectedValueOnce(new Error("Access denied"));
+    const read = createPrivateBlobReadCache({ getBlob });
+    await text(await read(path, options, 1024));
+    await expect(read(path, options, 1024)).rejects.toThrow("Access denied");
+    expect(getBlob).toHaveBeenCalledTimes(3);
+  });
+
+  it("retains the download limit during an unconditional recovery", async () => {
+    const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(unchanged())
+      .mockResolvedValueOnce(response("too large"));
+    const read = createPrivateBlobReadCache({ getBlob });
+    await expect(read(path, options, 4)).rejects.toThrow("too-large");
+    expect(getBlob).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not recover a 304 after the caller cancels", async () => {
+    const controller = new AbortController();
+    const getBlob = vi.fn<typeof get>().mockImplementationOnce(async () => {
+      controller.abort(new Error("Caller stopped"));
+      return unchanged();
+    });
+    const read = createPrivateBlobReadCache({ getBlob });
+    await expect(read(path, { ...options, abortSignal: controller.signal }, 1024)).rejects.toThrow("Caller stopped");
+    expect(getBlob).toHaveBeenCalledTimes(1);
   });
 
   it("shares concurrent downloads while giving each caller its own readable body", async () => {

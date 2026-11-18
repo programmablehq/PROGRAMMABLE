@@ -29,6 +29,7 @@ import { buildAgentInstructions } from "../lib/agent-connection";
 import { developerLaunchDestination } from "../lib/developer-api-key-route";
 import { BuilderIdeaPrompt, BuilderSetupSteps } from "../components/module-contribution-entry";
 import {
+  canResumeExpiredLaunch,
   launchPollingRetryAfterMs,
   fetchVerifiedProjectImageV1,
   launchResourceIdentity,
@@ -777,6 +778,33 @@ describe("developer API key interface", () => {
 });
 
 describe("developer launch history interface", () => {
+  it("resumes only an expired permit with its active renewed review and accepts authoritative preparation progress", () => {
+    const approvedAt = Date.now() - 1_000;
+    const review = { schemaVersion: "programmable.custom-launch-manual-review.v1" as const,
+      reviewId: "20000000-0000-4000-8000-000000000001", subjectHash: `sha256:${"ab".repeat(32)}`,
+      chainId: "1" as const, controller: "0x" + "11".repeat(20), state: "approved" as const,
+      revision: 4, submittedAt: "2026-10-09T00:00:00Z", approvedAt: new Date(approvedAt).toISOString(),
+      expiresAt: new Date(approvedAt + 86_400_000).toISOString(), reason: null, launchRequestedAt: null, launchDeadline: null };
+    const current = { ...v3Launch("failed", 1), manualReview: review,
+      failure: { code: "PERMIT_EXPIRED", message: "Expired", retryable: false, remediations: [] } };
+    expect(canResumeExpiredLaunch(current)).toBe(true);
+    const started = { ...current, status: "received" as const, failure: null,
+      manualReview: { ...review, launchRequestedAt: review.approvedAt, launchDeadline: review.expiresAt } };
+    expect(selectMonotonicLaunchResource(current, started)).toBe(started);
+    for (const unsafe of [
+      { ...started, manualReview: { ...started.manualReview, revision: 3 } },
+      { ...started, manualReview: { ...started.manualReview, subjectHash: `sha256:${"cd".repeat(32)}` } },
+      { ...started, manualReview: { ...started.manualReview, state: "expired" as const } },
+    ]) expect(selectMonotonicLaunchResource(current, unsafe)).toBe(current);
+    for (const unsafe of [
+      { ...current, failure: { ...current.failure, code: "SIMULATION_FAILED" } },
+      { ...current, status: "finalized" as const },
+      { ...current, status: "cancelled" as const },
+      { ...current, manualReview: { ...review, state: "pending" as const } },
+      { ...current, manualReview: { ...review, requiresRepack: true } },
+    ]) expect(canResumeExpiredLaunch(unsafe)).toBe(false);
+  });
+
   it("refreshes review decisions even when the launch timestamp is unchanged", () => {
     const review = { schemaVersion: "programmable.custom-launch-manual-review.v1" as const,
       reviewId: "20000000-0000-4000-8000-000000000001", subjectHash: `sha256:${"ab".repeat(32)}`,

@@ -62,6 +62,21 @@ test("pending review cannot prepare or sign", async ({ page }) => {
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
+test("a renewed expired permit resumes preparation and keeps reading without a wallet send", async ({ page }) => {
+  await page.clock.install();
+  await page.goto(origin + "?scenario=renewed-permit&chainId=99901&launchId=80000000-0000-4000-8000-000000099901");
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.legacyReads)).toBeGreaterThan(1);
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+  const reads = await page.evaluate(() => window.__customLaunchFixture.legacyReads);
+  await page.evaluate(() => { window.__customLaunchFixture.legacyRecovered = true; });
+  await page.clock.fastForward(20000);
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.legacyReads)).toBeGreaterThan(reads);
+  await expect(page.getByText("Received", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => window.__customLaunchFixture.startCalls)).toBe(1);
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+});
+
 test("wallet cancellation permits a deliberate retry", async ({ page }) => {
   await page.goto(origin + "?scenario=rejected");
   const sign = page.getByRole("button", { name: "Sign and launch", exact: true });
