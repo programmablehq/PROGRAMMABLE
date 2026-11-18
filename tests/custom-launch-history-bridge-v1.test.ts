@@ -485,6 +485,29 @@ describe("developer launch history same-origin bridge", () => {
     });
   }
 
+  it("opens the exact expired graph overview from the wallet index with no receipt scan", async () => {
+    const launch = { ...launchV3(), chainId: "99901", status: "failed",
+      failure: { code: "PERMIT_EXPIRED", message: "The permit expired.", retryable: false, remediations: [] } };
+    const status = { schemaVersion: "programmable.wallet-launch-status.v1", kind: "graph-v3",
+      resourceId: launch.requestId, chainId: launch.chainId, controller: WALLET.toLowerCase(),
+      requestHash: launch.requestHash, createdAt: launch.createdAt, status: "failed",
+      rawRequestSha256: null, launchReady: false, errorCode: "PERMIT_EXPIRED" };
+    const request = () => new Request(`https://programmable.market/api/developer/custom-launches/${launch.requestId}?walletAddress=${WALLET}&version=v3&chainId=99901&view=overview`);
+    fetchBackend.mockResolvedValueOnce(Response.json(status)).mockResolvedValueOnce(backendJsonV3({ launches: [launch], nextCursor: null }));
+    const response = await bridge().get(request(), launch.requestId);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ requestId: launch.requestId, status: "failed", output: null, failure: launch.failure });
+    const [statusUrl, listUrl] = fetchBackend.mock.calls.map(([url]) => url as URL);
+    expect(statusUrl.search).toBe("?view=status");
+    expect(listUrl.searchParams.get("limit")).toBe("1");
+    expect(listUrl.pathname).toBe("/v4/chains/99901/wallet-admin/custom-launches");
+    expect(fetchBackend).toHaveBeenCalledTimes(2);
+
+    fetchBackend.mockResolvedValueOnce(Response.json({ ...status, controller: "0x" + "99".repeat(20) }));
+    expect((await bridge().get(request(), launch.requestId)).status).toBe(503);
+    expect(fetchBackend).toHaveBeenCalledTimes(3);
+  });
+
   it("allows a valid launch detail read to finish after six seconds with production defaults", async () => {
     vi.useFakeTimers();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(delay => {

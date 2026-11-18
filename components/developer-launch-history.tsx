@@ -1346,6 +1346,11 @@ export function canResumeExpiredLaunch(
     && Boolean(launch.manualReview && customLaunchReviewLabel(launch.manualReview, now) === "Approved");
 }
 
+function expiredGraphPermit(launch: Pick<LaunchResource, "routeId" | "status" | "failure">) {
+  return launch.routeId === "custom-launch:create:v3"
+    && launch.status === "failed" && launch.failure?.code === "PERMIT_EXPIRED";
+}
+
 function requiresCurrentProjectMetadata(launch: LaunchResource) {
   return launch.routeId === "custom-launch:create:v4"
     || launch.launchProfileVersion === "3.3.0"
@@ -1585,6 +1590,9 @@ export function selectMonotonicLaunchResource(
   if (launchResourceKey(current) !== launchResourceKey(incoming)) {
     return incoming;
   }
+  if (expiredGraphPermit(current) && (incoming.status === "submitted" || incoming.status === "finalized")
+    && incoming.requestHash === current.requestHash && onchainTransactionHash(incoming)
+    && updatedAtTime(incoming.updatedAt) >= updatedAtTime(current.updatedAt)) return incoming;
   if (canResumeExpiredLaunch(current) && incoming.manualReview
     && incoming.manualReview.reviewId === current.manualReview?.reviewId
     && incoming.manualReview.subjectHash === current.manualReview.subjectHash
@@ -2694,7 +2702,7 @@ export function DeveloperLaunchHistory({
     signal?: AbortSignal,
   ) => {
     const response = await fetch(
-      `/api/developer/custom-launches/${encodeURIComponent(launchId)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" || initialLaunchChainId === "999" || initialLaunchChainId === "99901" ? `&chainId=${initialLaunchChainId}` : ""}`,
+      `/api/developer/custom-launches/${encodeURIComponent(launchId)}?walletAddress=${encodeURIComponent(account)}&version=${version}${initialLaunchChainId === "8453" || initialLaunchChainId === "999" || initialLaunchChainId === "99901" ? `&chainId=${initialLaunchChainId}` : ""}${version === "v3" ? "&view=overview" : ""}`,
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
@@ -2852,7 +2860,7 @@ export function DeveloperLaunchHistory({
     if (sendInFlightRef.current || fundingInFlightRef.current || hydrateInFlightRef.current
       || checkInFlightRef.current || refreshing || loadingMore) return;
     // Read the exact visible resources, including records on later history pages.
-    const active = launches.filter(launch => canResumeExpiredLaunch(launch)
+    const active = launches.filter(launch => canResumeExpiredLaunch(launch) && !expiredGraphPermit(launch)
       || !["failed", "cancelled"].includes(launch.status)
         && (launch.status !== "finalized" || launch.manualReview?.state === "pending"));
     for (const launch of active) {
@@ -3744,10 +3752,17 @@ export function DeveloperLaunchHistory({
                   </span> : null}
                 </div>
                 <p className={styles.statusDescription}>
-                  {showReviewStatus
+                  {expiredGraphPermit(launch) ? "The transaction permit expired."
+                    : showReviewStatus
                     ? customLaunchReviewDescription(launch.manualReview!) : statusDescription(launch.status)}
                 </p>
-                {launch.manualReview && (canResumeExpiredLaunch(launch)
+                {expiredGraphPermit(launch) ? <div className={styles.launchActions}>
+                  {launch.manualReview ? <p>Project review: {customLaunchReviewLabel(launch.manualReview)}{customLaunchReviewLabel(launch.manualReview) === "Approved" && launch.manualReview.expiresAt ? ` until ${formatDate(launch.manualReview.expiresAt)}` : ""}.</p> : null}
+                  <p>If you sent a transaction, check its status first. If you never sent it, submit a fresh launch request with your launch wallet.</p>
+                  <button className={styles.textButton} type="button" disabled={checkingId !== null || Boolean(pollingIds[key])}
+                    onClick={() => void checkOnchainStatus(launch)}>{checkingId === key ? "Checking…" : "Check on-chain status"}</button>
+                </div> : null}
+                {launch.manualReview && (canResumeExpiredLaunch(launch) && !expiredGraphPermit(launch)
                   || !["submitted", "finalized", "failed", "cancelled"].includes(launch.status))
                   ? <CustomLaunchStartButton key={`${resourceIdentity}:${launch.manualReview.revision}`} review={launch.manualReview} launchId={resourceIdentity} onStarted={refresh} /> : null}
                 {["authorized", "wallet_action_required", "awaiting_wallet_signature", "awaiting_funding_authorization"].includes(launch.status)
