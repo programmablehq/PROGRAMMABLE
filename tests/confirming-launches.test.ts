@@ -85,6 +85,25 @@ describe("receipt observations before canonical finality", () => {
 
 
 describe("nonblocking observation refresh", () => {
+  it("cancels an expired scan, releases the shared job and ignores its late results", async () => {
+    vi.useFakeTimers();
+    try {
+      const first = Promise.withResolvers<Awaited<ReturnType<typeof observeEthereumLaunches>>>();
+      const load = vi.fn<(signal: AbortSignal) => typeof first.promise>().mockReturnValueOnce(first.promise).mockResolvedValueOnce([]);
+      const jobs: Promise<void>[] = [];
+      const read = createLaunchObservationCache(load, job => jobs.push(job));
+      const pending = read();
+      await vi.advanceTimersByTimeAsync(30_000);
+      await jobs[0];
+      expect(await pending).toEqual([]);
+      expect(load.mock.calls[0][0].aborted).toBe(true);
+      await vi.advanceTimersByTimeAsync(3_001);
+      expect(await read()).toEqual([]);
+      first.resolve([{ confirmation: "confirming", observationExpiresAt: Date.now() + 30_000 }] as Awaited<typeof first.promise>);
+      expect(await read()).toEqual([]);
+      expect(load).toHaveBeenCalledTimes(2);
+    } finally { vi.useRealTimers(); }
+  });
   it("shares slow work, returns the page promptly, and discards observations after a failed refresh", async () => {
     vi.useFakeTimers();
     try {

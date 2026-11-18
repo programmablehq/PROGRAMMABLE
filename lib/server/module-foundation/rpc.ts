@@ -1,11 +1,14 @@
 import "server-only";
+import { setTimeout as cancellableDelay } from "node:timers/promises";
 import { createPublicClient, custom, type Hex } from "viem";
 import { mainnet } from "viem/chains";
 import { productionMainnetRpcPair } from "@/lib/onchain/website-rpc-providers.server";
 import { TradeRpcExecutionRevertedV1, type TradeRpcV1 } from "@/lib/server/custom-launch/routed-trade-rpc-v1";
 
 const nextRequest = new Map<string, number>();
-const pause = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const pause = (ms: number, signal?: AbortSignal) => signal
+  ? cancellableDelay(ms, undefined, { signal })
+  : new Promise<void>(resolve => setTimeout(resolve, ms));
 
 /** Preserve EVM reverts when adapting the paced reader to viem. */
 export function foundationMainnetReadClient(rpc: TradeRpcV1) {
@@ -24,11 +27,12 @@ export function foundationMainnetReadClient(rpc: TradeRpcV1) {
 
 /** Share the request budget across quote contexts in this server instance.
  * Leave capacity for the website's other reads on the same provider account. */
-async function pace(endpoint: string) {
+async function pace(endpoint: string, signal?: AbortSignal) {
+  signal?.throwIfAborted();
   const now = Date.now(), slot = Math.max(now, nextRequest.get(endpoint) ?? now);
   if (slot - now > 8_000) throw new Error("The quote provider is busy.");
   nextRequest.set(endpoint, slot + 50);
-  if (slot > now) await pause(slot - now);
+  if (slot > now) await pause(slot - now, signal);
 }
 
 class ProviderRateLimit extends Error {
@@ -36,12 +40,13 @@ class ProviderRateLimit extends Error {
 }
 
 /** Two existing, independently operated Ethereum providers. Never expose their URLs in errors. */
-export function foundationMainnetRpcs(env: Readonly<Record<string, string | undefined>> = process.env, fetcher: typeof fetch = fetch): readonly [TradeRpcV1, TradeRpcV1] {
+export function foundationMainnetRpcs(env: Readonly<Record<string, string | undefined>> = process.env, fetcher: typeof fetch = fetch, signal?: AbortSignal): readonly [TradeRpcV1, TradeRpcV1] {
   const pair = productionMainnetRpcPair(env);
   const transport = (endpoint: string): TradeRpcV1 => {
     const request: TradeRpcV1 = async (method, params) => {
-      await pace(endpoint);
-      const response = await fetcher(endpoint, { method: "POST", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000),
+      await pace(endpoint, signal);
+      const timeout = AbortSignal.timeout(10_000);
+      const response = await fetcher(endpoint, { method: "POST", cache: "no-store", redirect: "error", signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
       if (response.status === 429) {
         await response.body?.cancel();
@@ -71,7 +76,7 @@ export function foundationMainnetRpcs(env: Readonly<Record<string, string | unde
         try { return await request(method, params); }
         catch (error) {
           if (!(error instanceof ProviderRateLimit)) throw error;
-          await pause(error.delayMs);
+          await pause(error.delayMs, signal);
           return await request(method, params);
         }
       } catch (error) {

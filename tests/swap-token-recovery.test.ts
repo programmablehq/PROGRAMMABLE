@@ -43,7 +43,7 @@ describe("bounded swap route recovery", () => {
     expect(await result).toEqual(descriptor);
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
-  it.each([[400, "INVALID_ADDRESS"], [404, "TOKEN_NOT_FOUND"], [503, "TRADE_PROVIDER_DISAGREEMENT"], [503, "SWAP_STAMP_BINDING_CHANGED"]])("does not retry invalid or conflicting evidence (%s %s)", async (status, code) => {
+  it.each([[400, "INVALID_ADDRESS"], [404, "TOKEN_NOT_FOUND"], [422, "NO_VERIFIED_MARKET"], [503, "TRADE_PROVIDER_DISAGREEMENT"], [503, "SWAP_STAMP_BINDING_CHANGED"]])("does not retry terminal responses or conflicting evidence (%s %s)", async (status, code) => {
     fetcher.mockResolvedValue(Response.json({ error: "Not available", code }, { status: Number(status) }));
     await expect(fetchSwapToken(input)).rejects.toMatchObject({ code });
     expect(fetcher).toHaveBeenCalledTimes(1);

@@ -150,6 +150,7 @@ describe("public Explore OpenAPI contract", () => {
       });
       expect(Object.keys(operation.responses["503"].headers).sort()).toEqual([
         "Cache-Control",
+        ...(path === "/api/explore/token/analytics" ? [] : ["Link"]),
         "Retry-After",
         "X-Programmable-Indexing-Status",
       ]);

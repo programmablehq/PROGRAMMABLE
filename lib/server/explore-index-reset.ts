@@ -24,6 +24,11 @@ export function tokenDataIndexResetResponse() {
   return exploreIndexResetJson(TOKEN_DATA_INDEX_RESET_BODY);
 }
 
+export function withExploreAlternate(response: NextResponse, alternate: string) {
+  response.headers.set("Link", `<${alternate}>; rel="alternate"; type="application/json"`);
+  return response;
+}
+
 export function tokenChartIndexResetResponse(input: Readonly<{
   address: `0x${string}`;
   range: ResetChartRange;

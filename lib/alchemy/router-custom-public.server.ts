@@ -394,13 +394,13 @@ export function assertBoundedRouterCustomSnapshotBlobSizeV1(
   ) throw new Error("Router Custom durable snapshot size is invalid");
 }
 
-async function readDurableRouterCustomIdentitySnapshotRecordV1() {
+async function readDurableRouterCustomIdentitySnapshotRecordV1(signal?: AbortSignal) {
   const token = resolveDurableExploreBlobToken();
   if (!token) throw new Error(
     "Router Custom durable snapshot storage is not configured",
   );
   const result = await getRevalidatedPrivateBlob(
-    ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH, { token }, ROUTER_CUSTOM_SNAPSHOT_MAXIMUM_BYTES,
+    ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH, { token, abortSignal: signal }, ROUTER_CUSTOM_SNAPSHOT_MAXIMUM_BYTES,
   );
   if (!result || result.statusCode !== 200 || !result.stream) {
     throw new Error("Router Custom durable snapshot is unavailable");
@@ -446,19 +446,24 @@ export async function readSavedRouterCustomIdentitySnapshotV1() {
 
 async function persistDurableRouterCustomIdentitySnapshotV1(
   snapshot: RouterCustomIdentitySnapshotV1,
-  options: Readonly<{ replaceAfterReorg?: boolean }> = {},
+  options: Readonly<{
+    replaceAfterReorg?: boolean;
+    previousRecord?: Awaited<ReturnType<typeof readDurableRouterCustomIdentitySnapshotRecordV1>>;
+    signal?: AbortSignal;
+  }> = {},
 ) {
   const token = resolveDurableExploreBlobToken();
   if (!token) throw new Error(
     "Router Custom durable snapshot storage is not configured",
   );
-  let existing: Awaited<
-    ReturnType<typeof readDurableRouterCustomIdentitySnapshotRecordV1>
-  > | null = null;
-  try {
-    existing = await readDurableRouterCustomIdentitySnapshotRecordV1();
-  } catch {
-    existing = null;
+  let existing = options.previousRecord;
+  if (!existing) {
+    try {
+      existing = await readDurableRouterCustomIdentitySnapshotRecordV1(options.signal);
+    } catch {
+      options.signal?.throwIfAborted();
+      // With no observed ETag the only permitted write is create-only.
+    }
   }
   if (existing) {
     const previousBlock = BigInt(existing.snapshot.asOfBlock);
@@ -496,24 +501,31 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
       );
     }
   }
-  const { put } = await import("@vercel/blob");
-  await put(
-    ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH,
-    canonicalizeJson({
-      schemaVersion: ROUTER_CUSTOM_SNAPSHOT_ENVELOPE_SCHEMA_VERSION,
-      binding: LAUNCH_STAMP_ROUTER_BINDING,
-      snapshot,
-    }),
-    {
-      access: "private",
-      contentType: "application/json",
-      addRandomSuffix: false,
-      allowOverwrite: existing !== null,
-      cacheControlMaxAge: 60,
-      ...(existing ? { ifMatch: existing.etag } : {}),
-      token,
-    },
-  );
+  const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
+  try {
+    await put(
+      ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH,
+      canonicalizeJson({
+        schemaVersion: ROUTER_CUSTOM_SNAPSHOT_ENVELOPE_SCHEMA_VERSION,
+        binding: LAUNCH_STAMP_ROUTER_BINDING,
+        snapshot,
+      }),
+      {
+        access: "private", contentType: "application/json", addRandomSuffix: false,
+        allowOverwrite: Boolean(existing), cacheControlMaxAge: 60,
+        ...(existing ? { ifMatch: existing.etag } : {}),
+        abortSignal: options.signal, token,
+      },
+    );
+  } catch (error) {
+    if (!options.previousRecord || !(error instanceof BlobPreconditionFailedError)) throw error;
+    options.signal?.throwIfAborted();
+    // A concurrent writer changed this exact Blob. Validate its winning
+    // snapshot and ETag before attempting at most one further conditional put.
+    await persistDurableRouterCustomIdentitySnapshotV1(snapshot, {
+      replaceAfterReorg: options.replaceAfterReorg, signal: options.signal,
+    });
+  }
 }
 
 export async function persistRouterCustomIdentitySnapshotFromSourceV1(
@@ -532,6 +544,10 @@ export function createRouterCustomIdentitySnapshotReaderV1(
   const now = dependencies.now ?? Date.now;
   const readDurableSnapshot = dependencies.readDurableSnapshot ??
     readDurableRouterCustomIdentitySnapshotV1;
+  const readSavedRecord: () => Promise<{ snapshot: RouterCustomIdentitySnapshotV1; etag: string | null }> =
+    dependencies.readDurableSnapshot
+      ? async () => ({ snapshot: await readDurableSnapshot(), etag: null })
+      : readDurableRouterCustomIdentitySnapshotRecordV1;
   const persistDurableSnapshot = dependencies.persistDurableSnapshot ??
     persistDurableRouterCustomIdentitySnapshotV1;
   const currentReadTimeoutMs = dependencies.currentReadTimeoutMs ??
@@ -562,8 +578,13 @@ export function createRouterCustomIdentitySnapshotReaderV1(
     // Discovery and comparison consume the same saved boundary. A cold read
     // must not download and parse the full identity snapshot twice in series.
     savedSnapshotForRefresh = undefined;
-    const savedRead = withinDuration(readDurableSnapshot, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS)
-      .then(snapshot => { savedSnapshotForRefresh = snapshot; return snapshot; });
+    let savedRecord: Awaited<ReturnType<typeof readDurableRouterCustomIdentitySnapshotRecordV1>> | undefined;
+    const savedRead = withinDuration(readSavedRecord, ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS)
+      .then(({ snapshot, etag }) => {
+        savedSnapshotForRefresh = snapshot;
+        if (etag) savedRecord = { snapshot, etag };
+        return snapshot;
+      });
     // Attach a handler immediately while the independent source read runs.
     void savedRead.catch(() => undefined);
     try {
@@ -628,6 +649,7 @@ export function createRouterCustomIdentitySnapshotReaderV1(
         }
       } catch (error) {
         if (error instanceof RouterCustomSnapshotConflictError) throw error;
+        savedRecord = undefined;
         console.warn("Router Custom durable snapshot comparison unavailable", {
           name: error instanceof Error
             ? error.name
@@ -682,6 +704,9 @@ export function createRouterCustomIdentitySnapshotReaderV1(
         await withinDuration(
           () => persistDurableSnapshot(snapshot, {
             replaceAfterReorg: source.reorgDetected,
+            ...(!dependencies.persistDurableSnapshot && {
+              previousRecord: savedRecord, signal: AbortSignal.timeout(ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS),
+            }),
           }),
           ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS,
         );

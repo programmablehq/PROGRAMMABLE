@@ -42,6 +42,10 @@ describe("Explore index reset API", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual(RESET_BODY);
     expectResetHeaders(response);
+    const alternate = new URL(response.headers.get("link")!.match(/^<([^>]+)>/)![1], "http://localhost");
+    const params = new URLSearchParams(query);
+    expect(alternate.pathname).toBe(params.get("chain") === "4663" ? "/api/explore/robinhood" : "/api/explore/ethereum");
+    expect(alternate.searchParams.get("q")).toBe(params.get("q")?.replace(/^\$/, "") ?? null);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 

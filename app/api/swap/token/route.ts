@@ -12,6 +12,9 @@ export async function GET(request: Request) {
   if (!["1", "4663"].includes(chain) || [...query.keys()].some(key => !["address", "token", "chain"].includes(key))) return json({ error: "Select Ethereum or Robinhood Chain.", code: "INVALID_REQUEST" }, 400);
   try { return json(await resolveSwapToken({ address, chainId: Number(chain) as SwapChainId })); }
   catch (error) {
+    if (error instanceof SwapUnavailableError && error.code === "NO_VERIFIED_MARKET") {
+      return json({ error: error.message, code: error.code }, 422);
+    }
     // Log only public identity and our own error code. Provider errors can
     // contain credential-bearing URLs and must never be printed or returned.
     const code = error instanceof SwapUnavailableError || error instanceof LaunchPlanTradeErrorV1 ? error.code : "ROUTE_UNAVAILABLE";

@@ -16,9 +16,10 @@ import { SWAP_TOKEN_SCHEMA, SwapUnavailableError, type SwapChainId, type SwapTok
 import { isEthereumModuleLaunchCandidate } from "@/lib/module-foundation/ethereum-release";
 import { ethereumStampedSwapRoute } from "@/lib/swap/ethereum-stamped";
 import { readEthereumFeeClassificationV1 } from "@/lib/server/custom-launch/ethereum-routing-fee-policy-v1";
-import { ROUTED_TRADE_WRAPPED_ETH_V1 } from "@/lib/custom-launch/routed-trade-plan-v1";
+import { LaunchPlanTradeErrorV1, ROUTED_TRADE_WRAPPED_ETH_V1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
+const NO_ETH_POOL = "This launch has no verified ETH trading pool.";
 export interface SwapTokenDependencies {
   robinhood: typeof readRobinhoodToken;
   ethereum: typeof readEthereumToken;
@@ -108,7 +109,15 @@ export async function resolveVerifiedLaunchSwapToken(
 }
 
 async function resolveRobinhoodSwapToken(row: RobinhoodLaunch, dependencies: SwapTokenDependencies): Promise<SwapTokenDescriptor> {
-  const decimals = row.decimals ?? await dependencies.decimals(row.tokenAddress);
+  const decimals = row.decimals ?? await dependencies.decimals(row.tokenAddress).catch((error: unknown) => {
+    const missingUnits = (error instanceof SwapUnavailableError && error.code === "TOKEN_METADATA_UNAVAILABLE")
+      || (error instanceof LaunchPlanTradeErrorV1 && error.code === "TRADE_ANALYSIS_PENDING");
+    if (missingUnits && row.sourceKind === "custom-launch-plan-v1"
+      && row.launchProjection?.sourceVersion === "custom_launch_plan_v1" && row.launchProjection.markets.length === 0) {
+      throw new SwapUnavailableError(NO_ETH_POOL, "NO_VERIFIED_MARKET");
+    }
+    throw error;
+  });
   const base = { schemaVersion: SWAP_TOKEN_SCHEMA, chainId: 4663 as const, token: tokenMetadata({ ...row, decimals }), manageHref: robinhoodModuleManageHref(row) };
   if (isRobinhoodFoundationLaunch(row)) {
     return { ...base, status: "ready", route: { kind: "module-foundation", transactionHash: row.transactionHash as `0x${string}` } };
@@ -133,7 +142,7 @@ async function resolveRobinhoodSwapToken(row: RobinhoodLaunch, dependencies: Swa
       return assets.includes(base.token.address.toLowerCase())
         && (assets.includes(ZERO) || assets.includes(ROUTED_TRADE_WRAPPED_ETH_V1.address.toLowerCase()));
     });
-    if (!market) return unavailable(base, "This launch has no verified ETH trading pool.");
+    if (!market) return unavailable(base, NO_ETH_POOL);
     return { ...base, status: "ready", route: { kind: "custom-vnext", projection, marketId: market.marketId } };
   }
   if (row.sourceKind !== undefined && row.sourceKind !== "multi-role-v2") return unavailable(base, "This launch’s swap route is not available yet.");

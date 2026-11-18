@@ -125,12 +125,23 @@ export async function observeEthereumLaunches(clients: readonly PublicClient[], 
 }
 
 /** Keep the canonical page responsive while sustaining discovery after the response. */
-export function createLaunchObservationCache(read: () => Promise<ConfirmingLaunch[]>, sustain: (work: Promise<void>) => void) {
+export function createLaunchObservationCache(read: (signal: AbortSignal) => Promise<ConfirmingLaunch[]>, sustain: (work: Promise<void>) => void) {
   let current: { expires: number; value: Promise<ConfirmingLaunch[]> } | undefined;
   let previous: ConfirmingLaunch[] = [];
   return async (): Promise<ConfirmingLaunch[]> => {
     if (!current || current.expires <= Date.now()) {
-      const value = read();
+      // The observations expire relative to the start of the scan. A longer
+      // scan cannot publish a usable result and must release its shared slot.
+      const controller = new AbortController();
+      let expiry: ReturnType<typeof setTimeout>;
+      const deadline = new Promise<never>((_, reject) => {
+        expiry = setTimeout(() => {
+          controller.abort(new DOMException("Launch observation expired", "TimeoutError"));
+          reject(controller.signal.reason);
+        }, FRESH_MS);
+      });
+      const value = Promise.race([Promise.resolve().then(() => read(controller.signal)), deadline])
+        .finally(() => clearTimeout(expiry));
       const job = { expires: Number.POSITIVE_INFINITY, value };
       current = job;
       sustain(value.then(rows => { previous = rows; job.expires = Date.now() + 10_000; }, () => {
@@ -149,6 +160,6 @@ export function createLaunchObservationCache(read: () => Promise<ConfirmingLaunc
 }
 const verified = new Map<string, ConfirmingLaunch>();
 export const readConfirmingEthereumLaunches = createLaunchObservationCache(
-  async () => observeEthereumLaunches(foundationMainnetRpcs().map(foundationMainnetReadClient), Date.now(), verified),
+  async signal => observeEthereumLaunches(foundationMainnetRpcs(process.env, fetch, signal).map(foundationMainnetReadClient), Date.now(), verified),
   work => after(async () => { await work; }),
 );

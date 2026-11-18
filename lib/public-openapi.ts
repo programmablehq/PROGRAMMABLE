@@ -42,11 +42,17 @@ const exploreIndexResetResponseHeaders = {
   },
 } as const;
 
+const exploreIndexAlternateHeaders = {
+  ...exploreIndexResetResponseHeaders,
+  Link: { description: "An alternate JSON resource on the selected chain. Follow its URL using its own response schema.",
+    schema: { type: "string" } },
+} as const;
+
 export const programmablePublicOpenApi = {
   openapi: "3.1.0",
   info: {
     title: "Programmable developer APIs",
-    version: "1.19.0",
+    version: "1.19.1",
     summary:
       "Ethereum, Robinhood, Base and HyperEVM Explore feeds, Custom launch contracts and release discovery.",
     description:
@@ -207,7 +213,7 @@ export const programmablePublicOpenApi = {
               component("ExploreIndexResetError"),
               "Explore token indexing is intentionally reset.",
             ),
-            headers: exploreIndexResetResponseHeaders,
+            headers: exploreIndexAlternateHeaders,
           },
         },
       },
@@ -246,7 +252,7 @@ export const programmablePublicOpenApi = {
               component("ExploreIndexResetError"),
               "Explore token indexing is intentionally reset.",
             ),
-            headers: exploreIndexResetResponseHeaders,
+            headers: exploreIndexAlternateHeaders,
           },
         },
       },

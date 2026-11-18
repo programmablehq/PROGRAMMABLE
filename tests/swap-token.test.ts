@@ -1,4 +1,5 @@
 import { parseSwapTokenDescriptor } from "@/lib/swap/client";
+import { LaunchPlanTradeErrorV1 } from "@/lib/custom-launch/routed-trade-plan-v1";
 import { ETHEREUM_MODULE_SOURCE } from "@/lib/module-foundation/ethereum-release";
 import ethereumModuleSpec from "@/contracts/spec/module-foundation/chain-1.v1.json";
 import { describe, expect, it, vi } from "vitest";
@@ -152,6 +153,18 @@ describe("swap source resolution", () => {
     expect(await resolveSwapToken({ address: row.tokenAddress }, deps)).toMatchObject({ status: "ready", token: { decimals }, route: { kind: "custom-v4" } });
     expect(deps.decimals).toHaveBeenCalledWith(row.tokenAddress);
     expect(deps.custom).toHaveBeenCalledWith(row);
+  });
+
+  it("keeps a known empty market terminal when units are unavailable, retaining valid metadata and evidence errors", async () => {
+    const row = { ...nativeFixture().row, decimals: null, sourceKind: "custom-launch-plan-v1",
+      launchProjection: { sourceVersion: "custom_launch_plan_v1", markets: [] } } as unknown as RobinhoodLaunch;
+    const deps = dependencies(row), input = { address: row.tokenAddress };
+    vi.mocked(deps.decimals).mockRejectedValueOnce(new LaunchPlanTradeErrorV1("TRADE_ANALYSIS_PENDING", "Pending", 503));
+    await expect(resolveSwapToken(input, deps)).rejects.toMatchObject({ code: "NO_VERIFIED_MARKET" });
+    vi.mocked(deps.decimals).mockResolvedValueOnce(6);
+    await expect(resolveSwapToken(input, deps)).resolves.toMatchObject({ status: "unavailable", route: null, token: { decimals: 6 } });
+    vi.mocked(deps.decimals).mockRejectedValueOnce(new LaunchPlanTradeErrorV1("TRADE_PROVIDER_DISAGREEMENT", "Disagreement", 503));
+    await expect(resolveSwapToken(input, deps)).rejects.toMatchObject({ code: "TRADE_PROVIDER_DISAGREEMENT" });
   });
 
   it("does not guess token units when the contract read fails", async () => {

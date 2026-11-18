@@ -6,6 +6,7 @@ vi.mock("next/server", () => ({ after: (task: () => Promise<void>) => { void tas
 const mocks = vi.hoisted(() => ({
   blobGet: vi.fn(),
   blobPut: vi.fn(),
+  preconditionFailed: class BlobPreconditionFailedError extends Error {},
   readAlchemyExploreModel: vi.fn(),
   readAlchemyRouterCustomIdentitySourceV1: vi.fn(),
   enrichRouterCustomSnapshotWithFinalizedMetadataV1: vi.fn(),
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@vercel/blob", () => ({
   get: mocks.blobGet,
   put: mocks.blobPut,
+  BlobPreconditionFailedError: mocks.preconditionFailed,
 }));
 
 vi.mock("../lib/alchemy/explore.server", () => ({
@@ -376,6 +378,30 @@ describe("finalized Router Custom public projection", () => {
       entries: [customGraphExploreEntry],
     });
     expect(persistDurableSnapshot).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("uses the authenticated ETag once and rechecks a racing writer (race %s)", async race => {
+    const current = source(undefined, { blockNumber: "25740200" });
+    const etag = `"${"a2".repeat(16)}"`;
+    function stored(value: ReturnType<typeof source>, tag: string) {
+      const body = JSON.stringify({ schemaVersion: "programmable.router-custom-identity-snapshot-envelope.v1",
+        binding: LAUNCH_STAMP_ROUTER_BINDING, snapshot: routerCustomIdentitySnapshotFromSourceV1(value) });
+      return { statusCode: 200, stream: new Response(body).body, headers: new Headers(), blob: { size: body.length, etag: tag } };
+    }
+    vi.stubEnv("OPS_BLOB_READ_WRITE_TOKEN", "vercel_blob_rw_etag_fixture");
+    mocks.blobGet.mockResolvedValueOnce(stored(source(), etag));
+    if (race) {
+      mocks.blobPut.mockRejectedValueOnce(new mocks.preconditionFailed());
+      mocks.blobGet.mockResolvedValueOnce(stored(source(undefined, {
+        blockNumber: current.slice.cursor.blockNumber, blockHash: `0x${"df".repeat(32)}`,
+      }), `"${"b3".repeat(16)}"`));
+    }
+    const read = createRouterCustomIdentitySnapshotReaderV1({ readCurrentSource: async () => current });
+    if (race) await expect(read()).rejects.toThrow("conflicts at one block");
+    else await expect(read()).resolves.toMatchObject({ status: "current", asOfBlock: current.slice.cursor.blockNumber });
+    expect(mocks.blobGet).toHaveBeenCalledTimes(race ? 2 : 1);
+    expect(mocks.blobPut).toHaveBeenCalledTimes(1);
+    expect(mocks.blobPut.mock.calls[0][2]).toMatchObject({ ifMatch: etag, allowOverwrite: true, abortSignal: expect.any(AbortSignal) });
   });
 
   it("keeps current status when the durable snapshot matches exactly", async () => {
