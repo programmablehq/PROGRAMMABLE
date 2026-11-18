@@ -10,6 +10,8 @@ export default defineConfig([
     ".vercel/**",
     ".codex-temp-programmable-readme-gif/**",
     "node_modules/**",
+    // Published MIT distribution files, kept byte-for-byte for wallet storage compatibility.
+    "packages/walletconnect-storage-runtime/upstream/**",
     "work/**",
     "contracts/lib/**",
     "contracts/out/**",

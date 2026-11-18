@@ -1,0 +1,26 @@
+{
+  "name": "@programmable/walletconnect-storage-runtime",
+  "version": "1.17.5-walletconnect.1",
+  "private": true,
+  "description": "Unmodified unstorage entry points used by WalletConnect keyvaluestorage 1.1.1",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "import": "./upstream/dist/index.mjs",
+      "require": "./upstream/dist/index.cjs"
+    },
+    "./drivers/fs-lite": {
+      "import": "./upstream/drivers/fs-lite.mjs",
+      "require": "./upstream/drivers/fs-lite.cjs"
+    }
+  },
+  "dependencies": {
+    "destr": "^2.0.5"
+  },
+  "upstream": {
+    "name": "unstorage",
+    "version": "1.17.5",
+    "tarball": "https://registry.npmjs.org/unstorage/-/unstorage-1.17.5.tgz",
+    "integrity": "sha512-0i3iqvRfx29hkNntHyQvJTpf5W9dQ9ZadSoRU8+xVlhVtT7jAX57fazYO9EHvcRCfBCyi5YRya7XCDOsbTgkPg=="
+  }
+}
