@@ -469,14 +469,14 @@ describe("developer launch history same-origin bridge", () => {
     expect((fetchBackend.mock.calls[0][0] as URL).pathname).toBe(`/v4/chains/${chainId}/wallet-admin/custom-launches`);
   });
 
-  function bridge() {
+  function bridge(options: { backendTimeoutMs?: number } = { backendTimeoutMs: 1_000 }) {
     return createDeveloperLaunchHistoryBridgeV1({
       authenticator: { authenticate },
       backendBaseUrl: "https://custom-launch-api.example/",
       websiteToken: WEBSITE_TOKEN,
       bffAssertionKeyV2: BFF_ASSERTION_KEY,
       fetchBackend,
-      backendTimeoutMs: 1_000,
+      ...options,
       assertionNow: () => new Date(ASSERTION_ISSUED_AT),
       assertionNonce: () => Buffer.alloc(
         16,
@@ -484,6 +484,84 @@ describe("developer launch history same-origin bridge", () => {
       ).toString("base64url"),
     });
   }
+
+  it("allows a valid launch detail read to finish after six seconds with production defaults", async () => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(delay => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("slow upstream", "TimeoutError")), delay);
+      return controller.signal;
+    });
+    try {
+      fetchBackend.mockImplementationOnce((_url: URL, init: RequestInit) => new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(backendJsonV3({ ...launchV3(), chainId: "99901" })), 6_000);
+        init.signal!.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(init.signal!.reason);
+        }, { once: true });
+      }));
+      const pending = bridge({}).get(new Request(
+        `https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=99901`,
+      ), V3_LAUNCH_ID);
+      await vi.advanceTimersByTimeAsync(6_000);
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect((await response.json()).requestId).toBe(V3_LAUNCH_ID);
+      expect(fetchBackend).toHaveBeenCalledTimes(1);
+    } finally {
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([WALLET, OTHER_WALLET])("retries launch details with a fresh assertion and validates owner %s", async owner => {
+    fetchBackend.mockRejectedValueOnce(new DOMException("slow upstream", "TimeoutError"))
+      .mockResolvedValueOnce(backendJsonV3({ ...launchV3(owner), chainId: "99901" }));
+    const response = await bridge().get(new Request(
+      `https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=99901`,
+    ), V3_LAUNCH_ID);
+    expect(response.status).toBe(owner === WALLET ? 200 : 503);
+    expect(fetchBackend).toHaveBeenCalledTimes(2);
+    const headers = fetchBackend.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers));
+    expect(headers.map(value => value.get("x-programmable-wallet-address"))).toEqual([WALLET, WALLET]);
+    expect(headers[1]!.get("x-programmable-bff-assertion-nonce"))
+      .not.toBe(headers[0]!.get("x-programmable-bff-assertion-nonce"));
+  });
+
+  it.each(["authentication", "first read"])("shares the detail deadline with %s", async stage => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      if (stage === "authentication") authenticate.mockImplementationOnce(async () => {
+        now += 2_001;
+        return { privyUserId: "did:privy:test-user", privySessionId: "session-1", wallets: [WALLET] };
+      });
+      else fetchBackend.mockImplementationOnce(async () => {
+        now += 1_751;
+        throw new DOMException("slow upstream", "TimeoutError");
+      });
+      const response = await bridge().get(new Request(
+        `https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=99901`,
+      ), V3_LAUNCH_ID);
+      expect(response.status).toBe(503);
+      expect(fetchBackend).toHaveBeenCalledTimes(stage === "authentication" ? 0 : 1);
+    } finally { clock.mockRestore(); }
+  });
+
+  it("does not retry launch details when the caller aborts", async () => {
+    const controller = new AbortController();
+    fetchBackend.mockImplementationOnce(async () => {
+      const reason = new DOMException("caller left", "TimeoutError");
+      controller.abort(reason);
+      throw reason;
+    });
+    const response = await bridge().get(new Request(
+      `https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=99901`,
+      { signal: controller.signal },
+    ), V3_LAUNCH_ID);
+    expect(response.status).toBe(503);
+    expect(fetchBackend).toHaveBeenCalledTimes(1);
+  });
 
   it("starts independent history versions before a slow version finishes", async () => {
     let finishFirst!: (response: Response) => void;

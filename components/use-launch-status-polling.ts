@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 
 /** Status reads only. Never retries a wallet send or overlaps a slow request. */
 export function useLaunchStatusPolling(scope: string, enabled: boolean,
-  refresh: (signal: AbortSignal) => Promise<void> | void, intervalMs = 20_000, immediate = false) {
+  refresh: (signal: AbortSignal) => Promise<void> | void, intervalMs = 20_000, immediate = false,
+  timeoutMs = 15_000) {
   const latest = useRef(refresh);
   useEffect(() => { latest.current = refresh; }, [refresh]);
   useEffect(() => {
@@ -19,7 +20,7 @@ export function useLaunchStatusPolling(scope: string, enabled: boolean,
       clearTimeout(timer);
       if (Date.now() < nextReadAt) { schedule(); return; }
       const controller = new AbortController(); active = controller;
-      const timeout = setTimeout(() => controller.abort(), 15_000);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       let retryDelay = intervalMs;
       try { await latest.current(controller.signal); }
       catch (error) {
@@ -42,5 +43,5 @@ export function useLaunchStatusPolling(scope: string, enabled: boolean,
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("focus", resume);
     };
-  }, [scope, enabled, intervalMs, immediate]);
+  }, [scope, enabled, intervalMs, immediate, timeoutMs]);
 }

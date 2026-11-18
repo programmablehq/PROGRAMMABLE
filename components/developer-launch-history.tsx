@@ -264,7 +264,7 @@ const dateFormatter = new Intl.DateTimeFormat("en", {
 });
 const submittedPollIntervalMs = 12_000;
 const authorizedPollIntervalMs = 4_000;
-const launchHistoryRefreshTimeoutMs = 12_000;
+const launchHistoryRefreshTimeoutMs = 30_000;
 const launchHistoryRefreshTimeoutReason = "launch-history-refresh-timeout";
 const transactionHashPattern = /^0x[0-9a-fA-F]{64}$/u;
 const sha256Pattern = /^sha256:[0-9a-f]{64}$/u;
@@ -2578,7 +2578,8 @@ export function DeveloperLaunchHistory({
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
-        signal,
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(launchHistoryRefreshTimeoutMs)])
+          : AbortSignal.timeout(launchHistoryRefreshTimeoutMs),
       },
     );
     const body = await response.json().catch(() => null);
@@ -2681,7 +2682,8 @@ export function DeveloperLaunchHistory({
       {
         cache: "no-store",
         headers: await getAuthHeaders(),
-        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(launchHistoryRefreshTimeoutMs)])
+          : AbortSignal.timeout(launchHistoryRefreshTimeoutMs),
       },
     );
     const body = await response.json().catch(() => null);
@@ -2846,7 +2848,7 @@ export function DeveloperLaunchHistory({
       }
       updateLaunch(updated);
     }
-  });
+  }, 20_000, false, launchHistoryRefreshTimeoutMs);
 
   const checkOnchainStatus = async (launch: LaunchResource) => {
     const key = launchResourceKey(launch);

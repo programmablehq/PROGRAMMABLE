@@ -61,6 +61,8 @@ const MAXIMUM_BACKEND_PLAN_BODY_BYTES = 65 * 1024 * 1024;
 const MAXIMUM_BACKEND_PLAN_DEPTH = 130;
 const MAXIMUM_BROWSER_FUNDING_BODY_BYTES = 1_024;
 const DEFAULT_BACKEND_TIMEOUT_MS = 5_000;
+const DEFAULT_HISTORY_READ_TIMEOUT_MS = 15_000;
+const MAXIMUM_HISTORY_READ_DURATION_MS = 25_000;
 const DEFAULT_PAGE_SIZE = 5;
 const MAXIMUM_PAGE_SIZE = 10;
 const UUID =
@@ -312,6 +314,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
     websiteToken,
   );
   const timeoutMs = input.backendTimeoutMs ?? DEFAULT_BACKEND_TIMEOUT_MS;
+  const readTimeoutMs = input.backendTimeoutMs ?? DEFAULT_HISTORY_READ_TIMEOUT_MS;
   const assertionNow = input.assertionNow ?? (() => new Date());
   const assertionNonce = input.assertionNonce
     ?? (() => randomBytes(16).toString("base64url"));
@@ -352,6 +355,49 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       "X-Programmable-Wallet-Address": walletAddress,
       ...assertion,
     });
+  };
+
+  const fetchHistoryRead = async (
+    request: Request,
+    principal: AuthenticatedWalletPrincipalV1,
+    walletAddress: `0x${string}`,
+    backendUrl: URL,
+    deadline: number,
+    cancelled?: AbortSignal,
+    retry = true,
+  ): Promise<Response> => {
+    request.signal.throwIfAborted();
+    cancelled?.throwIfAborted();
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new DOMException("Wallet history read deadline exceeded", "TimeoutError");
+    }
+    try {
+      return await input.fetchBackend(backendUrl, {
+        method: "GET",
+        // A timed-out read may have consumed its assertion. Every attempt
+        // reauthenticates the same wallet with a fresh signed nonce.
+        headers: walletAdminHeaders(
+          principal, walletAddress, "GET", backendUrl, Buffer.alloc(0),
+        ),
+        cache: "no-store",
+        redirect: "error",
+        signal: AbortSignal.any([
+          request.signal,
+          ...(cancelled ? [cancelled] : []),
+          AbortSignal.timeout(Math.min(readTimeoutMs, remaining)),
+        ]),
+      });
+    } catch (error) {
+      if (retry && error instanceof Error && error.name === "TimeoutError"
+        && !request.signal.aborted && !cancelled?.aborted
+        && deadline - Date.now() >= 250) {
+        return fetchHistoryRead(
+          request, principal, walletAddress, backendUrl, deadline, cancelled, false,
+        );
+      }
+      throw error;
+    }
   };
 
   return Object.freeze({
@@ -430,9 +476,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       if (request.method !== "GET") {
         return errorResponse(405, "method_not_allowed", "GET");
       }
-      // Leave room inside the route's ten-second limit for parsing and reply.
-      // Authentication and a possible retry consume the same request budget.
-      const deadline = Date.now() + Math.min(8_000, timeoutMs * 2);
+      // Chain reconciliation can exceed five seconds. Keep authentication,
+      // all versions and one possible retry inside the route's shared budget.
+      const deadline = Date.now() + Math.min(MAXIMUM_HISTORY_READ_DURATION_MS, readTimeoutMs * 2);
       const cancelled = new AbortController();
       try {
         requireJsonResponse(request);
@@ -462,37 +508,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           if (cursorState?.cursor) {
             backendUrl.searchParams.set("cursor", cursorState.cursor);
           }
-          const fetchPage = async (retry = true): Promise<Response> => {
-            request.signal.throwIfAborted();
-            cancelled.signal.throwIfAborted();
-            const remaining = deadline - Date.now();
-            if (remaining <= 0) {
-              throw new DOMException("Wallet history read deadline exceeded", "TimeoutError");
-            }
-            try {
-              return await input.fetchBackend(backendUrl, {
-                method: "GET",
-                // Every attempt needs a new signed nonce. A timed-out GET may
-                // already have reached the backend and consumed the first one.
-                headers: walletAdminHeaders(
-                  principal, walletAddress, "GET", backendUrl, Buffer.alloc(0),
-                ),
-                cache: "no-store",
-                redirect: "error",
-                signal: AbortSignal.any([
-                  request.signal,
-                  cancelled.signal,
-                  AbortSignal.timeout(Math.min(timeoutMs, remaining)),
-                ]),
-              });
-            } catch (error) {
-              if (retry && error instanceof Error && error.name === "TimeoutError"
-                && !request.signal.aborted && !cancelled.signal.aborted
-                && deadline - Date.now() >= 250) return fetchPage(false);
-              throw error;
-            }
-          };
-          const backend = await fetchPage();
+          const backend = await fetchHistoryRead(
+            request, principal, walletAddress, backendUrl, deadline, cancelled.signal,
+          );
           // Optional legacy versions may be absent. A missing route on an
           // active EVM chain is an error, not proof of an empty wallet history.
           if (query.chainId === "1" && version !== "v1" && backend.status === 404) {
@@ -597,6 +615,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
       if (request.method !== "GET") {
         return errorResponse(405, "method_not_allowed", "GET");
       }
+      const deadline = Date.now() + Math.min(MAXIMUM_HISTORY_READ_DURATION_MS, readTimeoutMs * 2);
       try {
         requireJsonResponse(request);
         if (!UUID.test(launchId)) {
@@ -621,22 +640,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
                 }`,
             backendBaseUrl,
           );
-          const backend = await input.fetchBackend(backendUrl, {
-            method: "GET",
-            headers: walletAdminHeaders(
-              principal,
-              walletAddress,
-              "GET",
-              backendUrl,
-              Buffer.alloc(0),
-            ),
-            cache: "no-store",
-            redirect: "error",
-            signal: AbortSignal.any([
-              request.signal,
-              AbortSignal.timeout(timeoutMs),
-            ]),
-          });
+          const backend = await fetchHistoryRead(
+            request, principal, walletAddress, backendUrl, deadline,
+          );
           if (backend.status === 404) return null;
           if (!backend.ok) throw await mappedBackendError(backend);
           const resource = await readBoundedBackendJson(
