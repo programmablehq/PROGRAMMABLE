@@ -1,6 +1,7 @@
 import { once } from 'node:events';
 import type { Server } from 'node:http';
 import { expect, test } from '@playwright/test';
+import { parseEthereumExploreQuery } from '../../lib/ethereum-explore';
 // @ts-expect-error Executable fixture with no production provider calls.
 import { createExploreVisibilityServer } from './fixtures/explore-visibility-server.mjs';
 let server: Server, origin: string;
@@ -33,6 +34,23 @@ test('standalone Explore fetches immediately',async({page})=>{
   let requests=0;page.on('request',r=>{if(new URL(r.url()).pathname==='/api/explore/launches')requests++;});
   await page.goto(origin+'?standalone'); await expect(page.getByRole('heading',{name:'No launches yet',exact:true})).toBeVisible();
   expect(requests).toBe(1);
+});
+
+test('the Elysium list opens its own catalog with supported filters', async ({ page }) => {
+  await page.route('**/api/explore/elysium?*', route => {
+    const query = parseEthereumExploreQuery(new URL(route.request().url()).searchParams);
+    if (!query) return route.fulfill({ status: 400, json: { error: 'invalid_query' } });
+    return route.fulfill({ json: {
+      chainId: 99901, status: 'ready', updatedAt: new Date().toISOString(), items: [], presentations: [],
+      page: { number: query.page, size: query.pageSize, totalItems: 0, totalPages: 0, hasMore: false },
+    } });
+  });
+  await page.goto(origin + '?standalone&elysium-scope');
+  await expect(page.getByRole('searchbox', { name: /Search Elysium launches/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No launches yet' })).toBeVisible();
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Oldest', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Custom', exact: true })).toBeVisible();
 });
 
 function navigationPayload(url: URL) {

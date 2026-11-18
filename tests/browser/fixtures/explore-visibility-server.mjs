@@ -5,12 +5,13 @@ import { build } from 'esbuild';
 export async function createExploreVisibilityServer() {
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
     import React, {useState} from 'react'; import {createRoot} from 'react-dom/client';
-    import {UnifiedLaunchesView, UnifiedProfileLaunches} from './components/robinhood-launches-view';
+    import {RobinhoodLaunchesView, UnifiedLaunchesView, UnifiedProfileLaunches} from './components/robinhood-launches-view';
     import './app/globals.css'; import './app/programmable-experience.css'; import './app/interface.css'; import './app/webde-final-ui.css'; import './app/surfaces.css';
     const standalone=new URLSearchParams(location.search).has('standalone');
     const params=new URLSearchParams(location.search);
     function ExploreRoute() {
       const [visible,setVisible]=useState(true);
+      if(params.has('elysium-scope')) return <RobinhoodLaunchesView chainId={99901}/>;
       return <>{params.has('navigation')?<button onClick={()=>setVisible(value=>!value)}>Toggle explore</button>:null}
         {visible?<UnifiedLaunchesView embedded={!standalone}/>:<h1>Coin detail</h1>}</>;
     }
