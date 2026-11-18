@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 
 import { createSharedRequestPool, type SharedRead } from "@/lib/shared-request-pool";
 
 import { ExploreFilters } from "@/components/explore-filters";
+import { EXPLORE_CHAIN_SLUGS } from "@/lib/explore-chain";
 import { ChainMark } from "@/components/chain-mark";
 import { exploreIdentityKey } from "@/lib/unified-explore";
 import { launchPresentationDetails, type LaunchPresentationSource } from "@/lib/launch-presentation-details";
@@ -155,7 +156,7 @@ function exploreRequestUrl(chainId: ExploreScope, profileAccount: string | undef
   if (chainId === "all" && !profileAccount && (!request.chain || request.chain === "all")) query.set("chain", "all");
   if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
   if (profileAccount) query.set("account", profileAccount);
-  const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 999 ? "hyperevm" : chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
+  const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${EXPLORE_CHAIN_SLUGS[chainId]}`;
   return `${endpoint}?${query}`;
 }
 
