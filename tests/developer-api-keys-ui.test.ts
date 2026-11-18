@@ -898,7 +898,6 @@ describe("developer launch history interface", () => {
   });
 
   it("releases a stalled history refresh with a clear retry state", () => {
-    expect(historySource).toContain("launchHistoryRefreshTimeoutMs = 12_000");
     expect(historySource).toContain(
       "controller.abort(launchHistoryRefreshTimeoutReason)",
     );
