@@ -9,7 +9,7 @@ beforeEach(()=>{read.mockReset();read.mockResolvedValue({status:"ready",updatedA
 describe("bounded hook catalog search",()=>{
   it("keeps the selected network and returns launch references without an audit claim",async()=>{
     const result=await dispatchTool(search.ref,{query:"Rain",chain:"current"},context(),[search]);
-    expect(read).toHaveBeenCalledWith(1,"Rain",{sort:"newest",mode:"custom",chain:1},6);
+    expect(read).toHaveBeenCalledWith(1,"Rain",{sort:"newest",mode:"custom",matchesOnly:true,chain:1},6);
     expect(result.sources).toHaveLength(1);expect(JSON.stringify(result.facts)).toContain("Read the actual source");
   });
   it("rejects unbounded input before touching the catalog",async()=>{

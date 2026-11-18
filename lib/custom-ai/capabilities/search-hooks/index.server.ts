@@ -5,7 +5,7 @@ import { readUnifiedLaunches } from "@/lib/server/unified-explore";
 export default defineTool("search_hooks", "Find examples of indexed Programmable custom hooks by coin name, ticker or address. Use them as references; catalog membership is not a code audit or permission to copy an unknown contract.", async (input,context)=>{
   const {query,chain}=input as {query:string;chain:"current"|"all"};
   context.signal?.throwIfAborted();
-  const result=await readUnifiedLaunches(1,query,{sort:"newest",mode:"custom",chain:chain==="current"?context.chainId:"all"},6);
+  const result=await readUnifiedLaunches(1,query,{sort:"newest",mode:"custom",matchesOnly:true,chain:chain==="current"?context.chainId:"all"},6);
   const retrievedAt=new Date().toISOString();
   const items=result.items.filter(item=>item.mode==="custom").map(item=>({chainId:item.chainId,name:item.name,symbol:item.symbol,
     tokenAddress:item.tokenAddress,hookAddress:"hookAddress" in item?item.hookAddress:null,

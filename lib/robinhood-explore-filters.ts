@@ -23,11 +23,14 @@ export const LAUNCH_CHAIN_OPTIONS = [
 ] as const satisfies ReadonlyArray<{ value: ExploreChainFilter; label: string }>;
 
 export const ROBINHOOD_EXPLORE_PAGE_SIZE = 10;
+export const EXPLORE_MAX_QUERY_LENGTH = 128;
 
 export type RobinhoodExploreFilters = {
   sort: typeof LAUNCH_SORT_OPTIONS[number]["value"];
   mode?: typeof LAUNCH_MODE_OPTIONS[number]["value"] | "classic";
   chain?: ExploreChainFilter;
+  /** Unified catalog consumers can omit the persistent Explore pin from ranked results. */
+  matchesOnly?: boolean;
 };
 
 export const DEFAULT_EXPLORE_FILTERS: RobinhoodExploreFilters = { sort: "newest", mode: "all" };
@@ -48,21 +51,24 @@ export function sameRobinhoodExploreRequest(a: RobinhoodExploreRequest | null | 
     && exploreChainFilter(a) === exploreChainFilter(b));
 }
 
-export function parseRobinhoodExploreQuery(query: URLSearchParams, options: { allowChain?: boolean } = {}) {
+export function parseRobinhoodExploreQuery(query: URLSearchParams, options: { allowChain?: boolean; allowMatchesOnly?: boolean } = {}) {
   const allowChain = options.allowChain !== false;
+  const matchesOnly = query.get("matchesOnly");
   const page = query.get("page") ?? "1";
   const q = query.get("q") ?? "";
   const sort = query.get("sort") ?? DEFAULT_EXPLORE_FILTERS.sort;
   const mode = query.get("mode") ?? "all";
   const chain = query.get("chain") ?? "all";
   const pageSize = query.get("pageSize") ?? "50";
-  if ([...query.keys()].some((key) => !["page", "q", "sort", "mode", ...(allowChain ? ["chain"] : []), "pageSize"].includes(key) || query.getAll(key).length !== 1)
-    || !/^[1-9]\d{0,5}$/.test(page) || q.length > 128
+  if ([...query.keys()].some((key) => !["page", "q", "sort", "mode", ...(allowChain ? ["chain"] : []), ...(options.allowMatchesOnly ? ["matchesOnly"] : []), "pageSize"].includes(key) || query.getAll(key).length !== 1)
+    || !/^[1-9]\d{0,5}$/.test(page) || q.length > EXPLORE_MAX_QUERY_LENGTH
+    || (matchesOnly !== null && matchesOnly !== "true" && matchesOnly !== "false")
     || !LAUNCH_SORT_OPTIONS.some((option) => option.value === sort)
     || !LAUNCH_MODE_OPTIONS.some((option) => option.value === mode)
     || !(chain === "all" || ["1", "4663", "8453", "999", "99901"].includes(chain))
     || !["6", "8", "10", "50"].includes(pageSize)) return null;
   const filters: RobinhoodExploreFilters = { sort, mode } as RobinhoodExploreFilters;
+  if (matchesOnly === "true") filters.matchesOnly = true;
   if (chain !== "all") filters.chain = Number(chain) as Exclude<ExploreChainFilter, "all">;
   return { page: Number(page), pageSize: Number(pageSize) as 6 | 8 | 10 | 50, q, filters };
 }

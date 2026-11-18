@@ -40,10 +40,23 @@ describe("bounded read-only knowledge", () => {
     expect(result.status).toBe("stale");
     expect(result.facts).toMatchObject({ markets: [] });
   });
+  it("links matching token identities to their own chain and asks for a shorter oversized lookup", async () => {
+    const address = "0x188aF6b5e024a14924FF352BE3DD578AE15D4c9C";
+    readers.catalog.mockResolvedValue({ status: "ready", updatedAt: "2026-11-18", sources: {},
+      items: [{ chainId: 4663, tokenAddress: address, name: "HEIST", symbol: "HEIST" }], presentations: [] });
+    const selected = { ...lookup, kind: "catalog", chainId: 4663 as const };
+    const result = await readLiveKnowledge({ ...selected, query: "HEIST" });
+    const url = `https://programmable.market/token/${address}?chain=4663`;
+    expect(result.sources).toMatchObject([{ url }]);
+    expect(result.facts).toMatchObject({ items: [{ address, url }] });
+    const tooLong = await readLiveKnowledge({ ...selected, query: "a".repeat(129) });
+    expect(tooLong).toMatchObject({ status: "query-too-long", sources: [] });
+    expect(readers.catalog).toHaveBeenCalledTimes(1);
+  });
   it.each([1,4663,8453,999] as const)("keeps the catalog's requested network%i in the read and source link",async chainId=>{
     readers.catalog.mockResolvedValue({status:"current",updatedAt:"2026-10-31",sources:{},items:[],presentations:[]});
     const result=await readLiveKnowledge({...lookup,kind:"catalog",chainId,query:"example"});
-    expect(readers.catalog).toHaveBeenCalledWith(1,"example",{sort:"highest",mode:"all",chain:chainId},6);
+    expect(readers.catalog).toHaveBeenCalledWith(1,"example",{sort:"highest",mode:"all",chain:chainId,matchesOnly:true},6);
     expect(new URL(result.sources[0].url).searchParams.get("chain")).toBe(String(chainId));
   });
   it.each([8453,999] as const)("does not borrow another network's RPC for unavailable contract reads on%i",async chainId=>{
