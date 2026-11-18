@@ -73,13 +73,26 @@ export function createPrivateBlobReadCache(input: Readonly<{
     const read = async (): Promise<SavedBody | null> => {
       const previous = bodies.get(key);
       const signal = options.abortSignal ?? AbortSignal.timeout(5_000);
-      const result = await getBlob(path, {
+      const requestOptions = {
         access: "private", token: options.token, useCache: false,
         headers: { "accept-encoding": "identity" },
-        ...(previous ? { ifNoneMatch: previous.blob.etag } : {}),
         abortSignal: signal,
+      } as const;
+      let result = await getBlob(path, {
+        ...requestOptions,
+        ...(previous ? { ifNoneMatch: previous.blob.etag } : {}),
       });
-      options.abortSignal?.throwIfAborted();
+      signal.throwIfAborted();
+      if (result?.statusCode === 304 && (!previous || result.blob.etag !== previous.blob.etag)) {
+        // An unbound 304 cannot authenticate a saved body. Fetch the current
+        // representation once, using the same credential and deadline.
+        forget(key);
+        result = await getBlob(path, requestOptions);
+        signal.throwIfAborted();
+        if (result?.statusCode === 304) {
+          throw new Error("Blob 304 has no matching authenticated body");
+        }
+      }
       if (!result) {
         forget(key);
         return null;
