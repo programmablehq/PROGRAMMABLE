@@ -21,7 +21,7 @@ import "../../../app/surfaces.css";
 // Deliberately local browser fixtures. These exercise the product components and durable journal,
 // never production wallet authority or real onchain execution.
 const mode = new URLSearchParams(window.location.search).get("scenario") ?? "ready";
-const legacyWorkspace = mode === "workspace-history" || mode === "workspace-progress" || mode === "renewed-permit";
+const legacyWorkspace = mode === "workspace-history" || mode === "workspace-progress" || mode === "workspace-retry" || mode === "renewed-permit";
 const delayedHistory = mode === "workspace-progress"
   ? new Promise<void>(resolve => window.addEventListener("finish-history-read", () => resolve(), { once: true })) : null;
 const atomic = mode.startsWith("atomic");
@@ -93,7 +93,7 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
   if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
 }
 
-window.fetch = async (input) => {
+window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
   if (legacyWorkspace) {
     if (url.pathname === "/api/custom-launch-reviews/start") {
@@ -111,6 +111,10 @@ window.fetch = async (input) => {
     if (url.pathname.startsWith("/api/developer/custom-launches")) {
       control.legacyReads += 1;
       const chainId = url.searchParams.get("chainId") ?? "1";
+      if (mode === "workspace-retry" && chainId === "8453") {
+        await new Promise(resolve => setTimeout(resolve, 16_000));
+        init?.signal?.throwIfAborted();
+      }
       const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
       const resource = { schemaVersion: "programmable.custom-launch.v3", routeId: "custom-launch:create:v3", chainId,
         launchId, requestId: launchId, ownerWallet: controller, onchainLaunchId: null,

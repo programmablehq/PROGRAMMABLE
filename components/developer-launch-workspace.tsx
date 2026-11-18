@@ -5,6 +5,7 @@ import { DeveloperLaunchHistory, parseHistoryPage, parseLaunch, type DeveloperLa
 import { DeveloperUniversalLaunchHistory, parseEntries } from "./developer-universal-launch-history";
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
+import { launchHistoryRefreshTimeoutMs } from "@/lib/custom-launch-history-timeouts";
 import { launchOverviewItem, mergeLaunchOverview, type LaunchOverviewItem, type LaunchOverviewSource } from "@/lib/developer-launch-overview";
 import shared from "./developer-api-keys.module.css";
 import styles from "./developer-launch-workspace.module.css";
@@ -33,7 +34,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
     if (cursor) query.set("cursor", cursor);
     if (legacy) query.set(id ? "version" : "limit", id ? source === "legacy" && props.initialLaunchChainId === "4663" ? "v4" : "v3" : "5");
     const response = await fetch(`/api/developer/${legacy ? "custom-launches" : "custom-launch-plans"}${id ? `/${encodeURIComponent(id)}` : ""}?${query}`, {
-      cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]) });
+      cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(launchHistoryRefreshTimeoutMs)]) });
     const body = await response.json().catch(() => null);
     if (!response.ok) {
       if (id && response.status === 404) return { source, items: [], nextCursor: null };
@@ -83,6 +84,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
         } catch (caught) {
           if (signal.aborted) return;
           failures.push(caught instanceof Error ? caught.message : "API_UNAVAILABLE");
+          if (!id) setError(failures.join("; "));
         }
       }
       setError(id && !failures.length ? "404 This launch was not found for the connected wallet" : failures.join("; "));
@@ -94,7 +96,8 @@ export function DeveloperLaunchWorkspace(props: Props) {
     void load(controller.signal);
     return () => controller.abort();
   }, [load, refresh]);
-  useLaunchStatusPolling(props.account, !loading && !selected, signal => load(signal));
+  // The refresh reads one source at a time. Each read keeps its own bounded deadline.
+  useLaunchStatusPolling(props.account, !loading && !selected, signal => load(signal), 20_000, false, sources.length * launchHistoryRefreshTimeoutMs);
   function retry() { setRefresh(value => value + 1); }
   function open(item: LaunchOverviewItem) {
     deepLinkDone.current = true; setSelected(item); const url = new URL(window.location.href); url.searchParams.set("launchId", item.id); url.searchParams.set("chainId", item.chainId);

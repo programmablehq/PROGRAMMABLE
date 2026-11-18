@@ -15,6 +15,14 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { server.close(); await once(server, "close"); });
 
+test("a history read can finish after the first upstream attempt times out", async ({ page }) => {
+  await page.goto(origin + "?scenario=workspace-retry");
+  const workspace = page.getByRole("region", { name: "Your launches" });
+  await expect(workspace.getByRole("button", { name: /Custom launch Base/ })).toBeVisible({ timeout: 25_000 });
+  await expect(workspace.getByRole("status")).toHaveText("3 launches");
+  expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
+});
+
 test("a verified launch is usable while another history source is pending and after it fails", async ({ page }) => {
   await page.goto(origin + "?scenario=workspace-progress");
   const workspace = page.getByRole("region", { name: "Your launches" });
