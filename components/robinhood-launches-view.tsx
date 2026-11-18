@@ -13,6 +13,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 
 import { createSharedRequestPool, type SharedRead } from "@/lib/shared-request-pool";
 
 import { ExploreFilters } from "@/components/explore-filters";
+import { EXPLORE_CHAIN_SLUGS } from "@/lib/explore-chain";
 import { ChainMark } from "@/components/chain-mark";
 import { exploreIdentityKey } from "@/lib/unified-explore";
 import { launchPresentationDetails, type LaunchPresentationSource } from "@/lib/launch-presentation-details";
@@ -155,7 +156,7 @@ function exploreRequestUrl(chainId: ExploreScope, profileAccount: string | undef
   if (chainId === "all" && !profileAccount && (!request.chain || request.chain === "all")) query.set("chain", "all");
   if (chainId === "all" && request.chain && request.chain !== "all") query.set("chain", String(request.chain));
   if (profileAccount) query.set("account", profileAccount);
-  const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${chainId === 999 ? "hyperevm" : chainId === 8453 ? "base" : chainId === 4663 ? "robinhood" : "ethereum"}`;
+  const endpoint = profileAccount ? "/api/profile/launches" : chainId === "all" ? "/api/explore/launches" : `/api/explore/${EXPLORE_CHAIN_SLUGS[chainId]}`;
   return `${endpoint}?${query}`;
 }
 
@@ -280,8 +281,9 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
     observer.observe(listRef.current);
     return () => observer.disconnect();
   }, [embedded]);
-  const chainName = chainId === "all" ? "Programmable" : chainId === 999 ? "HyperEVM" : chainId === 8453 ? "Base" : chainId === 4663 ? "Robinhood" : "Ethereum";
-  const defaultFilters = profile ? DEFAULT_EXPLORE_FILTERS : chainId !== 1 && chainId !== 8453 ? ROBINHOOD_WEBSITE_FILTERS : ETHEREUM_EXPLORE_FILTERS;
+  const chainName = chainId === "all" ? "Programmable" : LAUNCH_CHAIN_OPTIONS.find(option => option.value === chainId)!.label;
+  const usesEthereumQuery = chainId !== "all" && chainId !== 4663;
+  const defaultFilters = profile ? DEFAULT_EXPLORE_FILTERS : usesEthereumQuery ? ETHEREUM_EXPLORE_FILTERS : ROBINHOOD_WEBSITE_FILTERS;
   const headingId = useId();
   const searchId = useId();
   const statusId = useId();
@@ -367,7 +369,7 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
             } });
           }
           const presentations = mergeRobinhoodPresentations(current?.data.presentations ?? [], data.presentations).items;
-          rememberRobinhoodTokenPresentations(presentations.map(item => ({ ...item, chainId: item.chainId ?? (chainId === 999 ? 999 : chainId === 8453 ? 8453 : chainId === 1 ? 1 : 4663) })));
+          rememberRobinhoodTokenPresentations(presentations.map(item => ({ ...item, chainId: item.chainId ?? (chainId === "all" ? 4663 : chainId) })));
           return rememberSnapshot({ request, fetchedAt: Date.now(), data: { ...data,
             presentations,
           } });
@@ -538,8 +540,8 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile }: { embedded: 
           </form>
           <ExploreFilters value={request} onApply={applyFilters} defaultValue={defaultFilters}
             chainOptions={chainId === "all" ? LAUNCH_CHAIN_OPTIONS : undefined}
-            modeOptions={chainId === 8453 || chainId === 999 ? ETHEREUM_EXPLORE_MODES.filter(option => option.value !== "classic") : chainId === 1 ? ETHEREUM_EXPLORE_MODES : undefined}
-            sortOptions={chainId === 1 || chainId === 8453 || chainId === 999 ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} /></> : null}
+            modeOptions={usesEthereumQuery ? ETHEREUM_EXPLORE_MODES.filter(option => chainId === 1 || option.value !== "classic") : undefined}
+            sortOptions={usesEthereumQuery ? [{ value: "newest", label: "Newest" }, { value: "oldest", label: "Oldest" }] : undefined} /></> : null}
           <nav className={styles.pagination} aria-label="Launch pages">
             <button type="button" aria-disabled={!canPrevious} aria-label="Previous page" title="Previous page" aria-controls={listId}
               onClick={() => { if (canPrevious) changePage(pageNumber - 1); }}>

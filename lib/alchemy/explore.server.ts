@@ -169,26 +169,27 @@ type AlchemyRegistryRefreshOptions = Readonly<{
 
 type ReadyExploreModel = Extract<ExploreReadModel, { status: "ready" }>;
 
-function durableOrRouterBootstrapModel(
+function routerBootstrapModel(deployment: ReadyOnchainDeployment): ReadyExploreModel {
+  return {
+    status: "ready",
+    tokens: [],
+    snapshot: {
+      chainId: deployment.chainId,
+      ...LAUNCH_STAMP_ROUTER_INITIAL_CURSOR,
+      confirmations: Number(deployment.confirmations),
+    },
+    creatorClaims: [],
+    launcherFeesAccruedWei: "0",
+    launcherFeesAccruedEth: "0",
+  };
+}
+
+async function readClassicBaseModel(
   deployment: ReadyOnchainDeployment,
-  read: Awaited<ReturnType<typeof readDurableExploreModel>>,
-): ReadyExploreModel {
+): Promise<ReadyExploreModel | null> {
+  const read = await readDurableExploreModel(deployment, Number.MAX_SAFE_INTEGER);
   if (read.status !== "ready") {
-    if (read.reason === "missing") {
-      return {
-        status: "ready",
-        tokens: [],
-        snapshot: {
-          chainId: deployment.chainId,
-          blockNumber: LAUNCH_STAMP_ROUTER_INITIAL_CURSOR.blockNumber,
-          blockHash: LAUNCH_STAMP_ROUTER_INITIAL_CURSOR.blockHash,
-          confirmations: Number(deployment.confirmations),
-        },
-        creatorClaims: [],
-        launcherFeesAccruedWei: "0",
-        launcherFeesAccruedEth: "0",
-      };
-    }
+    if (read.reason === "missing") return null;
     throw new Error(
       `Durable Alchemy registry is ${read.reason}: ${read.detail}`,
     );
@@ -388,12 +389,10 @@ async function refreshAlchemyExploreRegistryOnce(
   if (deployment.status !== "ready") {
     throw new Error("Alchemy production deployment is not ready");
   }
-  const durable = await readDurableExploreModel(
-    deployment,
-    Number.MAX_SAFE_INTEGER,
-  );
-  const hasDurableClassicBase = durable.status === "ready";
-  const base = durableOrRouterBootstrapModel(deployment, durable);
+  // The Router registry has its own finalized cursor and stores an empty
+  // Classic slice at the bootstrap block. Read Classic only for the mixed view.
+  const classicBase = options.routerOnly ? null : await readClassicBaseModel(deployment);
+  const base = classicBase ?? routerBootstrapModel(deployment);
   const initialCursor: AlchemyLaunchCursor = {
     blockNumber: base.snapshot.blockNumber,
     blockHash: base.snapshot.blockHash,
@@ -418,7 +417,7 @@ async function refreshAlchemyExploreRegistryOnce(
       blockHash: cursor.blockHash,
     },
   };
-  const confirmed = hasDurableClassicBase && !options.routerOnly
+  const confirmed = classicBase
     ? await advanceExploreLaunchDiscovery(
       deployment,
       cursorModel,
@@ -478,8 +477,7 @@ async function refreshAlchemyExploreRegistryOnce(
       console.warn("Alchemy registry persistence failed", safeAlchemyError(error));
     }
   }
-  const servedCursorModel = options.routerOnly || options.includeLatest === false ||
-      !hasDurableClassicBase
+  const servedCursorModel = !classicBase || options.includeLatest === false
     ? confirmed
     : await advanceExploreLaunchDiscovery(deployment, confirmed, "latest");
   const classicModel: ReadyExploreModel = {
