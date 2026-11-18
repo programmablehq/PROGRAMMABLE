@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 
-import { tokenDataIndexResetResponse } from
+import { tokenDataIndexResetResponse, withExploreAlternate } from
   "../../../../lib/server/explore-index-reset";
 
 export const dynamic = "force-dynamic";
@@ -39,5 +39,5 @@ export async function GET(request: NextRequest) {
   }
 
   const chain = chainValue === "4663" ? "robinhood" : "ethereum";
-  return tokenDataIndexResetResponse(`/api/explore/${chain}/presentation?token=${input.toLowerCase()}`);
+  return withExploreAlternate(tokenDataIndexResetResponse(), `/api/explore/${chain}/presentation?token=${input.toLowerCase()}`);
 }

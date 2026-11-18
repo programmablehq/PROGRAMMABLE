@@ -20,9 +20,12 @@ export function exploreIndexResetJson(body: unknown) {
   });
 }
 
-export function tokenDataIndexResetResponse(alternate?: string) {
-  const response = exploreIndexResetJson(TOKEN_DATA_INDEX_RESET_BODY);
-  if (alternate) response.headers.set("Link", `<${alternate}>; rel="alternate"; type="application/json"`);
+export function tokenDataIndexResetResponse() {
+  return exploreIndexResetJson(TOKEN_DATA_INDEX_RESET_BODY);
+}
+
+export function withExploreAlternate(response: NextResponse, alternate: string) {
+  response.headers.set("Link", `<${alternate}>; rel="alternate"; type="application/json"`);
   return response;
 }
 
