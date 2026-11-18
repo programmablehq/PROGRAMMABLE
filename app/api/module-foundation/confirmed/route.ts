@@ -7,15 +7,24 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 const requests = new Map<string, { expires: number; value: Promise<void> }>();
 let windowStarted = 0, count = 0, active = 0;
+const retrySeconds = 15;
 const response = (status: number) => Response.json({ status: status === 200 ? "confirmed" : "pending" },
-  { status, headers: { "cache-control": "no-store" } });
+  { status, headers: { "cache-control": "no-store", ...(status === 503 ? { "retry-after": String(retrySeconds) } : {}) } });
 
 async function record(input: ConfirmedLaunchRequest) {
   // Survives server restarts and page reloads. The stored receipt's block is
   // rechecked, but a repeated hint need not repeat every pool/metadata read.
   const existing = await findRecentFoundationLaunch(input.chainId, input.token).catch(() => null);
   if (existing?.row.transactionHash.toLowerCase() === input.transactionHash) return;
-  await saveRecentFoundationLaunch(await confirmFoundationLaunch(input));
+  let phase: "verify-receipt" | "save-confirmation" = "verify-receipt";
+  try {
+    const launch = await confirmFoundationLaunch(input);
+    phase = "save-confirmation";
+    await saveRecentFoundationLaunch(launch);
+  } catch (error) {
+    console.warn("module-foundation-confirmation-pending", { chainId: input.chainId, phase });
+    throw error;
+  }
 }
 
 export async function POST(request: Request) {
@@ -50,7 +59,7 @@ export async function POST(request: Request) {
     if (requests.size >= 128) requests.delete(requests.keys().next().value!);
     requests.set(key, saved);
     const entry = saved;
-    void value.catch(() => { if (requests.get(key) === entry) entry.expires = Date.now() + 15_000; });
+    void value.catch(() => { if (requests.get(key) === entry) entry.expires = Date.now() + retrySeconds * 1_000; });
   }
   try { await saved.value; return response(200); }
   catch { return response(503); }
