@@ -21,7 +21,7 @@ import "../../../app/surfaces.css";
 // Deliberately local browser fixtures. These exercise the product components and durable journal,
 // never production wallet authority or real onchain execution.
 const mode = new URLSearchParams(window.location.search).get("scenario") ?? "ready";
-const legacyWorkspace = mode === "workspace-history" || mode === "workspace-progress" || mode === "workspace-retry" || mode === "renewed-permit";
+const legacyWorkspace = mode === "workspace-history" || mode === "workspace-pagination" || mode === "workspace-progress" || mode === "workspace-retry" || mode === "renewed-permit";
 const delayedHistory = mode === "workspace-progress"
   ? new Promise<void>(resolve => window.addEventListener("finish-history-read", () => resolve(), { once: true })) : null;
 const atomic = mode.startsWith("atomic");
@@ -42,6 +42,7 @@ if (mode === "atomic-mismatch") record = { ...record, steps: [bindStep({ ...reco
 const control = {
   mode, indexed: false, proofCalls: 0, startCalls: 0, navigated: "", requests: [] as { method: string; params: readonly unknown[] }[],
   mined: false, legacyReads: 0, legacyRecovered: false,
+  historyReads: [] as { source: string; cursor: string | null }[],
   discoverMined: () => { control.mined = true; document.dispatchEvent(new Event("visibilitychange")); },
   sends: () => Number(localStorage.getItem("fixture:launch-sends") ?? 0),
   finalize: () => {
@@ -96,6 +97,13 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
   if (legacyWorkspace) {
+    const source = url.searchParams.get("source") ?? url.searchParams.get("chainId") ?? "combined";
+    const cursor = url.searchParams.get("cursor");
+    const paginated = mode === "workspace-pagination";
+    if (paginated && ["/api/developer/custom-launches", "/api/developer/custom-launch-plans"].includes(url.pathname)) {
+      control.historyReads.push({ source, cursor });
+    }
+    const nextCursor = paginated && !cursor && (source === "8453" || source === "multi_role_v2") ? "next-" + source : null;
     if (url.pathname === "/api/custom-launch-reviews/start") {
       control.startCalls += 1;
       return Response.json({ ok: true });
@@ -106,7 +114,7 @@ window.fetch = async (input, init) => {
         return Response.json({ error: { code: "TEMPORARILY_UNAVAILABLE" } }, { status: 503 });
       }
       const launches = delayedHistory ? [{ sourceVersion: "custom_launch_plan_v1", controller, resource: record }] : [];
-      return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches, nextCursor: null });
+      return Response.json({ schemaVersion: "programmable.website-launch-history.v1", launches, nextCursor });
     }
     if (url.pathname.startsWith("/api/developer/custom-launches")) {
       control.legacyReads += 1;
@@ -132,7 +140,7 @@ window.fetch = async (input, init) => {
           launchRequestedAt: mode === "renewed-permit" && control.startCalls ? new Date(now * 1000).toISOString() : null,
           launchDeadline: mode === "renewed-permit" && control.startCalls ? new Date((now + 86400) * 1000).toISOString() : null } };
       return Response.json(url.pathname.endsWith(launchId) ? resource : { schemaVersion: "programmable.custom-launch-history.v1",
-        launches: chainId === "1" ? [] : [resource], nextCursor: null });
+        launches: chainId === "1" ? [] : [resource], nextCursor });
     }
   }
   if (url.pathname === "/api/launch-destination") return control.indexed ? Response.json({

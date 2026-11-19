@@ -37,6 +37,31 @@ test("a verified launch is usable while another history source is pending and af
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
+test("wallet history polls and paginates only the selected chain", async ({ page }) => {
+  await page.clock.install();
+  await page.goto(origin + "?scenario=workspace-pagination");
+  const workspace = page.getByRole("region", { name: "Your launches" });
+  const chain = workspace.getByRole("combobox", { name: "Chain" });
+  const more = workspace.getByRole("button", { name: "Load more launches" });
+  const takeReads = () => page.evaluate(() => window.__customLaunchFixture.historyReads.splice(0));
+
+  await expect(workspace.getByRole("status")).toHaveText("3 launches");
+  expect((await takeReads()).map(read => read.source)).toEqual(["combined", "8453", "999", "99901", "custom_launch_plan_v1", "multi_role_v2"]);
+  await chain.selectOption("99901");
+  await expect(workspace.getByRole("status")).toHaveText("1 launch");
+  await expect(more).toHaveCount(0);
+  expect(await takeReads()).toEqual([{ source: "99901", cursor: null }]);
+
+  await chain.selectOption("8453");
+  await expect(more).toBeEnabled();
+  await more.click();
+  await expect(more).toHaveCount(0);
+  expect(await takeReads()).toEqual([{ source: "8453", cursor: null }, { source: "8453", cursor: "next-8453" }]);
+  await page.clock.fastForward(20_100);
+  await expect.poll(() => page.evaluate(() => window.__customLaunchFixture.historyReads)).toEqual([{ source: "8453", cursor: null }]);
+  await expect(more).toHaveCount(0);
+});
+
 for (const [chainId, name] of [["8453", "Base"], ["999", "HyperEVM"], ["99901", "Elysium"]]) {
   test(`owned ${name} launches remain visible in the workspace and direct links`, async ({ page }) => {
     await page.goto(origin + "?scenario=workspace-history");
