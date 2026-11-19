@@ -12,6 +12,7 @@ import type {PlatformAPI,ProjectItem,ProjectRevision,ProjectRun,ProjectRunState}
 import {ProjectFiles} from "./files";
 import {ProjectStart} from "./project-start";
 import {ProjectOverview} from "./project-overview";
+import {readReloadEdit,retireReloadEdit,saveReloadEdit} from "./workspace-draft";
 import {completedWork,readMessageIntent,resultTab,sendWorkspaceMessage,workExplanation,workStatus,type MessageIntent,type ResultIntent,type WorkProgress} from "./workspace-state";
 import styles from "./workspace.module.css";
 
@@ -20,7 +21,7 @@ type Tab=typeof tabs[number]["id"];
 type Props={account:string;headers:AISessionHeaders;onLegacy:(id?:string)=>void;onProject?:()=>void;beforeLeaveLegacy?:()=>Promise<void>;
   legacyId?:string;legacyContent?:ReactNode;incomingProjectId?:string;onProjectOpened?:()=>void;onAccessDenied?:()=>void;
   initialPrompt?:{id:string;content:string};onPromptAccepted?:(id:string)=>void;generalLaunchEnabled?:boolean};
-type Drafts={selected?:string;drafts:Record<string,string>;operation?:ProjectRun["operation"];preview?:boolean;result?:ResultIntent};
+type Drafts={selected?:string;drafts:Record<string,string>;operation?:ProjectRun["operation"];preview?:boolean;result?:ResultIntent;savedAt?:number};
 type Progress=WorkProgress&{run:ProjectRunState};
 const ProjectConnections=lazy(()=>import("./connections").then(module=>({default:module.ProjectConnections})));
 const ProjectRuntime=lazy(()=>import("./runtime").then(module=>({default:module.ProjectRuntime})));
@@ -59,7 +60,11 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   const cacheKey=scope?`programmable.project-workspace.v1:${scope}:${account}`:undefined;
   const persistWorkspace=useCallback((snapshot:Drafts)=>{
     if(!cacheKey)return Promise.resolve();
-    const write=cacheWrites.current.catch(()=>undefined).then(()=>writeDraftCache(cacheKey,snapshot));cacheWrites.current=write;return write;
+    const savedAt=performance.timeOrigin+performance.now();
+    const write=cacheWrites.current.catch(()=>undefined).then(async()=>{
+      await writeDraftCache(cacheKey,{...snapshot,savedAt});
+      retireReloadEdit(cacheKey,savedAt);
+    });cacheWrites.current=write;return write;
   },[cacheKey]);
   const scopedHeaders=useCallback(async()=>({...await credentials.current(),...(scope?{"X-Custom-AI-Cache-Scope":scope}:{})}),[scope]);
   const api:PlatformAPI=useCallback((path,options)=>platformAPI(scopedHeaders)(path,options),[scopedHeaders]);
@@ -80,14 +85,19 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
       if(controller.signal.aborted)return;
       setProjects(result.projects);
       for(const [id,text] of Object.entries(cached?.drafts??{}).slice(0,101))if(typeof text==="string"&&text.length<=24000&&!containsInlineCredential(text))drafts.current.set(id,text);
+      const staged=readReloadEdit(cacheKey,cached?.savedAt);
+      const edit=staged&&(!staged.selected||result.projects.some(p=>p.projectId===staged.selected))?staged:undefined;
+      if(edit)drafts.current.set(edit.selected??newDraft,edit.text);
       const journal=readMessageIntent(pending);
       const acknowledged=journal && cached?.result?.projectId===journal.projectId && cached.result.messageId===journal.id;
       const savedIntent=acknowledged?undefined:journal;pendingMessage.current=savedIntent;setHasPending(Boolean(savedIntent));
       const choice=entry.current?undefined:savedIntent?result.projects.find(p=>p.projectId===savedIntent.projectId)?.projectId:
-        cached?.selected&&result.projects.some(p=>p.projectId===cached.selected)?cached.selected:result.projects[0]?.projectId;
+        edit?edit.selected:cached?.selected&&result.projects.some(p=>p.projectId===cached.selected)?cached.selected:result.projects[0]?.projectId;
       setSelected(choice);setInput(savedIntent?.prompt??entry.current?.content??drafts.current.get(choice??newDraft)??"");
-      if(savedIntent)setOperation(savedIntent.operation);else if(cached?.operation&&["build","plan","test","deploy"].includes(cached.operation))setOperation(cached.operation);
-      if(typeof cached?.preview==="boolean")setPreviewAfterBuild(cached.preview);
+      const savedOperation=savedIntent?.operation??edit?.operation??cached?.operation;
+      if(savedOperation&&["build","plan","test","deploy"].includes(savedOperation))setOperation(savedOperation);
+      const preview=edit?.preview??cached?.preview;
+      if(typeof preview==="boolean")setPreviewAfterBuild(preview);
       if(cached?.result&&result.projects.some(p=>p.projectId===cached.result?.projectId))setResultIntent(cached.result);
       cacheLoaded.current=true;setReady(true);
     }catch(cause){if(!controller.signal.aborted){
@@ -100,9 +110,15 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
     if(containsInlineCredential(input))drafts.current.delete(selected??newDraft);else drafts.current.set(selected??newDraft,input);
     const snapshot:Drafts={selected,drafts:Object.fromEntries(drafts.current),operation,preview:previewAfterBuild,result:resultIntent};
     const version=cacheVersion.current;
-    const save=()=>{if(version===cacheVersion.current)void persistWorkspace(snapshot).catch(()=>undefined);};
-    const timer=setTimeout(save,250);window.addEventListener("pagehide",save);
-    return()=>{clearTimeout(timer);window.removeEventListener("pagehide",save);};
+    let committed=false;
+    const save=()=>{if(version===cacheVersion.current)void persistWorkspace(snapshot).then(()=>{committed=true;}).catch(()=>undefined);};
+    const flush=()=>{
+      if(committed||version!==cacheVersion.current)return;
+      saveReloadEdit(cacheKey,{selected,text:snapshot.drafts[selected??newDraft]??"",operation,preview:previewAfterBuild,savedAt:performance.timeOrigin+performance.now()});
+      save();
+    };
+    const timer=setTimeout(save,250);window.addEventListener("pagehide",flush);
+    return()=>{clearTimeout(timer);window.removeEventListener("pagehide",flush);};
   },[cacheKey,ready,selected,input,operation,previewAfterBuild,resultIntent,persistWorkspace]);
   const loadHistory=useCallback(async(cursor?:string)=>{
     if(!scope)return;const seq=++historyGeneration.current;historyAbort.current?.abort();const controller=new AbortController();historyAbort.current=controller;
