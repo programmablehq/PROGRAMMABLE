@@ -36,6 +36,25 @@ test('standalone Explore fetches immediately',async({page})=>{
   expect(requests).toBe(1);
 });
 
+test('a shared Explore URL follows the current search without adding history entries', async ({ page }) => {
+  await page.goto(origin + '/explore?standalone&ref=launch#coins');
+  const search = page.getByRole('searchbox');
+  const historyLength = await page.evaluate(() => history.length);
+  await search.fill('First coin');
+  await search.press('Enter');
+  await expect(page).toHaveURL(url => url.searchParams.get('q') === 'First coin');
+  await search.fill('Second coin');
+  await expect(page).toHaveURL(url => url.searchParams.get('q') === 'Second coin');
+  await page.getByRole('search').getByRole('button', { name: 'Clear search' }).click();
+  await expect(page).toHaveURL(url => !url.searchParams.has('q') && url.searchParams.get('ref') === 'launch' && url.hash === '#coins');
+  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  await page.getByRole('button', { name: 'Custom', exact: true }).click();
+  await expect(page).toHaveURL(url => url.searchParams.get('model') === 'custom');
+  await page.getByRole('button', { name: 'All', exact: true }).click();
+  await expect(page).toHaveURL(url => !url.searchParams.has('model'));
+  expect(await page.evaluate(() => history.length)).toBe(historyLength);
+});
+
 test('the Elysium list opens its own catalog with supported filters', async ({ page }) => {
   await page.route('**/api/explore/elysium?*', route => {
     const query = parseEthereumExploreQuery(new URL(route.request().url()).searchParams);

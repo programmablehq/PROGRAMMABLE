@@ -307,6 +307,18 @@ function IndexedLaunchList({ embedded, enabled, chainId, profile, entry }: { emb
   const prefetchingRequests = useRef(new Map<string, SharedRead<LaunchResponse>>());
   const presentations = new Map((snapshot?.data.presentations ?? []).map((item) => [exploreIdentityKey(item), item]));
 
+  useEffect(() => {
+    if (embedded || chainId !== "all" || window.location.pathname !== "/explore") return;
+    const url = new URL(window.location.href);
+    const custom = request.mode === "custom";
+    if ((url.searchParams.get("q") ?? "") === request.q && (url.searchParams.get("model") === "custom") === custom) return;
+    if (request.q) url.searchParams.set("q", request.q);
+    else url.searchParams.delete("q");
+    if (custom) url.searchParams.set("model", "custom");
+    else if (url.searchParams.get("model") === "custom") url.searchParams.delete("model");
+    window.history.replaceState(null, "", url);
+  }, [chainId, embedded, request.mode, request.q]);
+
   const navigate = useCallback((update: (current: Request) => Request) => {
     const next = update(requestRef.current);
     if (sameRobinhoodExploreRequest(requestRef.current, next)) return;
