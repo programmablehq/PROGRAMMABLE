@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { LaunchShareLink } from "./launch-share-link";
 import { FomoTeamTagButton } from "./fomo-team-tag";
 import { ProfileLaunchRewards } from "./profile-launch-rewards";
@@ -25,7 +26,7 @@ import { MODULE_TOKEN_FALLBACK_IMAGE, RobinhoodCoinArtwork } from "@/components/
 import { RobinhoodProjectLinks } from "@/components/robinhood-project-links";
 import { rememberRobinhoodTokenPresentations } from "@/components/robinhood-presentation-cache";
 import { coinAge, coinPairTicker, coinValuation, mergeRobinhoodPresentations, type RobinhoodCoinPresentation } from "@/lib/robinhood-presentation";
-import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, LAUNCH_CHAIN_OPTIONS, ROBINHOOD_EXPLORE_PAGE_SIZE, sameRobinhoodExploreRequest, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
+import { activeExploreFilterCount, DEFAULT_EXPLORE_FILTERS, LAUNCH_CHAIN_OPTIONS, ROBINHOOD_EXPLORE_PAGE_SIZE, readExploreSearchEntry, sameRobinhoodExploreRequest, type ExploreSearchEntry, type RobinhoodExploreFilters, type RobinhoodExploreRequest } from "@/lib/robinhood-explore-filters";
 import { isRobinhoodModuleLaunch } from "@/lib/robinhood-launches";
 import { isRobinhoodProjectedLaunch } from "@/lib/custom-launch/launch-projection-v1";
 import { isPinnedRobinhoodToken } from "@/lib/robinhood-explore-policy";
@@ -248,10 +249,17 @@ export function RobinhoodLaunchesView({
   return <IndexedLaunchList key={selectedChain} chainId={selectedChain} embedded={embedded} enabled={hydrated} />;
 }
 
-type ExploreEntry = { q: string; mode: "all" | "custom" };
+export function UnifiedLaunchesView({ embedded = false, entry }: { embedded?: boolean; entry?: ExploreSearchEntry }) {
+  if (embedded) return <IndexedLaunchList key={entry && JSON.stringify([entry.mode, entry.q])} entry={entry} chainId="all" embedded enabled />;
+  return <StandaloneExplore entry={entry} />;
+}
 
-export function UnifiedLaunchesView({ embedded = false, entry }: { embedded?: boolean; entry?: ExploreEntry }) {
-  return <IndexedLaunchList key={entry && JSON.stringify([entry.mode, entry.q])} entry={entry} chainId="all" embedded={embedded} enabled />;
+function StandaloneExplore({ entry }: { entry?: ExploreSearchEntry }) {
+  const params = useSearchParams();
+  // Back can restore the server tree for an earlier search alongside the edited URL.
+  const current = params ? readExploreSearchEntry(params.getAll("q"), params.getAll("model")) : entry;
+  const restored = current ?? (entry ? { q: "", mode: "all" as const } : undefined);
+  return <IndexedLaunchList key={entry && JSON.stringify([entry.mode, entry.q])} entry={restored} chainId="all" embedded={false} enabled />;
 }
 
 type ProfileListOptions = {
@@ -267,7 +275,7 @@ export function UnifiedProfileLaunches(props: ProfileListOptions) {
   return <IndexedLaunchList key={props.account.toLowerCase()} chainId="all" embedded enabled profile={props} />;
 }
 
-function IndexedLaunchList({ embedded, enabled, chainId, profile, entry }: { embedded: boolean; enabled: boolean; chainId: ExploreScope; profile?: ProfileListOptions; entry?: ExploreEntry }) {
+function IndexedLaunchList({ embedded, enabled, chainId, profile, entry }: { embedded: boolean; enabled: boolean; chainId: ExploreScope; profile?: ProfileListOptions; entry?: ExploreSearchEntry }) {
   const listRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(!embedded);
   const readEnabled = enabled && (!embedded || inView);
