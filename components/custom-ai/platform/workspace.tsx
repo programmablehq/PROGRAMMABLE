@@ -36,6 +36,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   const [project,setProject]=useState<ProjectRevision>(),[runs,setRuns]=useState<ProjectRun[]>([]),[input,setInput]=useState("");
   const [tab,setTab]=useState<Tab>("project"),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [ready,setReady]=useState(false),[dirty,setDirty]=useState(false),[launchLocked,setLaunchLocked]=useState(false);
+  const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
   const [operation,setOperation]=useState<ProjectRun["operation"]>("build"),[previewAfterBuild,setPreviewAfterBuild]=useState(true);
   const [historyOpen,setHistoryOpen]=useState(false),[historyQuery,setHistoryQuery]=useState("");
   const [conversations,setConversations]=useState<ConversationItem[]>([]),[historyCursor,setHistoryCursor]=useState<string>();
@@ -93,7 +94,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
       if(cause instanceof AIRequestError&&cause.status===403&&cause.code==="platform-pilot"&&onAccessDenied){onAccessDenied();return;}
       setError(cause instanceof Error?cause.message:"Projects could not load.");
     }}})();return()=>controller.abort();
-  },[scope,cacheKey,api,onAccessDenied]);
+  },[scope,cacheKey,api,onAccessDenied,workspaceLoadAttempt]);
   useEffect(()=>{
     if(!cacheKey||!ready||!cacheLoaded.current)return;
     if(containsInlineCredential(input))drafts.current.delete(selected??newDraft);else drafts.current.set(selected??newDraft,input);
@@ -152,6 +153,12 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   },[activeId,api,selected]);
   useEffect(()=>{if(runs.length&&follow.current&&transcript.current)transcript.current.scrollTop=transcript.current.scrollHeight;},[runs,progress]);
   const runTask=useCallback(async(work:()=>Promise<void>)=>{setBusy(true);setError("");try{await work();}catch(cause){setError(cause instanceof Error?cause.message:"The request could not finish. Your saved work is kept.");}finally{setBusy(false);}},[]);
+  function reloadSavedState() {
+    if (!scope) return void bootstrap();
+    if (ready) return void runTask(() => refresh());
+    setError("");
+    setWorkspaceLoadAttempt(attempt => attempt + 1);
+  }
   const savePending=useCallback(async(intent:MessageIntent|undefined)=>{
     pendingMessage.current=intent;setHasPending(Boolean(intent));
     if(cacheKey)await writeDraftCache(cacheKey+":pending",intent).catch(()=>undefined);
@@ -258,9 +265,9 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
         {historyCursor&&<button type="button" disabled={historyLoading} onClick={()=>void loadHistory(historyCursor)}>Load older coin chats</button>}
       </aside>
       <div ref={main} tabIndex={-1} className={styles.workContent}>
-        {error&&<div role="alert" className={styles.error}>{error}<div className={styles.row}>{hasPending&&<button type="button" disabled={busy||Boolean(active)} onClick={()=>void submit(pendingMessage.current)}>Retry saved message</button>}<button type="button" onClick={()=>void(scope?runTask(()=>refresh()):bootstrap())}>Reload saved state</button></div></div>}
+        {error&&<div role="alert" className={styles.error}>{error}<div className={styles.row}>{hasPending&&<button type="button" disabled={busy||Boolean(active)} onClick={()=>void submit(pendingMessage.current)}>Retry saved message</button>}<button type="button" disabled={busy} onClick={reloadSavedState}>{scope && !ready ? "Reload saved projects" : "Reload saved state"}</button></div></div>}
         {legacyOpen?<div className={styles.legacyWorkspace}>{legacyContent}</div>:<>
-          <div className={styles.statusBar}><p className={styles.notice} role="status"><span className={styles.workDot} data-active={Boolean(active)} aria-hidden="true"/>{currentStatus||"Ready when you are"}</p>{active&&<WorkTimer startedAt={active.createdAt}/>}</div>
+          {(ready || !error) && <div className={styles.statusBar}><p className={styles.notice} role="status"><span className={styles.workDot} data-active={Boolean(active)} aria-hidden="true"/>{currentStatus || (ready ? "Ready when you are" : "Loading saved projects…")}</p>{active&&<WorkTimer startedAt={active.createdAt}/>}</div>}
           {project&&<div className={styles.mobileSwitcher} aria-label="Project view"><button type="button" aria-pressed={mobilePane==="chat"} onClick={()=>setMobilePane("chat")}>Chat</button><button type="button" aria-pressed={mobilePane==="result"} onClick={()=>setMobilePane("result")}>Result</button></div>}
           <div className={styles.layout} data-empty={!selected}>
             <section className={styles.chat} data-active={mobilePane==="chat"} aria-label="Project chat">
