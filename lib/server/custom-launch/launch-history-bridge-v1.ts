@@ -678,6 +678,11 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
         let launch: DeveloperCustomLaunch | null = null;
         if (walletInput.version) {
           launch = await readVersion(walletInput.version);
+        } else if (walletInput.explicitEthereum) {
+          // Saved Ethereum links identify the request before its API version is known.
+          launch = await readVersion("v3")
+            ?? await readVersion("v2")
+            ?? await readVersion("v1");
         } else {
           launch = await readVersion("v1")
             ?? await readVersion("v2")
@@ -947,7 +952,7 @@ function exactWalletQuery(request: Request, allowOverview = false) {
       && versionValue !== "v4")
   ) throw new BrowserRequestErrorV1(400, "request_schema_invalid");
   return Object.freeze({
-    walletAddress, chainId, overview,
+    walletAddress, chainId, overview, explicitEthereum: search.get("chainId") === "1",
     version: versionValue as BackendHistoryVersion | null,
   });
 }

@@ -32,7 +32,11 @@ export function DeveloperLaunchWorkspace(props: Props) {
     if (source === "elysium") query.set("chainId", "99901");
     if (source === "hyperevm") query.set("chainId", "999");
     if (cursor) query.set("cursor", cursor);
-    if (legacy) query.set(id ? "version" : "limit", id ? source === "legacy" && props.initialLaunchChainId === "4663" ? "v4" : "v3" : "5");
+    if (legacy) {
+      if (!id) query.set("limit", "5");
+      else if (source === "legacy" && props.initialLaunchChainId === null) query.set("chainId", "1");
+      else query.set("version", source === "legacy" ? "v4" : "v3");
+    }
     const response = await fetch(`/api/developer/${legacy ? "custom-launches" : "custom-launch-plans"}${id ? `/${encodeURIComponent(id)}` : ""}?${query}`, {
       cache: "no-store", redirect: "error", headers, signal: AbortSignal.any([signal, AbortSignal.timeout(launchHistoryRefreshTimeoutMs)]) });
     const body = await response.json().catch(() => null);
