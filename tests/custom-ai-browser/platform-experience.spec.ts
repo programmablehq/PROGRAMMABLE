@@ -29,6 +29,24 @@ test("reloads saved projects and restores an unsent draft after the initial list
   expect(reads).toBe(2);
 });
 
+test("keeps the most recent project edit on an immediate tab reload", async ({ page }) => {
+  await page.clock.install();
+  await page.goto(origin);
+  const composer = page.getByRole("textbox", { name: "Describe your idea", exact: true });
+  await composer.fill("Keep my reading list.");
+  await page.clock.runFor(300);
+
+  const latest = "Keep my reading list. Add the new title.";
+  await composer.fill(latest);
+  await page.getByRole("combobox", { name: "Work mode" }).selectOption("plan");
+  await page.reload();
+  await expect(composer).toHaveValue(latest);
+  await expect(page.getByRole("combobox", { name: "Work mode" })).toHaveValue("plan");
+  await page.getByRole("combobox", { name: "Fixture account" }).selectOption("bob");
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue("");
+});
+
 test("starts from the first message, names the project and opens its saved result",async({page})=>{
  const creations:string[]=[],titles:string[]=[];
  page.on("request",request=>{if(request.method()==="POST"&&request.url().endsWith("/platform/projects"))creations.push(request.postDataJSON().projectId);if(request.method()==="PATCH"&&request.url().endsWith("/platform/projects"))titles.push(request.postDataJSON().patch.title);});
