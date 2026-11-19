@@ -56,6 +56,20 @@ describe("agent-readable public surface", () => {
     expect(canonical.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("links each Custom Launch network to its advertised guide and live checks", async () => {
+    const { workflows } = await getAgentDiscovery().json();
+    const rows = (await getAgentGuide().text()).split("\n").filter(line => line.startsWith("|"));
+    for (const workflow of [
+      workflows.customLaunch.ethereum, workflows.customLaunchPlan, workflows.customLaunch.base,
+      workflows.customLaunch.hyperevm, workflows.customLaunch.elysium,
+    ]) {
+      const row = rows.find(line => line.includes(`(${workflow.chainId})`));
+      expect(row).toContain(`](${workflow.guide})`);
+      expect(row).toContain(`](${workflow.capabilities})`);
+      if (workflow.readiness) expect(row).toContain(`](${workflow.readiness})`);
+    }
+  });
+
   it("routes new Robinhood projects to Custom Launch Plans and labels older profiles", async () => {
     const response = getAgentDiscovery();
     expect(response.status).toBe(200);
