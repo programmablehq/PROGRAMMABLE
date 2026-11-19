@@ -6,6 +6,29 @@ let fixture:Awaited<ReturnType<typeof createPlatformServer>>,origin:string;
 test.beforeEach(async()=>{fixture=await createPlatformServer();fixture.server.listen(0,"127.0.0.1");await once(fixture.server,"listening");origin=`http://127.0.0.1:${fixture.server.address().port}`;});
 test.afterEach(async()=>{await fixture.close();});
 
+test("reloads saved projects and restores an unsent draft after the initial list failed", async ({ page }) => {
+  const draft = "Keep the reading list in my project.";
+  const composer = page.getByRole("textbox", { name: "Describe your idea", exact: true });
+  await page.clock.install();
+  await page.goto(origin);
+  await composer.fill(draft);
+  await page.getByRole("combobox", { name: "Work mode" }).selectOption("plan");
+  await page.clock.runFor(300);
+
+  let reads = 0;
+  await page.route(url => url.pathname === "/api/custom-ai/platform/projects" && url.searchParams.has("limit"), route => {
+    if (++reads === 1) return route.fulfill({ status: 503, json: { error: "Saved projects are temporarily unavailable." } });
+    return route.continue();
+  });
+  await page.reload();
+  await expect(composer).toBeDisabled();
+  await page.getByRole("button", { name: "Reload saved projects" }).click();
+  await expect(composer).toBeEnabled();
+  await expect(composer).toHaveValue(draft);
+  await expect(page.getByRole("combobox", { name: "Work mode" })).toHaveValue("plan");
+  expect(reads).toBe(2);
+});
+
 test("starts from the first message, names the project and opens its saved result",async({page})=>{
  const creations:string[]=[],titles:string[]=[];
  page.on("request",request=>{if(request.method()==="POST"&&request.url().endsWith("/platform/projects"))creations.push(request.postDataJSON().projectId);if(request.method()==="PATCH"&&request.url().endsWith("/platform/projects"))titles.push(request.postDataJSON().patch.title);});
