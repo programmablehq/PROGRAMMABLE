@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
 import type { ProjectOverview } from "@/lib/custom-ai/project-overview";
-import type { ProjectCheckpoint } from "@/lib/custom-ai/project-store.server";
+import type { SavedProjectSource } from "@/lib/custom-ai/project-store.server";
 import { builderChain, type BuilderChainId } from "@/lib/custom-ai/execution-routing";
 import { ExecutionPreview } from "./execution-preview";
 import styles from "./workspace.module.css";
@@ -12,7 +12,7 @@ export function ProjectSource({source,chainId,account,conversationId,headers,dis
   chainId?:BuilderChainId;
   onCompile:(source:ProjectOverview)=>void;onEdit?:(source:ProjectOverview)=>void;
 }) {
-  const [saved,setSaved]=useState<ProjectCheckpoint>(),[loading,setLoading]=useState(false),[error,setError]=useState("");
+  const [saved,setSaved]=useState<SavedProjectSource>(),[loading,setLoading]=useState(false),[error,setError]=useState("");
   const controller=useRef<AbortController|null>(null);
   const matchesNetwork=chainId===undefined||chainId===source.chainId;
   const checksPending=source.compilation==="compiled"&&Boolean(source.blueprintId)&&!source.scenarios;
@@ -21,7 +21,7 @@ export function ProjectSource({source,chainId,account,conversationId,headers,dis
     if(saved||loading||!conversationId)return;
     controller.current=new AbortController();setLoading(true);setError("");
     try{
-      const value=await aiRequest<ProjectCheckpoint>(`/projects?${new URLSearchParams({account,conversation:conversationId,id:source.requestId})}`,headers,undefined,controller.current.signal);
+      const value=await aiRequest<SavedProjectSource>(`/projects?${new URLSearchParams({account,conversation:conversationId,id:source.requestId,view:"source"})}`,headers,undefined,controller.current.signal);
       if(value.requestId!==source.requestId||value.project.hash!==source.projectHash)throw Error("The saved source changed. Reload this design before opening it.");
       setSaved(value);
     }catch(cause){if(!controller.current.signal.aborted)setError(cause instanceof Error?cause.message:"The saved source could not be opened.");}

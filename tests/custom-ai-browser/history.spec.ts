@@ -412,7 +412,11 @@ test("a signed-out prompt can connect without waiting for transaction readiness"
 });
 test("general source restores compactly and reads complete code only when explicitly opened",async({page},info)=>{
  const f=await fixture(page),result=generalFixture();f.control.respond=()=>result;let sourceReads=0;
- await page.route("**/api/custom-ai/projects?**",route=>{sourceReads++;return route.fulfill({json:{version:1,requestId:f.calls[0].id,project:{hash:result.generalProject.projectHash,sources:{"Counter.sol":{content:"pragma solidity 0.8.26; contract Counter { uint256 public value; }"}}}}});});
+ await page.route("**/api/custom-ai/projects?**",route=>{
+  expect(new URL(route.request().url()).searchParams.get("view")).toBe("source");
+  sourceReads++;
+  return route.fulfill({json:{requestId:f.calls[0].id,project:{hash:result.generalProject.projectHash,sources:{"Counter.sol":{content:"pragma solidity 0.8.26; contract Counter { uint256 public value; }"}}}}});
+ });
  await page.goto(origin);const box=page.getByRole("textbox",{name:"Describe your coin or ask a question"});await expect(box).toBeEditable();
  await box.fill("Build a general counter contract");await box.press("Enter");await expect(page.getByText("Built",{exact:true})).toBeVisible();
  await expect(page.getByRole("button",{name:"Launch coin",exact:true})).toBeDisabled();expect(sourceReads).toBe(0);
