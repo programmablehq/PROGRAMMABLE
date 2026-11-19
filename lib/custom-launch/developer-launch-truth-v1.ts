@@ -290,8 +290,27 @@ export function customLaunchWarningFindingCodesV1(output: unknown) {
   return [...new Set(value)];
 }
 
+// The wallet history displays the worker's component status. Its separate
+// publication evidence can accompany the same Ethereum request and contract.
+function hasBoundSourcePublication(
+  candidate: Record<string, unknown>,
+  ethereumGraphRequestId: string | undefined,
+) {
+  const publication = candidate.publishedSource;
+  return ethereumGraphRequestId !== undefined
+    && isRecord(publication)
+    && publication.schemaVersion === "programmable.ethereum-graph-published-source.v1"
+    && publication.chainId === "1"
+    && publication.provider === "sourcify"
+    && publication.providerMatch === "match"
+    && publication.requestId === ethereumGraphRequestId
+    && publication.targetId === candidate.targetId
+    && publication.address === candidate.address;
+}
+
 export function parseSourceVerificationStatusV1(
   value: unknown,
+  ethereumGraphRequestId?: string,
 ): SourceVerificationStatusV1 | null {
   if (value === null || value === undefined) return null;
   if (
@@ -307,7 +326,9 @@ export function parseSourceVerificationStatusV1(
   for (const candidate of value.components) {
     if (
       !isRecord(candidate)
-      || Object.keys(candidate).length !== 4
+      || Object.keys(candidate).length !== (Object.hasOwn(candidate, "publishedSource") ? 5 : 4)
+      || (Object.hasOwn(candidate, "publishedSource")
+        && !hasBoundSourcePublication(candidate, ethereumGraphRequestId))
       || !["targetId", "address", "status", "provider"]
         .every((key) => Object.hasOwn(candidate, key))
       || typeof candidate.targetId !== "string"

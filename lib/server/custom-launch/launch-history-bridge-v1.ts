@@ -1915,7 +1915,10 @@ function parseLaunch(
   const sourceVerification = record.sourceVerification === undefined
     || record.sourceVerification === null
     ? null
-    : parseSourceVerificationStatusV1(record.sourceVerification);
+    : parseSourceVerificationStatusV1(
+      record.sourceVerification,
+      version === "v3" && (options.chainId ?? "1") === "1" ? record.requestId : undefined,
+    );
   if (
     record.sourceVerification !== undefined
     && record.sourceVerification !== null
