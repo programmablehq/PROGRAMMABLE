@@ -4,9 +4,22 @@ export const dynamic = "force-static";
 
 export function GET() {
   const entry = PROGRAMMABLE_AGENT_ENTRY;
+  const { customLaunch, customLaunchPlan } = entry.workflows;
+  const networks = [
+    ["Ethereum Mainnet", customLaunch.ethereum],
+    ["Robinhood Chain", customLaunchPlan],
+    ["Base", customLaunch.base],
+    ["HyperEVM", customLaunch.hyperevm],
+    ["Elysium", customLaunch.elysium],
+  ] as const;
+  const networkRows = networks.map(([name, workflow]) => {
+    const checks = [`[Capabilities](${workflow.capabilities})`];
+    if ("readiness" in workflow) checks.push(`[Readiness](${workflow.readiness})`);
+    return `| ${name} (${workflow.chainId}) | [Launch guide](${workflow.guide}) | ${checks.join(" · ")} |`;
+  });
   const content = [
     "# Programmable agent guide",
-    "Programmable has two launch experiences: Module Mode composes a coin from reviewed modules, while Custom launches an individual token, hook or application. Public launches use Robinhood. API keys are available for Custom Launch Plans.",
+    "Module Mode builds a coin from reviewed modules. Custom Launch lets you submit your own token, hook or application through the API for your chosen network.",
     `Machine-readable entry point: ${entry.discoveryUrl}\nCurrent release contracts: ${entry.releaseDiscoveryUrl}\nAll documentation: ${entry.docsIndexUrl}\nFull documentation: ${entry.docsFullUrl}`,
     "## Connect",
     "A connection file uses schema programmable.agent-connection.v1. Read credential.value privately into PROGRAMMABLE_API_KEY; do not print it. Use Authorization: Bearer $PROGRAMMABLE_API_KEY only on https://api.programmable.market. Read guideUrl and discoveryUrl without credentials. The key itself is an opaque credential, not an encoded manual. Its presence does not prove that any particular operation is authorized.",
@@ -14,13 +27,18 @@ export function GET() {
     "## Choose the workflow",
     "- Trade a coin: open https://programmable.market/token/TOKEN_ADDRESS?chain=4663 and use the trading panel on its coin page. Choose the direction, enter an amount or use Max, then review the current quote and minimum received. Some tokens require an exact-amount approval before quoting the swap. The connected wallet signs; a pending or unknown transaction must be reconciled before another send. The selected launch needs an executable ETH trading route; non-trading applications do not become swap markets.",
     `- Configure a normal coin: ${entry.website.moduleMode}. Choose the name, symbol, optional image and social links, initial buy and creator swap fees, then optionally add modules. A missing image resolves to the Programmable logo at launch; website, X, Telegram, Discord, GitHub and GitBook links are stored in token metadata. Review and sign with the connected wallet. Read ${entry.workflows.moduleLaunch.availability} for the active engine and catalog. This browser wallet path does not have a generic Module Mode API create endpoint; do not invent one.`,
-    `- Build a complete custom hook, token or application: follow the Robinhood Custom Launch Plan instructions below. Robinhood wallet handoffs open at ${entry.website.customLaunchHandoff}.`,
+    "- To launch your own contracts, find your network under [Custom Launch networks](#custom-launch-networks).",
     `- Find a coin: ${entry.website.explore}. The creator's coins appear at ${entry.website.profile}. Open ${entry.website.manageModuleCoin} with the actual token address for supported module funding, reward claims, fee claims and creator-recipient controls. These are wallet actions with role checks.`,
+    "## Custom Launch networks",
+    ["| Network (chain ID) | Workflow | Live checks |", "| --- | --- | --- |", ...networkRows].join("\n"),
+    "On Ethereum, read `profile.profileVersion` and require `profile.productionLaunchAuthorized` to be true. On Robinhood, check that `availability.operations.create.state` is `active` for Custom Launch Plans.",
+    "On Base, HyperEVM and Elysium, check the selected network’s readiness before preparing a request. It must return `mode` set to `active`, `ready` set to true and `publicLaunchAuthorized` set to true. If creation is unavailable, report the reason for the selected network.",
     "## Browser controls",
     "Use each control's accessible name and role. Explore has one search field, a Sort launches group with pressed states, Filters with an expanded state, and Previous page / Next page controls with disabled states. The website starts Explore with highest market cap; the API accepts an explicit sort. Changing the search or sort loads the selected results. Wait for the launches list's aria-busy state to clear before paging. Background updates keep the existing cards available.",
     "Module Mode and Profile show layout placeholders while their code or data loads. These placeholders are decorative, not available modules, empty balances or actionable controls. Read the loaded catalog and current wallet state. Connect wallet opens the wallet chooser; selecting an account is not a completed signature. After a wallet prompt or transaction opens, wait for its current status instead of clicking the launch, claim or swap action again. Use Try again for a failed read and reconcile pending transactions before another send.",
     "## New Robinhood Custom Launch Plans",
-    `Use ${entry.workflows.customLaunchPlan.guide} for the exact current schema and workflow. First read ${entry.workflows.customLaunchPlan.capabilities}; require availability.operations.create.state to be active. Bind the manifest at ${entry.workflows.customLaunchPlan.manifest} and read ${entry.workflows.customLaunchPlan.setup} before packing. The [quickstart](https://programmable.market/docs/developers/custom-launch-quickstart) and ${entry.workflows.customLaunchPlan.openApi} provide the public entry points.`,
+    `Use the [Plan guide](${customLaunchPlan.guide}) for the current schema. Bind the [manifest](${customLaunchPlan.manifest}) and read the [agent setup](${customLaunchPlan.setup}) before packing. See the [quickstart](https://programmable.market/docs/developers/custom-launch-quickstart) and the [OpenAPI reference](${customLaunchPlan.openApi}) for request details.`,
+    `Open the returned plan in [Your Robinhood launches](${entry.website.customLaunchHandoff}) with its controller wallet to review actions awaiting a signature.`,
     "For a new open plan, use admissionPolicy programmable.custom-launch-policy.provenance.v1, feeObligations [] and publication.visibility listed. The project's own contracts may define owner controls, pause behavior, liquidity and fees. A Programmable stamp records provenance only; it does not certify safety, economics or tradability.",
     "Preflight the exact packed request with POST /v4/chains/4663/custom-launch-plans:preflight, then create with POST /v4/chains/4663/custom-launch-plans using the same bytes and an Idempotency-Key. Preserve both on retries. If action_required, follow the returned remediation and do not ask for a wallet signature yet. The API key cannot sign or broadcast. The controller wallet reviews and signs the exact prepared transaction separately; reconcile an uncertain transaction before sending again.",
     `After finality, read ${entry.workflows.customLaunchPlan.indexing.feed} and ${entry.workflows.customLaunchPlan.indexing.guide} for source-bound indexing. A verified launch identity is separate from market data and executable trading routes.`,
