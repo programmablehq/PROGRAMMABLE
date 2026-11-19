@@ -2151,6 +2151,26 @@ describe("developer launch history same-origin bridge", () => {
     });
   });
 
+  it.each([
+    [launchV2(), ["v3", "v2"]],
+    [launch(), ["v3", "v2", "v1"]],
+    [null, ["v3", "v2", "v1"]],
+  ] as const)("resolves a saved Ethereum link within its own chain", async (resource, versions) => {
+    const id = resource?.requestId ?? V4_LAUNCH_ID;
+    fetchBackend.mockImplementation(async (url: URL) =>
+      resource && url.pathname.startsWith("/" + resource.routeId.split(":").at(-1) + "/")
+        ? Response.json(resource)
+        : new Response(null, { status: 404 }));
+    const response = await bridge().get(new Request(
+      "https://programmable.market/api/developer/custom-launches/" + id + "?walletAddress=" + WALLET + "&chainId=1",
+    ), id);
+    expect(fetchBackend.mock.calls.map(([url]) => (url as URL).pathname)).toEqual(
+      versions.map(version => "/" + version + "/wallet-admin/custom-launches/" + id),
+    );
+    expect(response.status).toBe(resource ? 200 : 404);
+    if (resource) expect(await response.json()).toEqual(resource);
+  });
+
   it("reads an exact V2 resource only from the V2 wallet-admin route", async () => {
     fetchBackend.mockResolvedValueOnce(new Response(JSON.stringify(launchV2()), {
       status: 200,
