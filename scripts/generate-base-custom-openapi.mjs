@@ -1,17 +1,27 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createHash } from "node:crypto";
-import { canonicalizeJson } from "../packages/launch/src/canonical-json.mjs";
+import {
+  AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2,
+  directNativeProgrammableTradeFeePolicyHashV36,
+  withAutomaticNativeProfileV2,
+} from "../packages/launch/src/profile-v36.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = name => JSON.parse(fs.readFileSync(path.join(root, name), "utf8"));
 const networks = [
   { id: '8453', name: 'Base', slug: 'base', block: '52866196', blockHash: '0x77c7a70a0a1d538879c9247ba16efc716f1d2226b2c56d385daa6ddcd30d33b9' },
   { id: '999', name: 'HyperEVM', slug: 'hyperevm', block: '49851979', blockHash: '0x07ea8b3308abf3e60a7b21f0a18db13e17d576df15dec5d71ac4b0edf37112cd' },
+  { id: '99901', name: 'Elysium', slug: 'elysium', block: '3584732', blockHash: '0x7abdac4d5084485a211dc716a9103133a4fb7a3676c00af7b1a816cf9446b42f' },
 ];
 for (const network of networks) {
 const profile = read(`packages/launch/src/${network.slug}-profile-v1.json`);
+const automaticProfile = withAutomaticNativeProfileV2(profile, AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2[network.id]);
+const revisions = [
+  { name: "Legacy", profile },
+  { name: "Automatic", profile: automaticProfile },
+];
+const ref = name => ({ $ref: "#/components/schemas/" + name });
 const source = read("public/openapi/custom-launch-v3.6.json");
 const legacy = read("public/openapi/custom-launch-v3.json");
 const prefix = `/v4/chains/${network.id}`;
@@ -32,11 +42,25 @@ const schemas = replace(source.components.schemas);
 // Resolve the chain-specific legacy schema before translating it. Keeping its
 // external reference would still require Ethereum's checkpoint on Base.
 schemas.FinalizedCheckpointV1 = replace(legacy.components.schemas.FinalizedCheckpointV1);
-schemas.ProgrammableTradeFeePolicyV36 = { const: profile.programmableTradeFeePolicy };
+for (const revision of revisions) {
+  const name = revision.name;
+  schemas[name + "TradeFeePolicy"] = { const: revision.profile.programmableTradeFeePolicy };
+  schemas[name + "ProfileFees"] = {
+    type: "object", required: ["platformFeePolicy", "programmableTradeFeePolicy"],
+    properties: {
+      platformFeePolicy: { const: revision.profile.platformFeePolicy },
+      programmableTradeFeePolicy: ref(name + "TradeFeePolicy"),
+    },
+  };
+}
+schemas.ProgrammableTradeFeePolicyV36 = { oneOf: revisions.map(({ name }) => ref(name + "TradeFeePolicy")) };
 const routingFee = schemas.RoutingFeePolicyBindingV36;
 routingFee.properties.schemaVersion = { const: `programmable.${network.slug}-launch-routing-fee-policy-binding.v1` };
-routingFee.properties.policyHash = { const: "sha256:" + createHash("sha256")
-  .update(profile.programmableTradeFeePolicy.schemaVersion + "\0" + canonicalizeJson(profile.programmableTradeFeePolicy)).digest("hex") };
+routingFee.properties.policyHash = { type: "string", pattern: "^sha256:[0-9a-f]{64}$" };
+routingFee.oneOf = revisions.map(({ name, profile }) => ({ properties: {
+  policy: ref(name + "TradeFeePolicy"),
+  policyHash: { const: directNativeProgrammableTradeFeePolicyHashV36(profile.programmableTradeFeePolicy) },
+} }));
 routingFee.properties.enforcementBoundary = {
   type: "object", required: ["chainId", "blockNumber", "blockHash", "releaseId"],
   properties: {
@@ -46,8 +70,35 @@ routingFee.properties.enforcementBoundary = {
   }, additionalProperties: false,
 };
 delete routingFee.allOf;
-schemas.DirectNativeHookGraphProfileV1 = { const: profile };
-schemas.CustomLaunchCreateRequestV3.properties.launchProfile = { const: profile };
+const profileProperties = Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, { const: value }]));
+schemas.ChainLaunchProfile = {
+  type: "object", required: Object.keys(profile), additionalProperties: false,
+  properties: { ...profileProperties, productionLaunchAuthorized: { type: "boolean" },
+    platformFeePolicy: { type: "object" }, programmableTradeFeePolicy: ref("ProgrammableTradeFeePolicyV36") },
+  oneOf: revisions.map(({ name }) => ref(name + "ProfileFees")),
+};
+const recipients = revisions.map(({ profile }) => profile.platformFeePolicy.claimAuthority);
+const binding = schemas.DirectNativePlatformFeeBindingV1;
+binding.description = "The declared platform fee uses the selected chain profile. The claim authority and any fixed payout recipient must agree with that profile.";
+binding.properties.programmableFeeHundredthsOfBip = { const: profile.platformFeePolicy.programmableFeeHundredthsOfBip };
+binding.properties.claimAuthority = { enum: recipients };
+for (const alternative of binding.properties.claimBinding.oneOf) {
+  alternative.properties.claimAuthority = { enum: recipients };
+  if (alternative.properties.payoutRecipient) alternative.properties.payoutRecipient = { enum: recipients };
+}
+function claimRecipient(address) {
+  return { properties: { claimAuthority: { const: address },
+    claimBinding: { properties: { claimAuthority: { const: address }, payoutRecipient: { const: address } } } } };
+}
+binding.oneOf = recipients.map(claimRecipient);
+const create = schemas.CustomLaunchCreateRequestV3;
+create.properties.launchProfile = { allOf: [ref("ChainLaunchProfile"), {
+  properties: { productionLaunchAuthorized: { const: profile.productionLaunchAuthorized } },
+}] };
+create.oneOf = revisions.map(({ name, profile }) => ({ properties: {
+  launchProfile: ref(name + "ProfileFees"),
+  launchProfileSelection: { properties: { platformFeeBinding: claimRecipient(profile.platformFeePolicy.claimAuthority) } },
+} }));
 schemas.CustomLaunchCreateRequestV3.properties.chainId = { const: network.id };
 for (const field of ["fundingAuthorization", "fundingIntentHash", "partnerAttribution"]) {
   if (schemas.CustomLaunchCreateRequestV3.properties[field]) schemas.CustomLaunchCreateRequestV3.properties[field] = false;
@@ -62,11 +113,21 @@ schemas.CustomLaunchCapabilitiesV1 = {
     chain: { const: { id: network.id, name: network.name } }, serverTime: { type: "string", format: "date-time" },
     releaseId: { type: "string", pattern: "^sha256:[0-9a-f]{64}$" }, mode: { enum: ["disabled", "canary", "active"] },
     publicLaunchAuthorized: { type: "boolean" }, moduleMode: { const: false },
-    profile: { type: "object", required: [...new Set([...Object.keys(profile), "productionLaunchAuthorized"])],
-      properties: { ...Object.fromEntries(Object.entries(profile).map(([key, value]) => [key, { const: value }])),
-        productionLaunchAuthorized: { type: "boolean" } }, additionalProperties: false },
+    profile: ref("ChainLaunchProfile"),
+    automaticPlatformFees: {
+      type: "object", required: ["policyId", "status", "chainId", "teamWallet", "platformFeeBps", "buybackBps", "nativePayoutBps", "activationTime", "router"],
+      properties: {
+        policyId: { const: "programmable.automatic-platform-fees.v2" }, status: { const: "active" },
+        chainId: { const: network.id }, teamWallet: { const: automaticProfile.platformFeePolicy.claimAuthority },
+        platformFeeBps: { const: automaticProfile.programmableTradeFeePolicy.rateBps }, buybackBps: { const: 0 },
+        nativePayoutBps: { const: 10000 }, activationTime: { type: "string", format: "date-time" }, router: { type: "null" },
+      },
+    },
     routes: { type: "object" }, authentication: { type: "object" },
   },
+  if: { required: ["automaticPlatformFees"] },
+  then: { properties: { profile: ref("AutomaticProfileFees") } },
+  else: { properties: { profile: ref("LegacyProfileFees") } },
   description: "Require mode active and publicLaunchAuthorized true for public launch availability. The canary mode admits only the release operator.",
 };
 const paths = {};
@@ -92,13 +153,13 @@ const scan = value => {
   for (const child of Object.values(value)) scan(child);
 };
 scan(paths);
-const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.0.0",
+const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.1.0",
   description: `${network.name} chain ${network.id}. Exact-source Custom Launch only. The request uses the graph V3 schema on a chain-qualified V4 URL. Module Mode and partner credentials are not enabled on this route.` },
   jsonSchemaDialect: source.jsonSchemaDialect, servers: [{ url: "https://api.programmable.market" }],
   externalDocs: { url: `https://programmable.market/developers/${network.slug}-custom-launch-api-v1.md` },
   security: source.security, paths, components: { ...source.components,
     schemas: Object.fromEntries([...names].sort().map(name => [name, schemas[name]])) } };
-const file = path.join(root, `public/openapi/${network.slug}-custom-launch-v1.json`);
+const file = path.join(root, `public/openapi/${network.slug}-custom-launch-v1.1.json`);
 const bytes = JSON.stringify(output, null, 2) + "\n";
 if (process.argv.includes("--check")) {
   if (fs.readFileSync(file, "utf8") !== bytes) throw Error(`${network.name} OpenAPI is not current`);

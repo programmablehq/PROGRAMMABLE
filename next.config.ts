@@ -173,6 +173,11 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return {
       beforeFiles: [
+        // Keep the documented URLs current while retaining the release-bound CLI source files.
+        ...["base", "hyperevm", "elysium"].map((chain) => ({
+          source: `/openapi/${chain}-custom-launch-v1.json`,
+          destination: `/openapi/${chain}-custom-launch-v1.1.json`,
+        })),
         {
           source: "/docs.md",
           destination: `${GITBOOK_PROXY_ORIGIN}/.md`,
