@@ -1,8 +1,8 @@
 "use client";
 import { createContext, Fragment, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Archive, Check, History, Pencil, Plus, Search, Undo2, X } from "lucide-react";
-import { aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
-import { type ConversationItem, type ConversationPage } from "@/lib/custom-ai/conversation";
+import { AIRequestError, aiRequest, type AISessionHeaders } from "@/lib/custom-ai/client";
+import { validConversationId, type ConversationItem, type ConversationPage } from "@/lib/custom-ai/conversation";
 import { readDraftCache, writeDraftCache } from "@/lib/custom-ai/draft-cache";
 import { scopedCacheKeys } from "@/lib/custom-ai/cache-scope";
 import styles from "./workspace.module.css";
@@ -17,6 +17,7 @@ export function ChatLibrary({account,headers,initialConversationId,existingConve
   const existingConversation=useRef(existingConversationId),lockedRef=useRef(false),selectionCallback=useRef(onSelected);
   useEffect(()=>{selectionCallback.current=onSelected;},[onSelected]);
   const [selected,setSelected]=useState<string>(),[page,setPage]=useState<ConversationPage>({conversations:[]}),[open,setOpen]=useState(false);
+  const [openingSelection,setOpeningSelection]=useState(true);
   const transition=useRef(false),[transitioning,setTransitioning]=useState(false);
   const pendingCreate=useRef<string>(undefined);
   const [search,setSearch]=useState(""),[archived,setArchived]=useState(false),[loading,setLoading]=useState(false),[error,setError]=useState(""),[listError,setListError]=useState("");
@@ -60,8 +61,10 @@ export function ChatLibrary({account,headers,initialConversationId,existingConve
         const bootstrap=await aiRequest<ConversationItem&{cacheScope:string}>("/conversations",()=>apiHeaders.current(),{account,action:"bootstrap"},controller.signal);
         if(!active)return;
         key.current=scopedCacheKeys(bootstrap.cacheScope,account).selected;scope.current=bootstrap.cacheScope;setCacheScope(bootstrap.cacheScope);
+        const readChat = (id: string) => aiRequest<ConversationItem>(
+          `/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(id)}`, scopedHeaders, undefined, controller.signal);
         if(existingConversation.current){
-          const saved=await aiRequest<ConversationItem>(`/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(existingConversation.current)}`,scopedHeaders,undefined,controller.signal);
+          const saved=await readChat(existingConversation.current);
           if(saved.archived)throw Error("This coin chat is archived. Restore it in chat options before editing.");
           if(!active)return;await writeDraftCache(key.current,saved.id);if(active)setSelected(saved.id);return;
         }
@@ -74,13 +77,31 @@ export function ChatLibrary({account,headers,initialConversationId,existingConve
           if(active)setSelected(entry.id);
           return;
         }
-        const saved=await readDraftCache<string>(key.current),result=await load("",false);
+        const saved = await readDraftCache<unknown>(key.current);
+        if (!active) return;
+        if (validConversationId(saved)) {
+          try {
+            const current = saved === bootstrap.id ? bootstrap : await readChat(saved);
+            if (!active) return;
+            if (current?.id !== saved || current.account?.toLowerCase() !== account.toLowerCase() || typeof current.archived !== "boolean") {
+              throw Error("Your saved chat could not be reopened. Reload chats to try again.");
+            }
+            if (!current.archived) {
+              setPage({ conversations: [current] });
+              setSelected(saved);
+              return;
+            }
+          } catch (cause) {
+            if (!(cause instanceof AIRequestError && cause.status === 404 && cause.code === "missing")) throw cause;
+          }
+        }
+        if (!active) return;
+        const result = await load("", false);
         if(!active||!result)return;
-        let choice=result.conversations.find(c=>c.id===saved);
-        if(!choice&&saved)try{const current=await aiRequest<ConversationItem>(`/conversations?account=${encodeURIComponent(account)}&id=${encodeURIComponent(saved)}`,scopedHeaders,undefined,controller.signal);if(!current.archived)choice=current;}catch{/* A deleted local selection never changes a saved chat. */}
-        if(!active)return;choice??=result.conversations[0];
+        const choice=result.conversations[0];
         if(choice)setSelected(choice.id);else setOpen(true);
       }catch(cause){if(active)setError(cause instanceof Error?cause.message:"Your chats could not load.");}
+      finally { if (active) { setOpeningSelection(false); setLoading(false); } }
     })();
     return()=>{active=false;controller.abort();listAbort.current?.abort();};
   },[account,load,scopedHeaders,bootstrapRevision]);
@@ -156,6 +177,6 @@ export function ChatLibrary({account,headers,initialConversationId,existingConve
       {problem&&<p role="alert">{problem}</p>}
     </section>
   </div>;};
-  if(!selected||!cacheScope)return <WorkspacePending status={!problem&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning)}>{problem&&<><p role="alert">{problem}</p><button type="button" className={styles.textButton} onClick={()=>{setError("");filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
+  if(!selected||!cacheScope)return <WorkspacePending status={!problem&&!open?"Opening your chats…":""} navigation={()=>panel(transitioning || openingSelection)}>{problem&&<><p role="alert">{problem}</p><button type="button" className={styles.textButton} onClick={()=>{setOpen(false);setOpeningSelection(true);filter("",false);setBootstrapRevision(value=>value+1);}}>Reload chats</button></>}</WorkspacePending>;
   return <LibraryContext.Provider value={{id:selected,cacheScope,navigation:{pending:transitioning,tools:panel,newChat,registerFlush}}}><Fragment key={selected}>{children}</Fragment></LibraryContext.Provider>;
 }

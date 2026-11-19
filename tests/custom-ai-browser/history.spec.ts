@@ -568,6 +568,61 @@ test("opening the recovered chat clears the pending create before the next new c
  await openChatLibrary(page);await page.getByRole("button",{name:"New chat",exact:true}).click();await expect(box).toHaveValue("");
  expect(f.chats.size).toBe(3);expect(f.calls).toHaveLength(0);
 });
+test("a temporary read failure keeps the selected chat and its unsent draft on reload", async ({ page }) => {
+  const f = await fixture(page);
+  const account = "0x" + "a".repeat(40);
+  const savedId = "901497dd-a9ff-4d7b-87a0-ed2cfd63bff3";
+  const now = new Date().toISOString();
+  const recent = { id: LEGACY_CONVERSATION, account, title: "Recent coin", archived: false, revision: 1, createdAt: now, updatedAt: now };
+  const saved = { ...recent, id: savedId, title: "Earlier coin" };
+  for (const [item, input] of [[recent, "More recent draft"], [saved, "My earlier draft"]] as const) {
+    const key = "alice:" + account + ":" + item.id;
+    f.chats.set(key, item);
+    f.studios.set(key, { revision: 1, state: { settings: EMPTY_COIN_SETUP, messages: [], input } });
+  }
+  await page.goto(origin);
+  const composer = page.getByRole("textbox", { name: "Describe your coin or ask a question" });
+  await expect(composer).toHaveValue("More recent draft");
+  await openChatLibrary(page);
+  await page.getByRole("button", { name: /^Earlier coin/ }).click();
+  await expect(composer).toHaveValue("My earlier draft");
+
+  let detailStatus = 503;
+  const reads: string[] = [];
+  await page.route("**/api/custom-ai/conversations?**", async route => {
+    if (new URL(route.request().url()).searchParams.get("id") === savedId) {
+      reads.push("selected");
+      if (detailStatus === 200) return route.fallback();
+      const json = detailStatus === 404
+        ? { code: "missing", error: "That chat was not found." }
+        : { code: "unavailable", error: "Please retry the saved chat." };
+      return route.fulfill({ status: detailStatus, json });
+    }
+    reads.push("list");
+    return route.fulfill({ json: { conversations: [recent], cursor: "next-page" } });
+  });
+  await page.reload();
+  const retry = page.getByRole("button", { name: "Reload chats" });
+  await expect.poll(async () => {
+    if (await retry.isVisible()) return "retry";
+    if (await composer.isVisible()) return composer.inputValue();
+    return "loading";
+  }).toBe("retry");
+  await expect(composer).toHaveCount(0);
+  expect(reads.splice(0)).toEqual(["selected"]);
+
+  detailStatus = 200;
+  await retry.click();
+  await expect(composer).toHaveValue("My earlier draft");
+  expect(reads.splice(0)).toEqual(["selected"]);
+
+  detailStatus = 404;
+  await page.reload();
+  await expect(composer).toHaveValue("More recent draft");
+  expect(reads).toEqual(["selected", "list"]);
+  expect(f.calls).toHaveLength(0);
+});
+
 test("waits for the initial saved-chat selection before enabling a new chat",async({page})=>{
  const f=await fixture(page);let started=false,release!:()=>void;const pending=new Promise<void>(resolve=>{release=resolve;});
  f.control.beforeList=async()=>{started=true;await pending;};
