@@ -74,20 +74,14 @@ export function DeveloperLaunchWorkspace(props: Props) {
   }, [props.account, props.initialLaunchChainId]);
   const load = useCallback(async (pollSignal?: AbortSignal, more?: HistoryCursors) => {
     if (pollSignal?.aborted || (pollSignal && inFlight.current && !inFlight.current.signal.aborted)) return;
-    if (Date.now() < cooldown.current) {
-      if (!pollSignal) setLoading(false);
-      return;
-    }
+    if (pollSignal && Date.now() < cooldown.current) return;
     inFlight.current?.abort();
     const controller = new AbortController();
     const signal = pollSignal ? AbortSignal.any([pollSignal, controller.signal]) : controller.signal;
     inFlight.current = controller;
-    if (!pollSignal) {
-      setLoading(true);
-      setError("");
-    }
     try {
       const [access, identity] = await Promise.all([tokens.current.access(), tokens.current.identity()]);
+      if (signal.aborted || Date.now() < cooldown.current) return;
       if (!access) throw new Error("401 Wallet session expired");
       const headers = new Headers({ Accept: "application/json", Authorization: `Bearer ${access}` });
       if (identity) headers.set("X-Privy-Identity-Token", identity);
@@ -131,7 +125,20 @@ export function DeveloperLaunchWorkspace(props: Props) {
   }, [load, refresh]);
   // The refresh reads one source at a time. Each read keeps its own bounded deadline.
   useLaunchStatusPolling(props.account, !loading && !selected, signal => load(signal), 20_000, false, sources.length * launchHistoryRefreshTimeoutMs);
-  function retry() { setRefresh(value => value + 1); }
+  function beginHistoryRead() {
+    const ready = Date.now() >= cooldown.current;
+    setLoading(ready);
+    if (ready) setError("");
+    return ready;
+  }
+  function retry() { if (beginHistoryRead()) setRefresh(value => value + 1); }
+  function changeChain(next: HistoryChain) {
+    beginHistoryRead();
+    setChain(next);
+  }
+  function loadMore() {
+    if (beginHistoryRead()) void load(undefined, cursors);
+  }
   function open(item: LaunchOverviewItem) {
     deepLinkDone.current = true; setSelected(item); const url = new URL(window.location.href); url.searchParams.set("launchId", item.id); url.searchParams.set("chainId", item.chainId);
     window.history.replaceState(null, "", url); document.getElementById("launch-workspace")?.focus();
@@ -144,7 +151,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
   </div>;
   const visible = items.filter(item => chain === "all" || item.chainId === chain);
   return <section className={styles.workspace} id="launch-workspace" tabIndex={-1} aria-label="Your launches">
-    <div className={styles.toolbar}><label>Chain <select value={chain} onChange={event => setChain(event.target.value as HistoryChain)}><option value="all">All chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option><option value="8453">Base</option><option value="999">HyperEVM</option><option value="99901">Elysium</option></select></label>
+    <div className={styles.toolbar}><label>Chain <select value={chain} onChange={event => changeChain(event.target.value as HistoryChain)}><option value="all">All chains</option><option value="1">Ethereum</option><option value="4663">Robinhood</option><option value="8453">Base</option><option value="999">HyperEVM</option><option value="99901">Elysium</option></select></label>
       <button type="button" className={shared.secondaryButton} onClick={retry} disabled={loading}>Refresh launches</button></div>
     {error ? <DeveloperIssue message={error} retry={retry} connect={props.openWallet} chainId={props.initialLaunchChainId ?? undefined} /> : null}
     <p role="status">{loading ? "Loading your launches…" : visible.length ? `${visible.length} ${visible.length === 1 ? "launch" : "launches"}` : error ? "Some launches could not be loaded. Your saved requests are kept." : "No launch requests for this wallet and chain. Check your launch wallet and chain filter, then refresh."}</p>
@@ -153,6 +160,6 @@ export function DeveloperLaunchWorkspace(props: Props) {
       <span className={styles.identity}><strong>{item.name}</strong><span>{item.symbol}{item.symbol ? " · " : ""}{item.chainId === "99901" ? "Elysium" : item.chainId === "999" ? "HyperEVM" : item.chainId === "8453" ? "Base" : item.chainId === "1" ? "Ethereum" : "Robinhood"}</span><small>{item.next}</small></span>
       <span className={styles.status}>{item.status}<span aria-hidden="true"> →</span></span>
     </button></li>)}</ul>
-    {selectedSources.some(source => cursors[source]) ? <button className={shared.secondaryButton} type="button" disabled={loading} onClick={() => void load(undefined, cursors)}>Load more launches</button> : null}
+    {selectedSources.some(source => cursors[source]) ? <button className={shared.secondaryButton} type="button" disabled={loading} onClick={loadMore}>Load more launches</button> : null}
   </section>;
 }
