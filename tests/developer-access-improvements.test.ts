@@ -64,7 +64,14 @@ describe("developer setup and diagnostics", () => {
   });
   it("does not treat an unrelated or failed response as available", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ chainId: "1", availability: { operations: { create: { state: "active" } } } }))));
-    expect((await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"))).status).toBe(503);
+    const response = await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("retry-after")).toBe("10");
+    const body = await response.json();
+    expect(body).toMatchObject({ chainId: "4663", authorizesKey: false, error: { code: "API_CONNECTION_UNAVAILABLE" } });
+    expect(body).not.toHaveProperty("createState");
+    expect(developerRecovery(body.error.code).kind).toBe("retry");
+    expect(developerRecovery(body.error.code).title).toMatch(/launch availability/i);
   });
 });
 describe("unified launch overview", () => {

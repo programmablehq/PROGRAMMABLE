@@ -25,6 +25,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ chainId, reachable: true, createState: ["active", "canary", "disabled", "degraded"].includes(createState) ? createState : "unavailable",
       checkedAt: new Date().toISOString(), authorizesKey: false }, { headers: { "Cache-Control": "no-store" } });
   } catch {
-    return NextResponse.json({ error: { code: "API_CONNECTION_UNAVAILABLE" } }, { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "10" } });
+    return NextResponse.json({
+      chainId, authorizesKey: false,
+      error: { code: "API_CONNECTION_UNAVAILABLE", message: "Could not check launch availability for this chain." },
+    }, { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "10" } });
   }
 }
