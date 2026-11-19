@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
+import {
+  AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2,
+  directNativeProgrammableTradeFeePolicyHashV36,
+  withAutomaticNativeProfileV2,
+} from "../../packages/launch/src/profile-v36.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const directory = path.join(root, "public/openapi");
@@ -35,5 +40,47 @@ test("the Base contract rejects substituted chains, checkpoint schemas and fee p
     const page = structuredClone(fixture);
     change(page.launches[0]);
     assert.equal(validate(page), false);
+  }
+});
+
+test("each chain binds capabilities and finalized policy hashes to the same fee revision as the CLI", async () => {
+  for (const slug of ["base", "hyperevm", "elysium"]) {
+    const legacy = JSON.parse(fs.readFileSync(path.join(root, `packages/launch/src/${slug}-profile-v1.json`)));
+    const chainId = legacy.chainId;
+    const policy = AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2[chainId];
+    const current = withAutomaticNativeProfileV2(legacy, policy);
+    const url = `https://programmable.market/openapi/${slug}-custom-launch-v1.json`;
+    const spec = JSON.parse(fs.readFileSync(path.join(directory, path.basename(url))));
+    if (url !== base) ajv.addSchema(spec, url);
+    const validateCapabilities = await ajv.compileAsync({ $ref: url + "#/components/schemas/CustomLaunchCapabilitiesV1" });
+    const validateCreateProfile = await ajv.compileAsync({ $ref: url + "#/components/schemas/CustomLaunchCreateRequestV3/properties/launchProfile" });
+    const validateFee = await ajv.compileAsync({ $ref: url + "#/components/schemas/RoutingFeePolicyBindingV36" });
+    const capabilities = { schemaVersion: "programmable.custom-launch-capabilities.v1", apiVersion: "v4",
+      chain: { id: chainId, name: { base: "Base", hyperevm: "HyperEVM", elysium: "Elysium" }[slug] },
+      serverTime: "2026-11-19T00:00:00Z", releaseId: "sha256:" + "ab".repeat(32), mode: "active",
+      publicLaunchAuthorized: true, moduleMode: false, routes: {}, authentication: {}, profile: legacy };
+    assert.ok(validateCapabilities(capabilities), JSON.stringify(validateCapabilities.errors));
+    const active = { ...capabilities, profile: current, automaticPlatformFees: {
+      policyId: "programmable.automatic-platform-fees.v2", status: "active", chainId, teamWallet: policy.defaultCollection.recipient,
+      platformFeeBps: 30, buybackBps: 0, nativePayoutBps: 10000, activationTime: capabilities.serverTime, router: null,
+    } };
+    assert.ok(validateCapabilities(active), JSON.stringify(validateCapabilities.errors));
+    assert.equal(validateCapabilities({ ...active, profile: legacy }), false);
+    assert.equal(validateCapabilities({ ...active, profile: { ...current, platformFeePolicy: legacy.platformFeePolicy } }), false);
+    assert.ok(validateCreateProfile(current));
+    assert.ok(validateCreateProfile(legacy));
+    assert.equal(validateCreateProfile({ ...legacy, programmableTradeFeePolicy: policy }), false);
+    const binding = structuredClone(fixture.launches[0].routingFeePolicy);
+    const bindingSchema = spec.components.schemas.RoutingFeePolicyBindingV36;
+    const boundary = bindingSchema.properties.enforcementBoundary.properties;
+    Object.assign(binding.enforcementBoundary, { chainId, blockNumber: boundary.blockNumber.const, blockHash: boundary.blockHash.const });
+    binding.schemaVersion = bindingSchema.properties.schemaVersion.const;
+    for (const selected of [legacy.programmableTradeFeePolicy, policy]) {
+      binding.policy = selected;
+      binding.policyHash = directNativeProgrammableTradeFeePolicyHashV36(selected);
+      assert.ok(validateFee(binding), JSON.stringify(validateFee.errors));
+    }
+    binding.policyHash = directNativeProgrammableTradeFeePolicyHashV36(legacy.programmableTradeFeePolicy);
+    assert.equal(validateFee(binding), false);
   }
 });

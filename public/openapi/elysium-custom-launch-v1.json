@@ -865,6 +865,57 @@
       "ApplicantSelectedFeeHundredthsOfBipV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/ApplicantSelectedFeeHundredthsOfBipV1"
       },
+      "AutomaticProfileFees": {
+        "type": "object",
+        "required": [
+          "platformFeePolicy",
+          "programmableTradeFeePolicy"
+        ],
+        "properties": {
+          "platformFeePolicy": {
+            "const": {
+              "schemaVersion": "programmable.platform-fee-policy.v1",
+              "accountingMode": "inclusive-selected-total",
+              "applicability": "successful-pool-swaps",
+              "rateDenominator": "1000000",
+              "programmableFeeHundredthsOfBip": "3000",
+              "assessmentBase": "executed-gross-declared-quote",
+              "feeCurrency": "declared-quote-currency",
+              "roundingMode": "floor",
+              "claimAuthority": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+            }
+          },
+          "programmableTradeFeePolicy": {
+            "$ref": "#/components/schemas/AutomaticTradeFeePolicy"
+          }
+        }
+      },
+      "AutomaticTradeFeePolicy": {
+        "const": {
+          "schemaVersion": "programmable.elysium-programmable-trade-fee-policy.v1",
+          "policyVersion": "programmable.elysium-native-fee.v2",
+          "scope": "elysium-custom-launch-trades",
+          "ratePpm": "3000",
+          "rateDenominator": "1000000",
+          "rateBps": 30,
+          "modeSelection": "server-exact-runtime-and-trade-proof",
+          "defaultCollection": {
+            "mode": "pool_enforced",
+            "routedRateBps": 0,
+            "basis": "gross-native-by-side",
+            "buyBasis": "funded-native-input",
+            "sellBasis": "gross-native-output-credit",
+            "currency": "native-HYPE",
+            "rounding": "ceil-per-trade",
+            "recipient": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62",
+            "collection": "atomic-pool-fee-forwarding"
+          },
+          "native30Waiver": null,
+          "launchAdmissionEstablishesFeeCollection": false,
+          "externalTradeFeeGuaranteed": false,
+          "historicalSignedFeeObligations": "preserved"
+        }
+      },
       "BehaviorScenarioInputsV1": {
         "type": "object",
         "required": [
@@ -992,6 +1043,215 @@
               }
             },
             "additionalProperties": false
+          }
+        ]
+      },
+      "ChainLaunchProfile": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "profileId",
+          "profileRevision",
+          "profileVersion",
+          "productionLaunchAuthorized",
+          "chainId",
+          "router",
+          "routerRuntimeCodeHash",
+          "permitAuthority",
+          "permitAuthorityRuntimeCodeHash",
+          "graphFactory",
+          "graphFactoryRuntimeCodeHash",
+          "poolManager",
+          "poolManagerRuntimeCodeHash",
+          "fundingToken",
+          "fundingTokenRuntimeCodeHash",
+          "graphPolicy",
+          "currencyPolicy",
+          "hookPermissionPolicy",
+          "fundingPolicy",
+          "platformFeePolicy",
+          "programmableTradeFeePolicy",
+          "platformAdmissionPolicy",
+          "projectMetadataPolicy"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.direct-native-hook-graph-profile.v3"
+          },
+          "profileId": {
+            "const": "programmable.direct-native-hook-graph.v1"
+          },
+          "profileRevision": {
+            "const": 3
+          },
+          "profileVersion": {
+            "const": "3.6.0"
+          },
+          "productionLaunchAuthorized": {
+            "type": "boolean"
+          },
+          "chainId": {
+            "const": "99901"
+          },
+          "router": {
+            "const": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4"
+          },
+          "routerRuntimeCodeHash": {
+            "const": "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7"
+          },
+          "permitAuthority": {
+            "const": "0x8B134A7F24C8a97B999dcce9D10Eb2966c260209"
+          },
+          "permitAuthorityRuntimeCodeHash": {
+            "const": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000"
+          },
+          "graphFactory": {
+            "const": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e"
+          },
+          "graphFactoryRuntimeCodeHash": {
+            "const": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8"
+          },
+          "poolManager": {
+            "const": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1"
+          },
+          "poolManagerRuntimeCodeHash": {
+            "const": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1"
+          },
+          "fundingToken": {
+            "const": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81"
+          },
+          "fundingTokenRuntimeCodeHash": {
+            "const": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
+          },
+          "graphPolicy": {
+            "const": {
+              "minimumTargets": 3,
+              "maximumTargets": 16,
+              "directTargetsOnly": true
+            }
+          },
+          "currencyPolicy": {
+            "const": {
+              "native": true,
+              "erc20": true
+            }
+          },
+          "hookPermissionPolicy": {
+            "const": {
+              "minimumMask": 0,
+              "maximumMask": 16383,
+              "requireHookMinerAddressMaskMatch": true
+            }
+          },
+          "fundingPolicy": {
+            "const": {
+              "mode": "wallet-transaction-value",
+              "launchFundingRequired": true,
+              "signatureRequired": false,
+              "valueSource": "exact-router-transaction-msg-value"
+            }
+          },
+          "platformFeePolicy": {
+            "type": "object"
+          },
+          "programmableTradeFeePolicy": {
+            "$ref": "#/components/schemas/ProgrammableTradeFeePolicyV36"
+          },
+          "platformAdmissionPolicy": {
+            "const": {
+              "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
+              "mode": "deterministic-exact-source-graph-static-baseline-v1",
+              "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
+              "engineId": "programmable.direct-native-static-admission",
+              "engineVersion": "1.0.0",
+              "exactSourceCompilerGraphBindingRequired": true,
+              "staticBaselineGateVersion": "1.0.0",
+              "blockingFindingRules": [
+                {
+                  "code": "RUNTIME_CALLCODE",
+                  "targetRoles": [
+                    "any"
+                  ]
+                },
+                {
+                  "code": "RUNTIME_SELFDESTRUCT",
+                  "targetRoles": [
+                    "any"
+                  ]
+                },
+                {
+                  "code": "SOURCE_SELFDESTRUCT_SURFACE",
+                  "targetRoles": [
+                    "any"
+                  ]
+                },
+                {
+                  "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
+                  "targetRoles": [
+                    "hook"
+                  ]
+                },
+                {
+                  "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
+                  "targetRoles": [
+                    "hook"
+                  ]
+                },
+                {
+                  "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
+                  "targetRoles": [
+                    "hook"
+                  ]
+                },
+                {
+                  "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
+                  "targetRoles": [
+                    "hook"
+                  ]
+                }
+              ],
+              "warningDisposition": "bound-and-visible",
+              "noBlockingFindingDisposition": "router-simulation-eligible",
+              "blockingFindingDisposition": "action-required",
+              "routerSimulationRequiredBeforeAuthorization": true,
+              "receiptAuthority": "platform-only",
+              "assurance": "launch-admission-only",
+              "safetyClaim": false,
+              "feeBehaviorClaim": false
+            }
+          },
+          "projectMetadataPolicy": {
+            "const": {
+              "schemaVersion": "programmable.project-metadata-policy.v1",
+              "descriptionMinimumUtf8Bytes": 20,
+              "descriptionMaximumUtf8Bytes": 4096,
+              "descriptionMinimumUnicodeLettersOrNumbers": 8,
+              "imageRequired": true,
+              "imageReceiptSourceManifestBindingRequired": true,
+              "imageMediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ],
+              "linksMaximumCount": 32,
+              "requiredLinkKinds": [
+                "website",
+                "x"
+              ],
+              "exactlyOneRequiredLinkPerKind": true,
+              "websiteUriPolicy": "canonical-public-credential-free-https",
+              "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
+            }
+          }
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LegacyProfileFees"
+          },
+          {
+            "$ref": "#/components/schemas/AutomaticProfileFees"
           }
         ]
       },
@@ -1728,244 +1988,76 @@
             "const": false
           },
           "profile": {
+            "$ref": "#/components/schemas/ChainLaunchProfile"
+          },
+          "automaticPlatformFees": {
             "type": "object",
             "required": [
-              "schemaVersion",
-              "profileId",
-              "profileRevision",
-              "profileVersion",
-              "productionLaunchAuthorized",
+              "policyId",
+              "status",
               "chainId",
-              "router",
-              "routerRuntimeCodeHash",
-              "permitAuthority",
-              "permitAuthorityRuntimeCodeHash",
-              "graphFactory",
-              "graphFactoryRuntimeCodeHash",
-              "poolManager",
-              "poolManagerRuntimeCodeHash",
-              "fundingToken",
-              "fundingTokenRuntimeCodeHash",
-              "graphPolicy",
-              "currencyPolicy",
-              "hookPermissionPolicy",
-              "fundingPolicy",
-              "platformFeePolicy",
-              "programmableTradeFeePolicy",
-              "platformAdmissionPolicy",
-              "projectMetadataPolicy"
+              "teamWallet",
+              "platformFeeBps",
+              "buybackBps",
+              "nativePayoutBps",
+              "activationTime",
+              "router"
             ],
             "properties": {
-              "schemaVersion": {
-                "const": "programmable.direct-native-hook-graph-profile.v3"
+              "policyId": {
+                "const": "programmable.automatic-platform-fees.v2"
               },
-              "profileId": {
-                "const": "programmable.direct-native-hook-graph.v1"
-              },
-              "profileRevision": {
-                "const": 3
-              },
-              "profileVersion": {
-                "const": "3.6.0"
-              },
-              "productionLaunchAuthorized": {
-                "type": "boolean"
+              "status": {
+                "const": "active"
               },
               "chainId": {
                 "const": "99901"
               },
+              "teamWallet": {
+                "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+              },
+              "platformFeeBps": {
+                "const": 30
+              },
+              "buybackBps": {
+                "const": 0
+              },
+              "nativePayoutBps": {
+                "const": 10000
+              },
+              "activationTime": {
+                "type": "string",
+                "format": "date-time"
+              },
               "router": {
-                "const": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4"
-              },
-              "routerRuntimeCodeHash": {
-                "const": "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7"
-              },
-              "permitAuthority": {
-                "const": "0x8B134A7F24C8a97B999dcce9D10Eb2966c260209"
-              },
-              "permitAuthorityRuntimeCodeHash": {
-                "const": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000"
-              },
-              "graphFactory": {
-                "const": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e"
-              },
-              "graphFactoryRuntimeCodeHash": {
-                "const": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8"
-              },
-              "poolManager": {
-                "const": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1"
-              },
-              "poolManagerRuntimeCodeHash": {
-                "const": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1"
-              },
-              "fundingToken": {
-                "const": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81"
-              },
-              "fundingTokenRuntimeCodeHash": {
-                "const": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
-              },
-              "graphPolicy": {
-                "const": {
-                  "minimumTargets": 3,
-                  "maximumTargets": 16,
-                  "directTargetsOnly": true
-                }
-              },
-              "currencyPolicy": {
-                "const": {
-                  "native": true,
-                  "erc20": true
-                }
-              },
-              "hookPermissionPolicy": {
-                "const": {
-                  "minimumMask": 0,
-                  "maximumMask": 16383,
-                  "requireHookMinerAddressMaskMatch": true
-                }
-              },
-              "fundingPolicy": {
-                "const": {
-                  "mode": "wallet-transaction-value",
-                  "launchFundingRequired": true,
-                  "signatureRequired": false,
-                  "valueSource": "exact-router-transaction-msg-value"
-                }
-              },
-              "platformFeePolicy": {
-                "const": {
-                  "schemaVersion": "programmable.platform-fee-policy.v1",
-                  "accountingMode": "inclusive-selected-total",
-                  "applicability": "successful-pool-swaps",
-                  "rateDenominator": "1000000",
-                  "programmableFeeHundredthsOfBip": "3000",
-                  "assessmentBase": "executed-gross-declared-quote",
-                  "feeCurrency": "declared-quote-currency",
-                  "roundingMode": "floor",
-                  "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
-                }
-              },
-              "programmableTradeFeePolicy": {
-                "const": {
-                  "schemaVersion": "programmable.elysium-programmable-trade-fee-policy.v1",
-                  "policyVersion": "programmable.elysium-native-fee.v1",
-                  "scope": "elysium-custom-launch-trades",
-                  "ratePpm": "3000",
-                  "rateDenominator": "1000000",
-                  "rateBps": 30,
-                  "modeSelection": "server-exact-runtime-and-trade-proof",
-                  "defaultCollection": {
-                    "mode": "pool_enforced",
-                    "routedRateBps": 0,
-                    "basis": "gross-native-by-side",
-                    "buyBasis": "funded-native-input",
-                    "sellBasis": "gross-native-output-credit",
-                    "currency": "native-HYPE",
-                    "rounding": "ceil-per-trade",
-                    "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                    "collection": "atomic-pool-fee-accrual"
-                  },
-                  "native30Waiver": null,
-                  "launchAdmissionEstablishesFeeCollection": false,
-                  "externalTradeFeeGuaranteed": false,
-                  "historicalSignedFeeObligations": "preserved"
-                }
-              },
-              "platformAdmissionPolicy": {
-                "const": {
-                  "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
-                  "mode": "deterministic-exact-source-graph-static-baseline-v1",
-                  "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
-                  "engineId": "programmable.direct-native-static-admission",
-                  "engineVersion": "1.0.0",
-                  "exactSourceCompilerGraphBindingRequired": true,
-                  "staticBaselineGateVersion": "1.0.0",
-                  "blockingFindingRules": [
-                    {
-                      "code": "RUNTIME_CALLCODE",
-                      "targetRoles": [
-                        "any"
-                      ]
-                    },
-                    {
-                      "code": "RUNTIME_SELFDESTRUCT",
-                      "targetRoles": [
-                        "any"
-                      ]
-                    },
-                    {
-                      "code": "SOURCE_SELFDESTRUCT_SURFACE",
-                      "targetRoles": [
-                        "any"
-                      ]
-                    },
-                    {
-                      "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
-                      "targetRoles": [
-                        "hook"
-                      ]
-                    },
-                    {
-                      "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
-                      "targetRoles": [
-                        "hook"
-                      ]
-                    },
-                    {
-                      "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
-                      "targetRoles": [
-                        "hook"
-                      ]
-                    },
-                    {
-                      "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
-                      "targetRoles": [
-                        "hook"
-                      ]
-                    }
-                  ],
-                  "warningDisposition": "bound-and-visible",
-                  "noBlockingFindingDisposition": "router-simulation-eligible",
-                  "blockingFindingDisposition": "action-required",
-                  "routerSimulationRequiredBeforeAuthorization": true,
-                  "receiptAuthority": "platform-only",
-                  "assurance": "launch-admission-only",
-                  "safetyClaim": false,
-                  "feeBehaviorClaim": false
-                }
-              },
-              "projectMetadataPolicy": {
-                "const": {
-                  "schemaVersion": "programmable.project-metadata-policy.v1",
-                  "descriptionMinimumUtf8Bytes": 20,
-                  "descriptionMaximumUtf8Bytes": 4096,
-                  "descriptionMinimumUnicodeLettersOrNumbers": 8,
-                  "imageRequired": true,
-                  "imageReceiptSourceManifestBindingRequired": true,
-                  "imageMediaTypes": [
-                    "image/png",
-                    "image/jpeg",
-                    "image/webp",
-                    "image/gif"
-                  ],
-                  "linksMaximumCount": 32,
-                  "requiredLinkKinds": [
-                    "website",
-                    "x"
-                  ],
-                  "exactlyOneRequiredLinkPerKind": true,
-                  "websiteUriPolicy": "canonical-public-credential-free-https",
-                  "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
-                }
+                "type": "null"
               }
-            },
-            "additionalProperties": false
+            }
           },
           "routes": {
             "type": "object"
           },
           "authentication": {
             "type": "object"
+          }
+        },
+        "if": {
+          "required": [
+            "automaticPlatformFees"
+          ]
+        },
+        "then": {
+          "properties": {
+            "profile": {
+              "$ref": "#/components/schemas/AutomaticProfileFees"
+            }
+          }
+        },
+        "else": {
+          "properties": {
+            "profile": {
+              "$ref": "#/components/schemas/LegacyProfileFees"
+            }
           }
         },
         "description": "Require mode active and publicLaunchAuthorized true for public launch availability. The canary mode admits only the release operator."
@@ -2031,162 +2123,18 @@
             "description": "sha256 of the UTF-8 domain programmable.custom-launch-behavior-scenario-inputs.v1, one NUL byte, and canonical behaviorScenarioInputs JSON. It is included in launchIntentHash."
           },
           "launchProfile": {
-            "const": {
-              "schemaVersion": "programmable.direct-native-hook-graph-profile.v3",
-              "profileId": "programmable.direct-native-hook-graph.v1",
-              "profileRevision": 3,
-              "profileVersion": "3.6.0",
-              "productionLaunchAuthorized": true,
-              "chainId": "99901",
-              "router": "0xEf972d7A9e7e064Ba0842c4537d7cc697c5d2eF4",
-              "routerRuntimeCodeHash": "0xd54e6b70893118e01f9f38ad938a690f85fd0a6b58b3e04b5444e9baf05485b7",
-              "permitAuthority": "0x8B134A7F24C8a97B999dcce9D10Eb2966c260209",
-              "permitAuthorityRuntimeCodeHash": "0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000",
-              "graphFactory": "0xB91488FEDC1d02eb365B7B5F2aCdA1A801bF692e",
-              "graphFactoryRuntimeCodeHash": "0xd23692fae59331592048e71a96d4963e170ee56e449683dc9f7fa3f9470018b8",
-              "poolManager": "0xE2e105d3F7209A9DA11f83cCf3E7398a753823F1",
-              "poolManagerRuntimeCodeHash": "0xbb5fb2091cfd38e71f56d14a2b6b5e71a22ac2b8e5881faa422ccf92b40df7a1",
-              "fundingToken": "0xbA876237B0F021A6c6D852d6c26E107997cC5E81",
-              "fundingTokenRuntimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
-              "graphPolicy": {
-                "minimumTargets": 3,
-                "maximumTargets": 16,
-                "directTargetsOnly": true
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChainLaunchProfile"
               },
-              "currencyPolicy": {
-                "native": true,
-                "erc20": true
-              },
-              "hookPermissionPolicy": {
-                "minimumMask": 0,
-                "maximumMask": 16383,
-                "requireHookMinerAddressMaskMatch": true
-              },
-              "fundingPolicy": {
-                "mode": "wallet-transaction-value",
-                "launchFundingRequired": true,
-                "signatureRequired": false,
-                "valueSource": "exact-router-transaction-msg-value"
-              },
-              "platformFeePolicy": {
-                "schemaVersion": "programmable.platform-fee-policy.v1",
-                "accountingMode": "inclusive-selected-total",
-                "applicability": "successful-pool-swaps",
-                "rateDenominator": "1000000",
-                "programmableFeeHundredthsOfBip": "3000",
-                "assessmentBase": "executed-gross-declared-quote",
-                "feeCurrency": "declared-quote-currency",
-                "roundingMode": "floor",
-                "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
-              },
-              "programmableTradeFeePolicy": {
-                "schemaVersion": "programmable.elysium-programmable-trade-fee-policy.v1",
-                "policyVersion": "programmable.elysium-native-fee.v1",
-                "scope": "elysium-custom-launch-trades",
-                "ratePpm": "3000",
-                "rateDenominator": "1000000",
-                "rateBps": 30,
-                "modeSelection": "server-exact-runtime-and-trade-proof",
-                "defaultCollection": {
-                  "mode": "pool_enforced",
-                  "routedRateBps": 0,
-                  "basis": "gross-native-by-side",
-                  "buyBasis": "funded-native-input",
-                  "sellBasis": "gross-native-output-credit",
-                  "currency": "native-HYPE",
-                  "rounding": "ceil-per-trade",
-                  "recipient": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
-                  "collection": "atomic-pool-fee-accrual"
-                },
-                "native30Waiver": null,
-                "launchAdmissionEstablishesFeeCollection": false,
-                "externalTradeFeeGuaranteed": false,
-                "historicalSignedFeeObligations": "preserved"
-              },
-              "platformAdmissionPolicy": {
-                "schemaVersion": "programmable.direct-native-platform-admission-policy.v1",
-                "mode": "deterministic-exact-source-graph-static-baseline-v1",
-                "receiptSchemaVersion": "programmable.platform-admission-receipt.v1",
-                "engineId": "programmable.direct-native-static-admission",
-                "engineVersion": "1.0.0",
-                "exactSourceCompilerGraphBindingRequired": true,
-                "staticBaselineGateVersion": "1.0.0",
-                "blockingFindingRules": [
-                  {
-                    "code": "RUNTIME_CALLCODE",
-                    "targetRoles": [
-                      "any"
-                    ]
-                  },
-                  {
-                    "code": "RUNTIME_SELFDESTRUCT",
-                    "targetRoles": [
-                      "any"
-                    ]
-                  },
-                  {
-                    "code": "SOURCE_SELFDESTRUCT_SURFACE",
-                    "targetRoles": [
-                      "any"
-                    ]
-                  },
-                  {
-                    "code": "V4_CALLBACK_AUTHENTICATION_MISSING",
-                    "targetRoles": [
-                      "hook"
-                    ]
-                  },
-                  {
-                    "code": "V4_CALLBACK_AUTHENTICATION_INVALID",
-                    "targetRoles": [
-                      "hook"
-                    ]
-                  },
-                  {
-                    "code": "V4_CALLBACK_POOL_MANAGER_MISMATCH",
-                    "targetRoles": [
-                      "hook"
-                    ]
-                  },
-                  {
-                    "code": "V4_ENABLED_CALLBACK_IMPLEMENTATION_MISSING",
-                    "targetRoles": [
-                      "hook"
-                    ]
+              {
+                "properties": {
+                  "productionLaunchAuthorized": {
+                    "const": true
                   }
-                ],
-                "warningDisposition": "bound-and-visible",
-                "noBlockingFindingDisposition": "router-simulation-eligible",
-                "blockingFindingDisposition": "action-required",
-                "routerSimulationRequiredBeforeAuthorization": true,
-                "receiptAuthority": "platform-only",
-                "assurance": "launch-admission-only",
-                "safetyClaim": false,
-                "feeBehaviorClaim": false
-              },
-              "projectMetadataPolicy": {
-                "schemaVersion": "programmable.project-metadata-policy.v1",
-                "descriptionMinimumUtf8Bytes": 20,
-                "descriptionMaximumUtf8Bytes": 4096,
-                "descriptionMinimumUnicodeLettersOrNumbers": 8,
-                "imageRequired": true,
-                "imageReceiptSourceManifestBindingRequired": true,
-                "imageMediaTypes": [
-                  "image/png",
-                  "image/jpeg",
-                  "image/webp",
-                  "image/gif"
-                ],
-                "linksMaximumCount": 32,
-                "requiredLinkKinds": [
-                  "website",
-                  "x"
-                ],
-                "exactlyOneRequiredLinkPerKind": true,
-                "websiteUriPolicy": "canonical-public-credential-free-https",
-                "xUriPattern": "^https://x\\.com/[A-Za-z0-9_]{1,64}$"
+                }
               }
-            }
+            ]
           },
           "launchProfileSelection": {
             "$ref": "#/components/schemas/DirectNativeProfileSelectionBindingV1"
@@ -2308,7 +2256,65 @@
           }
         ],
         "description": "Fresh Elysium Custom Launch request. Exact source, graph, complete project metadata, profile and intent hashes are required. Use the existing funding-mode-specific authorization rules. Profile 3.6 does not accept the 3.4/3.5 behaviorScenarioInputs fields.",
-        "additionalProperties": false
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "launchProfile": {
+                "$ref": "#/components/schemas/LegacyProfileFees"
+              },
+              "launchProfileSelection": {
+                "properties": {
+                  "platformFeeBinding": {
+                    "properties": {
+                      "claimAuthority": {
+                        "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                      },
+                      "claimBinding": {
+                        "properties": {
+                          "claimAuthority": {
+                            "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                          },
+                          "payoutRecipient": {
+                            "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "launchProfile": {
+                "$ref": "#/components/schemas/AutomaticProfileFees"
+              },
+              "launchProfileSelection": {
+                "properties": {
+                  "platformFeeBinding": {
+                    "properties": {
+                      "claimAuthority": {
+                        "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+                      },
+                      "claimBinding": {
+                        "properties": {
+                          "claimAuthority": {
+                            "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+                          },
+                          "payoutRecipient": {
+                            "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "CustomLaunchFailureV3": {
         "$ref": "./custom-launch-v3.json#/components/schemas/CustomLaunchFailureV3"
@@ -2798,10 +2804,7 @@
             "const": "1000000"
           },
           "programmableFeeHundredthsOfBip": {
-            "enum": [
-              "3000",
-              "10000"
-            ]
+            "const": "3000"
           },
           "assessmentBase": {
             "enum": [
@@ -2820,8 +2823,8 @@
           },
           "claimAuthority": {
             "enum": [
-              "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-              "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+              "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+              "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
             ]
           },
           "claimBinding": {
@@ -2839,14 +2842,14 @@
                   },
                   "claimAuthority": {
                     "enum": [
-                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
                     ]
                   },
                   "payoutRecipient": {
                     "enum": [
-                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
                     ]
                   }
                 },
@@ -2865,8 +2868,8 @@
                   },
                   "claimAuthority": {
                     "enum": [
-                      "0x4957f49620AFf3Adbbe8195a4f633E49cc93376c",
-                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                      "0xD88539d3c4C460136a733A3Fd60cf6BF269079da",
+                      "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
                     ]
                   },
                   "destinationConstraint": {
@@ -2894,8 +2897,44 @@
             "additionalProperties": false
           }
         },
-        "description": "Declared launch fee obligation at the rate in the selected policy: 10000 ppm for the current policy, 3000 ppm for retained policies. It does not itself prove collection; Programmable-routed collection follows programmableTradeFeePolicy.",
-        "additionalProperties": false
+        "description": "The declared platform fee uses the selected chain profile. The claim authority and any fixed payout recipient must agree with that profile.",
+        "additionalProperties": false,
+        "oneOf": [
+          {
+            "properties": {
+              "claimAuthority": {
+                "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+              },
+              "claimBinding": {
+                "properties": {
+                  "claimAuthority": {
+                    "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                  },
+                  "payoutRecipient": {
+                    "const": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "claimAuthority": {
+                "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+              },
+              "claimBinding": {
+                "properties": {
+                  "claimAuthority": {
+                    "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+                  },
+                  "payoutRecipient": {
+                    "const": "0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62"
+                  }
+                }
+              }
+            }
+          }
+        ]
       },
       "DirectNativePoolKeyV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/DirectNativePoolKeyV1"
@@ -3505,27 +3544,32 @@
       "LaunchPartnerAttributionV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/LaunchPartnerAttributionV1"
       },
-      "PlatformFeeEconomicsV2": {
+      "LegacyProfileFees": {
         "type": "object",
         "required": [
-          "applicantSelectedHundredthsOfBip",
-          "projectHundredthsOfBip",
-          "effectiveTotalHundredthsOfBip"
+          "platformFeePolicy",
+          "programmableTradeFeePolicy"
         ],
         "properties": {
-          "applicantSelectedHundredthsOfBip": {
-            "$ref": "#/components/schemas/ApplicantSelectedFeeHundredthsOfBipV1"
+          "platformFeePolicy": {
+            "const": {
+              "schemaVersion": "programmable.platform-fee-policy.v1",
+              "accountingMode": "inclusive-selected-total",
+              "applicability": "successful-pool-swaps",
+              "rateDenominator": "1000000",
+              "programmableFeeHundredthsOfBip": "3000",
+              "assessmentBase": "executed-gross-declared-quote",
+              "feeCurrency": "declared-quote-currency",
+              "roundingMode": "floor",
+              "claimAuthority": "0xD88539d3c4C460136a733A3Fd60cf6BF269079da"
+            }
           },
-          "projectHundredthsOfBip": {
-            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
-          },
-          "effectiveTotalHundredthsOfBip": {
-            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
+          "programmableTradeFeePolicy": {
+            "$ref": "#/components/schemas/LegacyTradeFeePolicy"
           }
-        },
-        "additionalProperties": false
+        }
       },
-      "ProgrammableTradeFeePolicyV36": {
+      "LegacyTradeFeePolicy": {
         "const": {
           "schemaVersion": "programmable.elysium-programmable-trade-fee-policy.v1",
           "policyVersion": "programmable.elysium-native-fee.v1",
@@ -3550,6 +3594,36 @@
           "externalTradeFeeGuaranteed": false,
           "historicalSignedFeeObligations": "preserved"
         }
+      },
+      "PlatformFeeEconomicsV2": {
+        "type": "object",
+        "required": [
+          "applicantSelectedHundredthsOfBip",
+          "projectHundredthsOfBip",
+          "effectiveTotalHundredthsOfBip"
+        ],
+        "properties": {
+          "applicantSelectedHundredthsOfBip": {
+            "$ref": "#/components/schemas/ApplicantSelectedFeeHundredthsOfBipV1"
+          },
+          "projectHundredthsOfBip": {
+            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
+          },
+          "effectiveTotalHundredthsOfBip": {
+            "$ref": "#/components/schemas/SelectedFeeHundredthsOfBipV1"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProgrammableTradeFeePolicyV36": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LegacyTradeFeePolicy"
+          },
+          {
+            "$ref": "#/components/schemas/AutomaticTradeFeePolicy"
+          }
+        ]
       },
       "ProjectMetadataV1": {
         "$ref": "./custom-launch-v3.json#/components/schemas/ProjectMetadataV1"
@@ -3608,7 +3682,8 @@
             "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "policyHash": {
-            "const": "sha256:f50b01decbd1ecc7bded4082a9d9229c256991d96d901e9d0bc73268e13c8f9b"
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
           },
           "policy": {
             "$ref": "#/components/schemas/ProgrammableTradeFeePolicyV36"
@@ -3682,7 +3757,29 @@
           "enforcementBoundary"
         ],
         "additionalProperties": false,
-        "description": "sha256(schemaVersion + NUL + canonicalJson(all fields except bindingHash)); canonicalJson sorts object keys, compact separators. Join this server-authored record to the exact finalized onchain stamp, router, token, hook, pool and transaction. Persist the validated classification; missing or inconsistent classification after the boundary prevents trade preparation."
+        "description": "sha256(schemaVersion + NUL + canonicalJson(all fields except bindingHash)); canonicalJson sorts object keys, compact separators. Join this server-authored record to the exact finalized onchain stamp, router, token, hook, pool and transaction. Persist the validated classification; missing or inconsistent classification after the boundary prevents trade preparation.",
+        "oneOf": [
+          {
+            "properties": {
+              "policy": {
+                "$ref": "#/components/schemas/LegacyTradeFeePolicy"
+              },
+              "policyHash": {
+                "const": "sha256:00ee4c5ec7eb88f6ed6527f75526a4926c86932d646124b6f41abffdc6d5e810"
+              }
+            }
+          },
+          {
+            "properties": {
+              "policy": {
+                "$ref": "#/components/schemas/AutomaticTradeFeePolicy"
+              },
+              "policyHash": {
+                "const": "sha256:1afefe13034345d636df38abadd0739d8aef8a025b66515bf01db617be3438eb"
+              }
+            }
+          }
+        ]
       },
       "SelectedFeeHundredthsOfBipV1": {
         "type": "string",
