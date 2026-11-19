@@ -35,10 +35,15 @@ export type ProjectCheckpoint = {
   scenarios?: GeneralScenarioReport;
   sourceAudit?: GeneralSourceAudit;
 };
+export type SavedProjectSource = Pick<ProjectCheckpoint, "requestId" | "project">;
 export type BlueprintCheckpoint = {version:1;requestId:string;payloadHash:string;intent:LaunchIntent;blueprint:GeneralCheckBlueprint;verificationInstruction?:string};
 type Transaction = <T>(work: (connection: AIConnection) => Promise<T>) => Promise<T>;
 const kind = "contract-project";
 const blueprintKind = "contract-check-blueprint";
+const ownedCheckpointRows = `FROM programmable_custom_ai_v1.objects o
+  JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
+  AND j.payload_hash=o.value->>'payloadHash'
+  WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`;
 const conflict = () => new CustomAIError("project-conflict", "This saved source belongs to a different revision. Your earlier project is kept.", 409);
 
 /** Uses the existing owned job and object tables. Source survives a compiler
@@ -52,17 +57,21 @@ export function createProjectStore(transaction: Transaction, now: () => number =
     return String(row.payload_hash);
   }
   async function saved(db: AIConnection, owner: string, id: string): Promise<ProjectCheckpoint | null> {
-    const row = (await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
-      JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
-      AND j.payload_hash=o.value->>'payloadHash'
-      WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`, [owner, id, kind])).rows[0];
+    const row = (await db.query(`SELECT o.value ${ownedCheckpointRows}`, [owner, id, kind])).rows[0];
     return row ? row.value as ProjectCheckpoint : null;
   }
+  async function readSource(owner: string, id: string): Promise<SavedProjectSource | null> {
+    return transaction(async db => {
+      const row = (await db.query(
+        `SELECT o.value->>'requestId' AS request_id, o.value->'project' AS project ${ownedCheckpointRows}`,
+        [owner, id, kind]
+      )).rows[0];
+      if (row?.request_id !== id || !row.project) return null;
+      return { requestId: id, project: row.project as ContractProject };
+    });
+  }
   async function savedBlueprint(db: AIConnection,owner:string,id:string):Promise<BlueprintCheckpoint|null>{
-    const row=(await db.query(`SELECT o.value FROM programmable_custom_ai_v1.objects o
-      JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
-      AND j.payload_hash=o.value->>'payloadHash'
-      WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`,[owner,id,blueprintKind])).rows[0];
+    const row=(await db.query(`SELECT o.value ${ownedCheckpointRows}`,[owner,id,blueprintKind])).rows[0];
     return row?row.value as BlueprintCheckpoint:null;
   }
   async function saveBlueprint(owner:string,id:string,lease:string,input:Pick<BlueprintCheckpoint,"intent"|"blueprint"|"verificationInstruction">){
@@ -218,10 +227,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
   }
   async function overview(owner: string, id: string): Promise<ProjectOverview | null> {
     return transaction(async db => {
-      const row = (await db.query(`SELECT o.value->'overview' AS overview FROM programmable_custom_ai_v1.objects o
-        JOIN programmable_custom_ai_v1.jobs j ON j.owner=o.owner AND j.id=o.id
-        AND j.payload_hash=o.value->>'payloadHash'
-        WHERE o.owner=$1 AND o.id=$2 AND o.kind=$3`, [owner, id, kind])).rows[0];
+      const row = (await db.query(`SELECT o.value->'overview' AS overview ${ownedCheckpointRows}`, [owner, id, kind])).rows[0];
       return row?.overview ? row.overview as ProjectOverview : null;
     });
   }
@@ -317,7 +323,7 @@ export function createProjectStore(transaction: Transaction, now: () => number =
       try{return checkedGeneralCheckBlueprint((row.value as BlueprintCheckpoint).blueprint,intent);}catch{return undefined;}
     });
   }
-  return { save, complete, overview, saveSourceProgress, readSourceProgress, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
+  return { save, complete, overview, readSource, saveSourceProgress, readSourceProgress, saveBlueprint, saveCheckDiagnostic, readCheckDiagnostic, saveScenarios, saveSourceAudit, readForLaunch, publishForLaunch, readPublicSource, readSourceCreatedAt,
     preparations: createGeneralPreparationStore(transaction, {read:readForLaunchInTransaction,
       publish:async (db,source)=>{await publishSourceInTransaction(db,source);}}, now),
     readBlueprint:(owner:string,id:string)=>transaction(db=>savedBlueprint(db,owner,id)),

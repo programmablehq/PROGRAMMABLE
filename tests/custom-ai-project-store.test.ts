@@ -270,6 +270,8 @@ describe("owned general contract checkpoints", () => {
     await store.projects.complete("alice", id, attempt.lease!, result);
     await store.projects.complete("alice", id, attempt.lease!, result);
     expect((await store.projects.read("alice", id))?.compilation).toEqual(result);
+    expect(await store.projects.readSource("alice", id)).toEqual({requestId:id, project:source});
+    expect(await store.projects.readSource("bob", id)).toBeNull();
     expect(await store.projects.overview("alice", id)).toMatchObject({ projectHash: source.hash, artifactHash: result.artifactHash,
       compilation: "diagnostics", diagnostics: result.diagnostics });
     const changed = compilation(source); changed.diagnostics[0].message = "Changed after hashing";
