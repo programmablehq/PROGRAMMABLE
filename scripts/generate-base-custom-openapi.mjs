@@ -153,13 +153,13 @@ const scan = value => {
   for (const child of Object.values(value)) scan(child);
 };
 scan(paths);
-const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.0.0",
+const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.1.0",
   description: `${network.name} chain ${network.id}. Exact-source Custom Launch only. The request uses the graph V3 schema on a chain-qualified V4 URL. Module Mode and partner credentials are not enabled on this route.` },
   jsonSchemaDialect: source.jsonSchemaDialect, servers: [{ url: "https://api.programmable.market" }],
   externalDocs: { url: `https://programmable.market/developers/${network.slug}-custom-launch-api-v1.md` },
   security: source.security, paths, components: { ...source.components,
     schemas: Object.fromEntries([...names].sort().map(name => [name, schemas[name]])) } };
-const file = path.join(root, `public/openapi/${network.slug}-custom-launch-v1.json`);
+const file = path.join(root, `public/openapi/${network.slug}-custom-launch-v1.1.json`);
 const bytes = JSON.stringify(output, null, 2) + "\n";
 if (process.argv.includes("--check")) {
   if (fs.readFileSync(file, "utf8") !== bytes) throw Error(`${network.name} OpenAPI is not current`);

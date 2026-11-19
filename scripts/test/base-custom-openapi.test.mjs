@@ -13,8 +13,8 @@ import {
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const directory = path.join(root, "public/openapi");
-const base = "https://programmable.market/openapi/base-custom-launch-v1.json";
-const document = JSON.parse(fs.readFileSync(path.join(directory, "base-custom-launch-v1.json")));
+const base = "https://programmable.market/openapi/base-custom-launch-v1.1.json";
+const document = JSON.parse(fs.readFileSync(path.join(directory, path.basename(base))));
 const fixture = JSON.parse(fs.readFileSync(path.join(root, "tests/fixtures/base-finalized-custom-launch-metadata-feed-v1.json")));
 const ajv = new Ajv2020({ strict: false, allErrors: true, validateFormats: false,
   loadSchema: async uri => JSON.parse(fs.readFileSync(path.join(directory, path.basename(new URL(uri).pathname)))),
@@ -49,7 +49,7 @@ test("each chain binds capabilities and finalized policy hashes to the same fee 
     const chainId = legacy.chainId;
     const policy = AUTOMATIC_NATIVE_TRADE_FEE_POLICIES_V2[chainId];
     const current = withAutomaticNativeProfileV2(legacy, policy);
-    const url = `https://programmable.market/openapi/${slug}-custom-launch-v1.json`;
+    const url = `https://programmable.market/openapi/${slug}-custom-launch-v1.1.json`;
     const spec = JSON.parse(fs.readFileSync(path.join(directory, path.basename(url))));
     if (url !== base) ajv.addSchema(spec, url);
     const validateCapabilities = await ajv.compileAsync({ $ref: url + "#/components/schemas/CustomLaunchCapabilitiesV1" });
