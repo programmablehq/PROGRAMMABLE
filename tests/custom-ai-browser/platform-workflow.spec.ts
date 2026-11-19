@@ -19,6 +19,43 @@ test("creates, runs and edits a real persisted project, then isolates another ac
   await expect(page.getByLabel("Your projects",{exact:true})).toBeEnabled();await page.reload();await page.getByRole("tab",{name:"Files",exact:true}).click();await page.getByRole("button",{name:"index.js",exact:true}).click();await expect(page.getByRole("textbox",{name:"index.js",exact:true})).toHaveValue("export const count = 2;\n");
   await page.getByLabel("Fixture account",{exact:true}).selectOption("bob");await expect(page.getByRole("textbox",{name:"Describe your idea"})).toBeVisible();await expect(page.getByText("Baue einen Zähler für unser Spiel.",{exact:true})).toHaveCount(0);expect(errors).toEqual([]);
 });
+test("saves a new file and keeps later typing until its own save", async ({ page }) => {
+  await page.goto(origin);
+  await page.getByRole("button", { name: "New project", exact: true }).click();
+  await page.getByRole("tab", { name: "Files", exact: true }).click();
+  const path = "contracts/Counter.sol";
+  await page.getByLabel("New file path", { exact: true }).fill(path);
+  await page.getByRole("button", { name: "Add file", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: path, exact: true });
+  const projects = page.getByLabel("Your projects", { exact: true });
+  const save = page.getByRole("button", { name: "Save file", exact: true });
+  await editor.fill("contract Counter {}");
+  await expect(projects).toBeDisabled();
+  await save.click();
+  await expect(projects).toBeEnabled();
+
+  let resume!: () => void;
+  const paused = new Promise<void>(resolve => { resume = resolve; });
+  await page.route("**/api/custom-ai/platform/projects", async route => {
+    await paused;
+    await route.continue();
+  }, { times: 1 });
+  await editor.fill("contract Counter { uint count; }");
+  const pending = page.waitForRequest(request => request.method() === "PATCH" && request.url().endsWith("/platform/projects"));
+  await save.click();
+  await pending;
+  const latest = "contract Counter { uint public count; }";
+  try { await editor.fill(latest); } finally { resume(); }
+  await expect(save).toBeEnabled();
+  await expect(editor).toHaveValue(latest);
+  await expect(projects).toBeDisabled();
+  await save.click();
+  await expect(projects).toBeEnabled();
+  await page.reload();
+  await page.getByRole("tab", { name: "Files", exact: true }).click();
+  await page.getByRole("button", { name: path, exact: true }).click();
+  await expect(editor).toHaveValue(latest);
+});
 test("keeps one queued request through refresh and stops that saved run",async({page,request})=>{
   await request.post(`${origin}/fixture/pause`,{data:{paused:true}});await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();
   const prompt="Wait for my next step.";await page.getByRole("textbox",{name:"Message your project"}).fill(prompt);await page.getByRole("button",{name:"Send",exact:true}).click();await expect(page.getByRole("button",{name:"Stop",exact:true})).toBeVisible();
