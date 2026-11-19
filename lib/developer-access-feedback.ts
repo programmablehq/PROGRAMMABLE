@@ -8,6 +8,9 @@ export function safeDeveloperDetails(message: string, chainId?: string) {
     requestId && !requestId.startsWith("pm_live_") ? `Request ID: ${requestId}` : null, code ? `Code: ${code}` : null, httpStatus ? `HTTP: ${httpStatus}` : null].filter(Boolean).join("\n");
 }
 export function developerRecovery(message: string) {
+  if (/\bAPI_CONNECTION_(?:UNAVAILABLE|INVALID)\b/u.test(message)) return {
+    owner: "Programmable", title: "Could not check launch availability", action: "Try again",
+    description: "Try again shortly to refresh the status for this chain.", kind: "retry" as const };
   if (/API_KEY_(?:INACTIVE|NOT_FOUND|CHAIN_RESTRICTION)|scope|permission/iu.test(message)) return {
     owner: "Your action", title: "Check this key's access", action: "Try again",
     description: "Use an active key with the required permissions and saved chain access. Choosing a different builder chain does not change the key's permissions.", kind: "retry" as const };
