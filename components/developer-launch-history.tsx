@@ -2393,12 +2393,13 @@ export function DeveloperLaunchHistory({
   initialLaunchChainId,
   detailOnly = false,
   initialLaunchVersion,
+  historicalDetail,
   getAccessToken,
   getIdentityToken,
   sendCustomLaunchWalletAction,
   sendCustomLaunchWalletActionV4,
   signCustomLaunchFundingAuthorization,
-}: DeveloperLaunchHistoryProps) {
+}: DeveloperLaunchHistoryProps & { historicalDetail?: LaunchResource }) {
   const [launches, setLaunches] = useState<LaunchResource[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -2766,8 +2767,18 @@ export function DeveloperLaunchHistory({
     setHydratingId(`custom-launch:create:${version}:${initialLaunchId}`);
     setError("");
     setStatusMessage("Loading the exact wallet handoff.");
-    void readLaunchById(initialLaunchId, version, controller.signal)
+    const completedDetail = detailOnly && initialLaunchChainId === null
+      && (version === "v1" || version === "v2")
+      && historicalDetail?.routeId === `custom-launch:create:${version}`
+      && historicalDetail.requestId === initialLaunchId
+      && historicalDetail.ownerWallet.toLowerCase() === account.toLowerCase()
+      && terminalStatus(historicalDetail.status) ? historicalDetail : null;
+    const initialRead = completedDetail
+      ? Promise.resolve(completedDetail)
+      : readLaunchById(initialLaunchId, version, controller.signal);
+    void initialRead
       .then((launch) => {
+        if (controller.signal.aborted) return;
         const key = launchResourceKey(launch);
         updateLaunch(launch);
         setHydratedReviews((current) => Object.freeze({
@@ -2808,6 +2819,7 @@ export function DeveloperLaunchHistory({
     initialLaunchId,
     initialLaunchChainId,
     initialLaunchVersion,
+    historicalDetail,
     detailOnly,
     readLaunchById,
     updateLaunch,

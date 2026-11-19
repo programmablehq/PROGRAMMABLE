@@ -1,7 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from "react";
 import NextImage from "next/image";
-import { DeveloperLaunchHistory, parseHistoryPage, parseLaunch, type DeveloperLaunchHistoryProps } from "./developer-launch-history";
+import { DeveloperLaunchHistory, parseHistoryPage, parseLaunch, type DeveloperLaunchHistoryProps, type LaunchResource } from "./developer-launch-history";
 import { DeveloperUniversalLaunchHistory, parseEntries } from "./developer-universal-launch-history";
 import { DeveloperIssue } from "./developer-issue";
 import { useLaunchStatusPolling } from "./use-launch-status-polling";
@@ -15,6 +15,7 @@ type Props = DeveloperLaunchHistoryProps & {
 };
 type HistorySource = LaunchOverviewSource | "base" | "hyperevm" | "elysium";
 type HistoryCursors = Partial<Record<HistorySource, string | null>>;
+type SelectedLaunch = LaunchOverviewItem & { historicalDetail?: LaunchResource };
 type HistoryChain = "all" | "1" | "4663" | "8453" | "999" | "99901";
 const sources = ["legacy", "base", "hyperevm", "elysium", "custom_launch_plan_v1", "multi_role_v2"] as const;
 // The legacy list covers Ethereum v1–v3 and Robinhood v4.
@@ -27,7 +28,7 @@ const sourcesByChain: Record<HistoryChain, readonly HistorySource[]> = {
   "99901": ["elysium"],
 };
 export function DeveloperLaunchWorkspace(props: Props) {
-  const [items, setItems] = useState<LaunchOverviewItem[]>([]), [selected, setSelected] = useState<LaunchOverviewItem | null>(null);
+  const [items, setItems] = useState<LaunchOverviewItem[]>([]), [selected, setSelected] = useState<SelectedLaunch | null>(null);
   const [loading, setLoading] = useState(true), [error, setError] = useState("");
   const [chain, setChain] = useState<HistoryChain>("all"), [refresh, setRefresh] = useState(0);
   const selectedSources = sourcesByChain[chain];
@@ -67,7 +68,9 @@ export function DeveloperLaunchWorkspace(props: Props) {
       const launch = id ? parseLaunch(body, props.account, chainId) : null;
       const page = id ? launch ? { launches: [launch], nextCursor: null } : null : parseHistoryPage(body, props.account, chainId);
       if (!page) throw new Error("API_RESPONSE_INVALID");
-      return { source, items: page.launches.map(item => launchOverviewItem(item as unknown as Record<string, unknown>, "legacy", now)), nextCursor: page.nextCursor };
+      const historicalDetail = launch?.routeId === "custom-launch:create:v1" || launch?.routeId === "custom-launch:create:v2"
+        ? launch : undefined;
+      return { source, items: page.launches.map(item => launchOverviewItem(item as unknown as Record<string, unknown>, "legacy", now)), nextCursor: page.nextCursor, historicalDetail };
     }
     const page = parseEntries(body, props.account);
     return { source, items: page.entries.map(item => launchOverviewItem(item.resource, source, now)), nextCursor: page.nextCursor };
@@ -105,7 +108,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
           const match = id && page.items.find(item => item.id === id);
           if (match) {
             deepLinkDone.current = true;
-            setSelected(match);
+            setSelected({ ...match, historicalDetail: page.historicalDetail });
             setError("");
             return;
           }
@@ -145,7 +148,7 @@ export function DeveloperLaunchWorkspace(props: Props) {
   }
   if (selected) return <div id="launch-workspace" tabIndex={-1}>
     <button type="button" className={shared.textLink} onClick={() => { setSelected(null); deepLinkDone.current = true; const url = new URL(window.location.href); url.searchParams.delete("launchId"); window.history.replaceState(null, "", url); retry(); }}>← All launches</button>
-    {selected.source === "legacy" ? <DeveloperLaunchHistory {...props} detailOnly initialLaunchId={selected.id} initialLaunchVersion={selected.version} initialLaunchChainId={selected.chainId === "1" ? null : selected.chainId} />
+    {selected.source === "legacy" ? <DeveloperLaunchHistory {...props} detailOnly historicalDetail={selected.historicalDetail} initialLaunchId={selected.id} initialLaunchVersion={selected.version} initialLaunchChainId={selected.chainId === "1" ? null : selected.chainId} />
       : props.sendUniversalLaunchWalletAction ? <DeveloperUniversalLaunchHistory account={props.account} initialLaunchId={selected.id} sourceOnly={selected.source}
         getAccessToken={props.getAccessToken} getIdentityToken={props.getIdentityToken} sendWallet={props.sendUniversalLaunchWalletAction} openWallet={props.openWallet} /> : <DeveloperIssue message="Wallet connection unavailable" connect={props.openWallet} retry={retry} />}
   </div>;
