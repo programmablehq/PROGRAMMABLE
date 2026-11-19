@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { DeveloperIssue } from "../components/developer-issue";
 import { buildAgentConnection, buildAgentInstructions } from "../lib/agent-connection";
 import { safeDeveloperDetails, developerRecovery } from "../lib/developer-access-feedback";
 import { launchOverviewItem, mergeLaunchOverview } from "../lib/developer-launch-overview";
@@ -6,6 +9,17 @@ import { GET } from "../app/api/developer/connection/route";
 const id = "10000000-0000-4000-8000-000000000001";
 afterEach(() => vi.unstubAllGlobals());
 describe("developer setup and diagnostics", () => {
+  it("shows the service retry interval and keeps support details available", () => {
+    const html = renderToStaticMarkup(createElement(DeveloperIssue, {
+      message: "API_CONNECTION_UNAVAILABLE HTTP 503 Request ID: region::trace-12",
+      retry: () => {}, retryAfterSeconds: 10, chainId: "99901",
+    }));
+    expect(html).toContain("wait 10 seconds");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>Try again<\/button>/);
+    expect(html).toContain("Request ID: region::trace-12");
+    expect(html).toContain("Copy error details");
+  });
+
   it("keeps Ethereum instructions free of Robinhood bindings and headers", () => {
     const input = { scopes: ["custom-launch:create", "custom-launch:read"], chainId: "1" as const, launchContract: { manifestDigest: "old", text: "robinhood-only-setup" } };
     const data = JSON.parse(buildAgentConnection(`pm_live_${"a".repeat(22)}_${"b".repeat(43)}`, input));
