@@ -37,13 +37,19 @@ test('standalone Explore fetches immediately',async({page})=>{
 });
 
 test('a shared Explore URL follows the current search without adding history entries', async ({ page }) => {
-  await page.goto(origin + '/explore?standalone&ref=launch#coins');
+  await page.goto(origin + '/explore?standalone&navigation&q=Initial&ref=launch#coins');
   const search = page.getByRole('searchbox');
+  await expect(search).toHaveValue('Initial');
   const historyLength = await page.evaluate(() => history.length);
   await search.fill('First coin');
   await search.press('Enter');
   await expect(page).toHaveURL(url => url.searchParams.get('q') === 'First coin');
   await search.fill('Second coin');
+  await expect(page).toHaveURL(url => url.searchParams.get('q') === 'Second coin');
+  await page.getByRole('button', { name: 'Toggle explore' }).click();
+  await expect(page.getByRole('heading', { name: 'Coin detail' })).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle explore' }).click();
+  await expect(search).toHaveValue('Second coin');
   await expect(page).toHaveURL(url => url.searchParams.get('q') === 'Second coin');
   await page.getByRole('search').getByRole('button', { name: 'Clear search' }).click();
   await expect(page).toHaveURL(url => !url.searchParams.has('q') && url.searchParams.get('ref') === 'launch' && url.hash === '#coins');

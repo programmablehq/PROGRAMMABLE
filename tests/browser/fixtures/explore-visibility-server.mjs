@@ -6,14 +6,16 @@ export async function createExploreVisibilityServer() {
   const result = await build({ stdin: { resolveDir: process.cwd(), loader: 'tsx', contents: `
     import React, {useState} from 'react'; import {createRoot} from 'react-dom/client';
     import {RobinhoodLaunchesView, UnifiedLaunchesView, UnifiedProfileLaunches} from './components/robinhood-launches-view';
+    import {readExploreSearchEntry} from './lib/robinhood-explore-filters';
     import './app/globals.css'; import './app/programmable-experience.css'; import './app/interface.css'; import './app/webde-final-ui.css'; import './app/surfaces.css';
     const standalone=new URLSearchParams(location.search).has('standalone');
     const params=new URLSearchParams(location.search);
+    const entry=readExploreSearchEntry(params.getAll('q'),params.getAll('model'));
     function ExploreRoute() {
       const [visible,setVisible]=useState(true);
       if(params.has('elysium-scope')) return <RobinhoodLaunchesView chainId={99901}/>;
       return <>{params.has('navigation')?<button onClick={()=>setVisible(value=>!value)}>Toggle explore</button>:null}
-        {visible?<UnifiedLaunchesView embedded={!standalone}/>:<h1>Coin detail</h1>}</>;
+        {visible?<UnifiedLaunchesView embedded={!standalone} entry={entry}/>:<h1>Coin detail</h1>}</>;
     }
     function Profile() {
       const [account,setAccount]=useState('0x'+'aa'.repeat(20));
@@ -34,7 +36,7 @@ export async function createExploreVisibilityServer() {
       p.onLoad({filter:/.*/,namespace:'stub'}, a=>({loader:'tsx',resolveDir:process.cwd(),contents:a.path==='next/link'
         ? 'import React from "react";export default function Link({prefetch,...props}){return <a {...props}/>}'
         : a.path==='next/image' ? 'import React from "react";export default function Image({priority,fill,unoptimized,...props}){return <img {...props}/>}'
-        : a.path==='next/navigation' ? 'export const useRouter=()=>({prefetch:()=>{}});export const usePathname=()=>"/";'
+        : a.path==='next/navigation' ? 'export const useRouter=()=>({prefetch:()=>{}});export const usePathname=()=>"/";export const useSearchParams=()=>new URLSearchParams(location.search);'
         : 'export const useRouteViewChain=()=>({hydrated:true,viewChainId:4663});'}));
     }}] });
   const files=new Map(result.outputFiles.map(f=>[f.path.endsWith('.css')?'/fixture.css':'/fixture.js',f.contents]));

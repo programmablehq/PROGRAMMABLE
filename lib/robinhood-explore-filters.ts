@@ -25,6 +25,22 @@ export const LAUNCH_CHAIN_OPTIONS = [
 export const ROBINHOOD_EXPLORE_PAGE_SIZE = 10;
 export const EXPLORE_MAX_QUERY_LENGTH = 128;
 
+export type ExploreSearchEntry = { q: string; mode: "all" | "custom" };
+type EntryParameter = string | readonly string[] | undefined;
+
+function singleEntryValue(value: EntryParameter) {
+  if (typeof value === "string") return value;
+  return value?.length === 1 ? value[0] : undefined;
+}
+
+export function readExploreSearchEntry(search: EntryParameter, model: EntryParameter): ExploreSearchEntry | undefined {
+  const term = singleEntryValue(search)?.trim();
+  const q = term !== undefined && term.length <= EXPLORE_MAX_QUERY_LENGTH ? term : undefined;
+  const custom = singleEntryValue(model) === "custom";
+  if (q === undefined && !custom) return undefined;
+  return { q: q ?? "", mode: custom ? "custom" : "all" };
+}
+
 export type RobinhoodExploreFilters = {
   sort: typeof LAUNCH_SORT_OPTIONS[number]["value"];
   mode?: typeof LAUNCH_MODE_OPTIONS[number]["value"] | "classic";

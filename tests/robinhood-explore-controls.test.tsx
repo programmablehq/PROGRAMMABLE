@@ -6,7 +6,7 @@ vi.mock("@/components/view-chain", () => {
   const useViewChain = () => ({ hydrated: true, viewChainId: 4663, setViewChainId: vi.fn() });
   return { useViewChain, useRouteViewChain: useViewChain };
 });
-vi.mock("next/navigation", () => ({ usePathname: () => "/explore/robinhood", useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => null, usePathname: () => "/explore/robinhood", useRouter: () => ({ push: vi.fn() }) }));
 import { readLaunchListResponse, RobinhoodLaunchesView, UnifiedLaunchesView } from "@/components/robinhood-launches-view";
 import { ChainMark } from "@/components/chain-mark";
 import ExplorePage from "@/app/explore/page";
