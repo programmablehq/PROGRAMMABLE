@@ -135,7 +135,9 @@ Finalized launches become eligible for Explore and the connected wallet's Profil
 
 ## Ethereum Custom
 
-Ethereum Mainnet uses V3 with chain ID `1` and its own schemas, funding rules and finality policy. Follow the Ethereum section of the versioned reference linked above. V1 and V2 creation are read-only: new requests return non-retryable `409 CUSTOM_LAUNCH_V1_READ_ONLY` or `409 CUSTOM_LAUNCH_V2_READ_ONLY`. Existing resources retain their original contract.
+Ethereum Mainnet uses V3 with chain ID `1`. Before packing, read `profile.profileVersion` from [Ethereum capabilities](https://api.programmable.market/v3/capabilities). For a new request, require `profile.productionLaunchAuthorized` to be true and the selected version to appear in `requestProfiles.freshSubmissionExactVersions`. Use the [3.6.0 request schema](https://programmable.market/openapi/custom-launch-v3.6.json) for profile `3.6.0` and the [3.3.0 request schema](https://programmable.market/openapi/custom-launch-v3.json) for profile `3.3.0`.
+
+Existing V1 and V2 requests can still be read. New requests to those versions return non-retryable `409 CUSTOM_LAUNCH_V1_READ_ONLY` or `409 CUSTOM_LAUNCH_V2_READ_ONLY`.
 
 V3 `prepared` means the artifact exists but there is no wallet transaction to sign. `authorized` supplies the wallet transaction after the required server checks. EIP-3009 funding has a separate funding-signature step before the Router transaction. Neither action can be performed by an API key.
 
