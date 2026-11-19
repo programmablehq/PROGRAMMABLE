@@ -64,7 +64,14 @@ test("uses the selected network for a hook starter and resets a new project to b
  await page.goto(origin);
  await page.getByRole("combobox",{name:"Network for contract starters",exact:true}).selectOption("99901");
  await page.getByRole("button",{name:/^Custom hook/}).click();
- await expect(page.getByRole("textbox",{name:"Describe your idea",exact:true})).toHaveValue("Build a custom hook on Elysium. ");
+ const input=page.getByRole("textbox",{name:"Describe your idea",exact:true});
+ await expect(input).toHaveValue("Build a custom hook on Elysium. ");
+ await page.getByRole("combobox",{name:"Network for contract starters",exact:true}).selectOption("8453");
+ const hook=page.getByRole("button",{name:/^Custom hook/});
+ await hook.click();await expect(input).toHaveValue("Build a custom hook on Base. ");
+ await input.fill("Build a custom hook on Base. Keep the original fee policy.");
+ await expect(hook).toBeDisabled();await expect(page.getByRole("button",{name:/^Web app/})).toBeDisabled();
+ await input.fill("");await expect(hook).toBeEnabled();
  await page.getByRole("combobox",{name:"Work mode",exact:true}).selectOption("plan");
  await page.getByRole("button",{name:"New project",exact:true}).click();
  await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeEnabled();

@@ -656,6 +656,9 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
     return updated;
   };
 
+  const ideas = projectEntry ? projectStarterIdeas : starterIdeas;
+  const canChooseIdea = !input.trim() || ideas.some(idea => idea.prompt === input);
+
   return <div ref={workspaceElement} className={styles.workspace}>
     <div className={styles.studio} data-guest={signedOut||undefined} data-empty={!signedOut && !showCoinPanel || undefined}>
     <section className={styles.conversation} aria-label={projectEntry?"Build your project":"Build your coin"} data-chat-state={signedOut?"wallet-required":activity.id}
@@ -689,7 +692,7 @@ function CustomAISession({ owner, headers: sessionHeaders, localPreview, general
             <p>{draft||generalProject ? "Your current rules are saved." : "Describe the rules. Build your coin here, without writing code."}</p>
           </>}
           <div className={styles.starterIdeas} aria-label="Ideas to get started">
-            {(projectEntry?projectStarterIdeas:starterIdeas).map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked}
+            {ideas.map(idea => <button type="button" key={idea.title} disabled={!restored || switchingCoin || launchLocked || !canChooseIdea}
               onClick={() => { setInput(idea.prompt); onGuestInput?.(idea.prompt); textarea.current?.focus(); }}>{idea.title}<ArrowUp size={15} aria-hidden="true" /></button>)}
           </div>
         </div>}
