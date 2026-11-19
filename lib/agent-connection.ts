@@ -6,6 +6,11 @@ export const AGENT_SCOPES = ["custom-launch:create", "custom-launch:read", "modu
 export const PROGRAMMABLE_AGENT_GUIDE_URL = "https://programmable.market/agents.md";
 export const PROGRAMMABLE_AGENT_DISCOVERY_URL = "https://programmable.market/api/agent";
 
+const ethereumOpenApiByProfile = {
+  "3.3.0": "https://programmable.market/openapi/custom-launch-v3.json",
+  "3.6.0": "https://programmable.market/openapi/custom-launch-v3.6.json",
+} as const;
+
 export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
   schemaVersion: "programmable.agent-discovery.v1",
   name: "Programmable",
@@ -62,10 +67,11 @@ export const PROGRAMMABLE_AGENT_ENTRY = Object.freeze({
         preflight: "https://api.programmable.market/v3/custom-launches/preflight",
         create: "https://api.programmable.market/v3/custom-launches",
         status: "https://api.programmable.market/v3/custom-launches/{launchId}",
-        guide: documentationUrl(DOCUMENTATION.customLaunch),
-        openApi: "https://programmable.market/openapi/custom-launch-v3.json",
+        guide: documentationUrl(DOCUMENTATION.ethereumCustomLaunch),
+        openApi: ethereumOpenApiByProfile["3.6.0"],
+        openApiByProfile: ethereumOpenApiByProfile,
         finalizedMetadata: "https://api.programmable.market/v3/finalized-custom-launches",
-        profileAndFeePolicy: "Read the active profile and fee policy from live capabilities before packing.",
+        profileAndFeePolicy: "Before packing, read profile.profileVersion and the fee policy from live capabilities. Require profile.productionLaunchAuthorized and the selected version in requestProfiles.freshSubmissionExactVersions. Use the matching openApiByProfile entry. If the version is missing, stop before packing.",
       },
       robinhood: { chainId: 4663, recommendedForNewProjects: false, capabilities: "https://api.programmable.market/v4/chains/4663/capabilities", readiness: "https://api.programmable.market/v4/chains/4663/readiness", openApi: "https://programmable.market/openapi/custom-launch-v4.json" },
     },
@@ -128,7 +134,7 @@ export function buildAgentInstructions(input?: { scopes?: readonly string[]; wal
   const workflowInstruction = chain === "99901" ? `Use workflows.customLaunch.elysium and ${capabilityUrl}.` : chain === "999" ? `Use workflows.customLaunch.hyperevm and ${capabilityUrl}.` : chain === "8453"
     ? `Use workflows.customLaunch.base and ${capabilityUrl}.`
     : chain === "1"
-      ? `Use workflows.customLaunch.ethereum and ${capabilityUrl}.`
+      ? `Use workflows.customLaunch.ethereum and ${capabilityUrl}. Choose the request schema from openApiByProfile using profile.profileVersion.`
       : chain === "4663"
         ? `Use workflows.customLaunchPlan and ${capabilityUrl}.`
         : "Follow the selected chain's workflow.";

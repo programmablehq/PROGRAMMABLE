@@ -1,11 +1,14 @@
 /** Human documentation is published by GitBook; versioned API assets keep their own URLs. */
 export const GITBOOK_PROXY_ORIGIN = "https://proxy.gitbook.site/sites/site_V93gQ";
 
+const customLaunch = "/docs/developers/custom-launch-quickstart/custom-launch";
+
 export const DOCUMENTATION = {
   home: "/docs",
   developers: "/docs/developers/developers",
   quickstart: "/docs/developers/custom-launch-quickstart",
-  customLaunch: "/docs/developers/custom-launch-quickstart/custom-launch",
+  customLaunch,
+  ethereumCustomLaunch: `${customLaunch}#ethereum-custom`,
   base: "/docs/developers/custom-launch-quickstart/base-custom-launch",
   elysium: "/developers/elysium-custom-launch-api-v1.md",
   hyperevm: "/docs/developers/custom-launch-quickstart/hyperevm-custom-launch",

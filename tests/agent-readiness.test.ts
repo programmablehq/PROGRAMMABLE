@@ -70,6 +70,20 @@ describe("agent-readable public surface", () => {
     }
   });
 
+  it("links Ethereum profiles to request schemas that accept those versions", async () => {
+    const { workflows } = await getAgentDiscovery().json();
+    const ethereum = workflows.customLaunch.ethereum;
+    expect(ethereum.openApi).toBe(ethereum.openApiByProfile["3.6.0"]);
+    for (const version of ["3.3.0", "3.6.0"]) {
+      const url = new URL(ethereum.openApiByProfile[version]);
+      expect(url.origin).toBe(ORIGIN);
+      const { components } = JSON.parse(readFileSync(`public${url.pathname}`, "utf8"));
+      const profileRef = components.schemas.CustomLaunchCreateRequestV3.properties.launchProfile.$ref;
+      const profile = components.schemas[profileRef.split("/").pop()].properties.profileVersion;
+      expect(profile.enum ?? [profile.const]).toContain(version);
+    }
+  });
+
   it("routes new Robinhood projects to Custom Launch Plans and labels older profiles", async () => {
     const response = getAgentDiscovery();
     expect(response.status).toBe(200);
