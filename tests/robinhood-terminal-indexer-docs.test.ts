@@ -226,6 +226,9 @@ describe("Robinhood terminal and indexer documentation", () => {
     );
     expect(rewrites).toEqual({
       beforeFiles: [
+        { source: "/openapi/base-custom-launch-v1.json", destination: "/openapi/base-custom-launch-v1.1.json" },
+        { source: "/openapi/hyperevm-custom-launch-v1.json", destination: "/openapi/hyperevm-custom-launch-v1.1.json" },
+        { source: "/openapi/elysium-custom-launch-v1.json", destination: "/openapi/elysium-custom-launch-v1.1.json" },
         {
           source: "/docs.md",
           destination: "https://proxy.gitbook.site/sites/site_V93gQ/.md",
