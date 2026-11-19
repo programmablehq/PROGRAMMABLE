@@ -73,7 +73,9 @@ for (const [chainId, name] of [["8453", "Base"], ["999", "HyperEVM"], ["99901", 
     await expect(page.getByRole("alert")).toHaveCount(0);
     const launchId = `80000000-0000-4000-8000-${chainId.padStart(12, "0")}`;
     await page.goto(`${origin}?scenario=workspace-history&launchId=${launchId}&chainId=${chainId}`);
-    await expect(page.getByRole("button", { name: "All launches", exact: false })).toBeVisible();
+    await page.getByRole("button", { name: "All launches", exact: false }).click();
+    await expect(page).toHaveURL(`${origin}/?scenario=workspace-history&view=history`);
+    await expect(workspace.getByRole("status")).toHaveText("3 launches");
     expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
   });
 }

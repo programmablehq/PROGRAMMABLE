@@ -146,8 +146,19 @@ export function DeveloperLaunchWorkspace(props: Props) {
     deepLinkDone.current = true; setSelected(item); const url = new URL(window.location.href); url.searchParams.set("launchId", item.id); url.searchParams.set("chainId", item.chainId);
     window.history.replaceState(null, "", url); document.getElementById("launch-workspace")?.focus();
   }
+  function showLaunchList() {
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", "history");
+    url.searchParams.delete("launchId");
+    url.searchParams.delete("chainId");
+    url.searchParams.delete("start");
+    deepLinkDone.current = true;
+    window.history.replaceState(null, "", url);
+    setSelected(null);
+    retry();
+  }
   if (selected) return <div id="launch-workspace" tabIndex={-1}>
-    <button type="button" className={shared.textLink} onClick={() => { setSelected(null); deepLinkDone.current = true; const url = new URL(window.location.href); url.searchParams.delete("launchId"); window.history.replaceState(null, "", url); retry(); }}>← All launches</button>
+    <button type="button" className={shared.textLink} onClick={showLaunchList}>← All launches</button>
     {selected.source === "legacy" ? <DeveloperLaunchHistory {...props} detailOnly historicalDetail={selected.historicalDetail} initialLaunchId={selected.id} initialLaunchVersion={selected.version} initialLaunchChainId={selected.chainId === "1" ? null : selected.chainId} />
       : props.sendUniversalLaunchWalletAction ? <DeveloperUniversalLaunchHistory account={props.account} initialLaunchId={selected.id} sourceOnly={selected.source}
         getAccessToken={props.getAccessToken} getIdentityToken={props.getIdentityToken} sendWallet={props.sendUniversalLaunchWalletAction} openWallet={props.openWallet} /> : <DeveloperIssue message="Wallet connection unavailable" connect={props.openWallet} retry={retry} />}
