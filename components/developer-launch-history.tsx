@@ -935,6 +935,7 @@ export function parseLaunch(value: unknown, account: string, chainId: "1" | "845
   if (v3 && !liquidityIntent) return null;
   const sourceVerification = parseSourceVerificationStatusV1(
     value.sourceVerification,
+    v3 && chainId === "1" ? value.requestId : undefined,
   );
   if (
     value.sourceVerification !== undefined
@@ -2261,6 +2262,39 @@ function ProjectMetadataReview({
       )}
       </details>
     </section>
+  );
+}
+
+const sourceStatusLabels = {
+  queued: "Queued",
+  retrying: "Retrying",
+  needs_attention: "Needs attention",
+  exact_match: "Exact match",
+} satisfies Record<SourceVerificationStatusV1["status"], string>;
+const sourceProviderLabels = {
+  sourcify: "Sourcify",
+  etherscan: "Etherscan",
+  blockscout: "Blockscout",
+} satisfies Record<NonNullable<SourceVerificationStatusV1["components"][number]["provider"]>, string>;
+
+function LaunchSourceResults({ source }: Readonly<{ source: SourceVerificationStatusV1 }>) {
+  const matched = source.components.filter(component => component.status === "exact_match").length;
+  return (
+    <details className={styles.detailDisclosure}>
+      <summary>Contract verification results · {matched} of {source.components.length} matched</summary>
+      <dl className={styles.sourceResults}>
+        {source.components.map(component => (
+          <div key={component.targetId}>
+            <dt>{component.targetId}</dt>
+            <dd>
+              <span>{sourceStatusLabels[component.status]}{component.provider
+                ? ` · ${sourceProviderLabels[component.provider]}` : ""}</span>
+              <code>{component.address}</code>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 
@@ -3796,6 +3830,9 @@ export function DeveloperLaunchHistory({
                 {launchErrors[key] ? <p className={styles.inlineError} role="alert">{launchFeedback(launchErrors[key])}</p> : null}
                 {launch.status === "finalized" ? <CustomLaunchCompletion chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "99901" ? "99901" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1"}
                   launchId={launch.onchainLaunchId} controller={launch.ownerWallet} transactionHash={transactionHash} /> : null}
+                {reviewLaunch.status === "finalized" && reviewLaunch.sourceVerification ? (
+                  <LaunchSourceResults source={reviewLaunch.sourceVerification} />
+                ) : null}
                 <details className={styles.launchReview}>
                   <summary>Details and review</summary>
                 <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "99901" ? "99901" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1"} />

@@ -93,6 +93,11 @@
 .truthGrid [data-tone="warning"] strong { color: var(--warning); }
 .truthGrid [data-tone="danger"] strong { color: var(--danger); }
 .truthGrid dd > span { color: var(--webde-muted); font-size: 12px; line-height: 18px; }
+.sourceResults { display: grid; gap: 10px; margin: 8px 0 0; }
+.sourceResults dt, .sourceResults code { overflow-wrap: anywhere; }
+.sourceResults dt { font-weight: 500; }
+.sourceResults dd { display: grid; gap: 2px; margin: 0; }
+.sourceResults code { color: var(--webde-muted); font-size: 12px; }
 .handoffExpiry { border-inline-start: 2px solid var(--warning); display: grid; gap: 4px; margin-top: 16px; padding-inline-start: 12px; }
 .handoffExpiry[data-expired="true"] { border-color: var(--danger); }
 .handoffExpiry strong { color: var(--webde-ink); font-size: 14px; font-weight: 500; line-height: 20px; }

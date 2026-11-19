@@ -1609,6 +1609,19 @@ describe("developer launch history interface", () => {
     expect(historySource).toContain("|| handoffExpired");
   });
 
+  it("keeps the worker status when a component carries separate Ethereum publication evidence", () => {
+    const requestId = "10000000-0000-4000-8000-000000000001";
+    const component = { targetId: "token", address: "0x1111111111111111111111111111111111111111", status: "needs_attention", provider: null };
+    const publishedSource = { schemaVersion: "programmable.ethereum-graph-published-source.v1", chainId: "1", provider: "sourcify",
+      providerMatch: "match", requestId, targetId: component.targetId, address: component.address };
+    const status = { schemaVersion: "programmable.source-verification-status.v1", status: "needs_attention",
+      components: [{ ...component, publishedSource }], updatedAt: "2026-08-25T10:10:00.000Z" };
+    expect(parseSourceVerificationStatusV1(status, requestId)).toEqual({ ...status, components: [component] });
+    expect(parseSourceVerificationStatusV1(status)).toBeNull();
+    expect(parseSourceVerificationStatusV1(status, "20000000-0000-4000-8000-000000000002")).toBeNull();
+    expect(parseSourceVerificationStatusV1({ ...status, components: [{ ...component, targetId: "hook", publishedSource }] }, requestId)).toBeNull();
+  });
+
   it("renders six independent proof states without promoting finality", () => {
     const sourceVerification = parseSourceVerificationStatusV1({
       schemaVersion: "programmable.source-verification-status.v1",
