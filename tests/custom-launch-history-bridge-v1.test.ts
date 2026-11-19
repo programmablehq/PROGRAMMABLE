@@ -14,6 +14,7 @@ import {
   CUSTOM_LAUNCH_SUBMISSION_HINT_SCHEMA_V1,
   CUSTOM_LAUNCH_SUMMARY_SCHEMA_V4,
 } from "../lib/server/custom-launch/launch-history-bridge-v1";
+import { WalletPrincipalAuthenticationErrorV1 } from "../lib/server/creator-article/wallet-principal.server";
 import { canonicalizeJson } from
   "../lib/server/projection-target/canonical-json";
 
@@ -467,6 +468,22 @@ describe("developer launch history same-origin bridge", () => {
     expect((await response.json()).error.code).toBe("launch_history_unavailable");
     expect(fetchBackend).toHaveBeenCalledTimes(1);
     expect((fetchBackend.mock.calls[0][0] as URL).pathname).toBe(`/v4/chains/${chainId}/wallet-admin/custom-launches`);
+  });
+
+  it.each([
+    ["session_required", "Sign in to access your launches.", 'Bearer realm="Programmable"'],
+    ["access_token_invalid", "Sign in again to renew your wallet session.", 'Bearer realm="Programmable", error="invalid_token"'],
+    ["privy_session_rejected", "Sign in again to renew your wallet session.", 'Bearer realm="Programmable"'],
+  ])("returns a sign-in instruction for %s", async (code, message, challenge) => {
+    authenticate.mockRejectedValue(new WalletPrincipalAuthenticationErrorV1(401, code));
+    const response = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}`,
+    ));
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe(challenge);
+    const { body } = await correlatedError(response);
+    expect(body.error).toMatchObject({ code, message });
+    expect(fetchBackend).not.toHaveBeenCalled();
   });
 
   function bridge(options: { backendTimeoutMs?: number } = { backendTimeoutMs: 1_000 }) {

@@ -2341,6 +2341,16 @@ async function mappedBackendError(response: Response) {
 
 function mappedError(error: unknown) {
   if (error instanceof WalletPrincipalAuthenticationErrorV1) {
+    if (error.status === 401) {
+      const message = error.code === "session_required"
+        ? "Sign in to access your launches."
+        : "Sign in again to renew your wallet session.";
+      const response = errorResponse(error.status, error.code, undefined, message);
+      response.headers.set("WWW-Authenticate", error.code === "access_token_invalid"
+        ? 'Bearer realm="Programmable", error="invalid_token"'
+        : 'Bearer realm="Programmable"');
+      return response;
+    }
     return errorResponse(error.status, error.code);
   }
   if (error instanceof BrowserRequestErrorV1) {
