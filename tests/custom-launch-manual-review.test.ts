@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHash, createHmac } from "node:crypto";
 vi.mock("server-only", () => ({}));
 import { createManualReviewStartBridgeV1 } from "../lib/server/custom-launch/manual-review-start-v1";
+import { createManualReviewFeedbackBridgeV4 } from "../lib/server/custom-launch/manual-review-feedback-v4";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
 import { createManualReviewBridgeV1 } from "../lib/server/custom-launch/manual-review-bridge-v1";
 import { customLaunchReviewNeedsStart, customLaunchReviewOverdue, customLaunchReviewAllowsSigning, customLaunchReviewDescription, customLaunchReviewLabel, type CustomLaunchReview } from "../lib/custom-launch-review";
@@ -19,6 +20,32 @@ function request(body: unknown) { return new Request(`https://programmable.marke
   method: "POST", headers: { "Content-Type": "application/json", Origin: "https://programmable.market" }, body: JSON.stringify(body),
 }); }
 const decision = { reviewId: review.reviewId, subjectHash: review.subjectHash, revision: 1, decision: "approve", reason: "Reviewed" };
+
+describe("applicant review feedback", () => {
+  it.each(["8453", "999", "99901"] as const)("forwards owner reads and replies on chain %s", async chainId => {
+    const saved = { ...review, chainId, state: "pending" as const, approvedAt: null, expiresAt: null };
+    const fetchBackend = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ review: saved }));
+    const route = createManualReviewFeedbackBridgeV4({
+      authenticator: { authenticate: async () => ({ privyUserId: "did:privy:owner", privySessionId: "session", wallets: [WEBSITE_ADMIN_WALLET] }) },
+      backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43), fetchBackend,
+    });
+    const target = { chainId, launchId: saved.reviewId };
+    for (const payload of [{ ...target, operation: "ownerRead" }, { ...target, operation: "reply",
+      revision: saved.revision, subjectHash: saved.subjectHash, message: "Updated my deployment notes.", links: [] }]) {
+      const response = await route(new Request("https://programmable.market/api/custom-launch-reviews/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, walletAddress: saved.controller }),
+      }));
+      expect(response.status).toBe(200);
+      expect((await response.json()).review).toEqual(saved);
+      const [url, init] = fetchBackend.mock.lastCall!;
+      expect(String(url)).toBe("https://api.programmable.market/v1/wallet-admin/custom-launch-reviews/feedback");
+      expect(JSON.parse(String(init?.body))).toEqual(payload);
+      expect(new Headers(init?.headers).get("X-Programmable-Wallet-Address")?.toLowerCase()).toBe(saved.controller.toLowerCase());
+    }
+  });
+});
+
 describe("manual launch approval", () => {
   it("waits for a cold source review beyond 60 seconds and still bounds an unresponsive backend", async () => {
     vi.useFakeTimers();

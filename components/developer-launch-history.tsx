@@ -3833,13 +3833,12 @@ export function DeveloperLaunchHistory({
                 {reviewLaunch.status === "finalized" && reviewLaunch.sourceVerification ? (
                   <LaunchSourceResults source={reviewLaunch.sourceVerification} />
                 ) : null}
+                {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
                 <details className={styles.launchReview}>
                   <summary>Details and review</summary>
                 <CustomLaunchProgress status={launch.status} review={launch.manualReview} launchId={resourceIdentity} chainId={launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "99901" ? "99901" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1"} />
                 {launchErrors[key] ? <pre>{safeDeveloperDetails(launchErrors[key],launch.routeId === "custom-launch:create:v4" ? "4663" : initialLaunchChainId === "99901" ? "99901" : initialLaunchChainId === "999" ? "999" : initialLaunchChainId === "8453" ? "8453" : "1")}</pre> : null}
                 <CustomLaunchAssessment value={launch.output?.reviewReadiness} review={launch.manualReview} subjectHash={launch.manualReview?.subjectHash} chainId={launch.manualReview?.chainId} tradeChecks={launch.manualReview?.tradeChecks} />
-                {launch.manualReview ? <CustomLaunchDiscussion review={launch.manualReview} launchId={resourceIdentity} onUpdated={refresh} /> : null}
-
                 <details className={styles.detailDisclosure}>
                   <summary>Request details</summary>
                 <dl className={styles.metadata}>

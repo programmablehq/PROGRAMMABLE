@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { launchExecutionProgress } from "@/lib/custom-launch-execution-progress";
 import type { CustomLaunchReview } from "@/lib/custom-launch-review";
+import { developerLaunchHistoryHref } from "@/lib/developer-api-key-route";
 import styles from "./custom-launch-progress.module.css";
 
 export function CustomLaunchProgress({ status, review, launchId, chainId, indexed = false }: {
@@ -12,7 +13,7 @@ export function CustomLaunchProgress({ status, review, launchId, chainId, indexe
   const execution = launchExecutionProgress(status);
   const complete = indexed || execution?.complete === true;
   const stage = complete ? 2 : execution || review?.state === "approved" || !review && ["authorized", "awaiting_wallet_signature", "wallet_action_required", "wallet_action_ready"].includes(status) ? 1 : 0;
-  const href = `/developers/api-keys?view=history&chainId=${encodeURIComponent(chainId)}&launchId=${encodeURIComponent(launchId)}`;
+  const href = developerLaunchHistoryHref(chainId, launchId);
   return <div className={styles.progress}>
     <ol aria-label="Launch progress">{["Review", "Launch", "Complete"].map((label, index) => <li key={label}
       data-done={index < stage || complete} aria-current={index === stage ? "step" : undefined}>

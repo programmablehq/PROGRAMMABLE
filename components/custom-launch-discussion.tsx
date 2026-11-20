@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useWallet } from "./wallet-provider";
 import { parseCustomLaunchReview, type CustomLaunchReview } from "@/lib/custom-launch-review";
 import { reviewLinksV4 } from "@/lib/custom-launch-review-workflow";
+import { developerLaunchHistoryHref } from "@/lib/developer-api-key-route";
 import discussionStyles from "./custom-launch-discussion.module.css";
 import styles from "./developer-api-keys.module.css";
 
@@ -11,7 +12,7 @@ type DiscussionProps = { review: CustomLaunchReview; launchId: string; onUpdated
 
 export function CustomLaunchDiscussion(props: DiscussionProps) {
   const { wallet } = useWallet();
-  return <LaunchDiscussion key={`${wallet?.account ?? "disconnected"}:${props.launchId}:${props.review.reviewId}`} {...props} />;
+  return <LaunchDiscussion key={`${wallet?.account ?? "disconnected"}:${props.review.chainId}:${props.launchId}:${props.review.reviewId}`} {...props} />;
 }
 
 function LaunchDiscussion({ review, launchId, onUpdated }: DiscussionProps) {
@@ -19,6 +20,7 @@ function LaunchDiscussion({ review, launchId, onUpdated }: DiscussionProps) {
   const [message, setMessage] = useState(""), [links, setLinks] = useState("");
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
   const [assessment, setAssessment] = useState<unknown>(null);
+  const [assessmentError, setAssessmentError] = useState("");
   const assessmentBusy = useRef(false);
   const account = wallet?.account;
   const active = useRef(account);
@@ -28,12 +30,25 @@ function LaunchDiscussion({ review, launchId, onUpdated }: DiscussionProps) {
     assessmentBusy.current = true;
     try {
       const [token, identity] = await Promise.all([getAccessToken(), getIdentityToken()]);
-      if (!token || active.current !== account) return;
+      if (active.current !== account) return;
+      if (!token) {
+        setAssessmentError("Reconnect the wallet that submitted this launch to read the review details.");
+        return;
+      }
       const response = await fetch("/api/custom-launch-reviews/feedback", { method: "POST", cache: "no-store",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(identity ? { "X-Privy-Identity-Token": identity } : {}) },
         body: JSON.stringify({ operation: "ownerRead", chainId: review.chainId, launchId, walletAddress: account }), signal: AbortSignal.timeout(70000) });
-      if (response.ok) { const value = await response.json(); if (active.current === account) setAssessment(value.assessment ?? null); }
-    } catch { /* The stored review and reply remain usable during a diagnostics outage. */ }
+      const value = await response.json();
+      if (active.current !== account) return;
+      if (response.ok) {
+        setAssessment(value.assessment ?? null);
+        setAssessmentError("");
+      } else {
+        setAssessmentError(typeof value.error === "string" ? value.error : "Could not load review details. Try again.");
+      }
+    } catch {
+      if (active.current === account) setAssessmentError("Could not load review details. Try again.");
+    }
     finally { assessmentBusy.current = false; }
   }
   async function reply() {
@@ -57,10 +72,16 @@ function LaunchDiscussion({ review, launchId, onUpdated }: DiscussionProps) {
     } catch (cause) { if (active.current === account) setNotice(cause instanceof Error ? cause.message : "Could not send reply."); }
     finally { if (active.current === account) setBusy(false); }
   }
-  if (review.supersededBy) return <p>Continue with request {review.supersededBy.launchId}.</p>;
+  if (review.supersededBy) return <p><a className={discussionStyles.replacementLink}
+    href={developerLaunchHistoryHref(review.chainId, review.supersededBy.launchId)}>
+    Open replacement submission <code>{review.supersededBy.launchId}</code>
+  </a></p>;
   return <details className={discussionStyles.discussion} onToggle={event => { if (event.currentTarget.open) void readAssessment(); }}>
     <summary>Review messages{review.discussion?.length ? ` (${review.discussion.length})` : ""}</summary>
     {review.reason ? <section aria-label="Review decision"><strong>Programmable review</strong><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{review.reason}</p></section> : null}
+    {assessmentError ? <div><p role="status">{assessmentError}</p>
+      <button type="button" className={styles.secondaryButton} onClick={() => void readAssessment()}>Retry review details</button>
+    </div> : null}
     <CustomLaunchAssessment value={assessment} review={review} subjectHash={review.subjectHash} chainId={review.chainId} tradeChecks={review.tradeChecks} />
     {review.discussion?.map(entry => <div key={entry.revision}>
       <strong>{entry.author === "reviewer" ? "Programmable" : "Your team"}</strong>

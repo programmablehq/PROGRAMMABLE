@@ -1,5 +1,9 @@
 const launchIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
+export function developerLaunchHistoryHref(chainId: string, launchId: string): string {
+  return `/developers/api-keys?view=history&chainId=${encodeURIComponent(chainId)}&launchId=${encodeURIComponent(launchId)}`;
+}
+
 /** Ethereum graph handoffs omit chainId. Robinhood's Plan and V4 graph
  * handoffs declare 4663 explicitly; never reinterpret an Ethereum ID as V4. */
 export function developerLaunchDestination(query: URLSearchParams): { launchId: string | null; chainId: "4663" | "8453" | "999" | "99901" | null } {
