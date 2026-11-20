@@ -13,6 +13,17 @@ function retryDelaySeconds(response: Response) {
   return seconds > 0 && seconds <= 2_147_483 ? seconds : 0;
 }
 
+function availabilityLabel(state: unknown) {
+  switch (state) {
+    case "active": return "available";
+    case "canary": return "limited access";
+    case "disabled": return "paused";
+    case "degraded": return "degraded";
+    case "unavailable": return "unavailable";
+    default: return "status unknown";
+  }
+}
+
 export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
   apiKey: ApiKeySummary; chainId: "1" | "4663" | "8453" | "999" | "99901" | ""; verify(): Promise<ApiKeySummary>; connect(): void;
 }) {
@@ -41,6 +52,7 @@ export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
         `Saved launch permissions · ${actions.join(" and ") || "none"}`,
         "Your agent verifies the secret when it connects."];
       setResult(keyDetails);
+      if (!actions.length) return;
       const response = await fetch(`/api/developer/connection?chainId=${chainId}`, { cache: "no-store", signal: AbortSignal.timeout(8000) }).catch(() => null);
       if (!response) throw new Error("API_CONNECTION_UNAVAILABLE");
       if (!response.ok) {
@@ -53,8 +65,14 @@ export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
       const availability = await response.json().catch(() => null);
       if (availability?.chainId !== chainId || availability.reachable !== true || availability.authorizesKey !== false) throw new Error("API_CONNECTION_INVALID");
       if (run !== generation.current) return;
-      const service = availability.createState === "active" ? "Launch service available" : `Launch service: ${availability.createState === "canary" ? "limited access" : "temporarily unavailable"}`;
-      setResult([...keyDetails, service]);
+      const operations: string[] = [];
+      if (actions.includes("read") && availability.readState !== undefined) {
+        operations.push(`Launch history · ${availabilityLabel(availability.readState)}`);
+      }
+      if (actions.includes("create")) {
+        operations.push(`New launches · ${availabilityLabel(availability.createState)}`);
+      }
+      setResult([...keyDetails, ...(operations.length ? operations : ["Public launch API reached"])]);
     } catch (caught) { if (run === generation.current) setError(caught instanceof Error ? caught.message : "API_KEY_CHECK_FAILED"); }
     finally { setBusy(false); }
   }
