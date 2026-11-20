@@ -219,6 +219,7 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     {indexedHref ? <CustomLaunchSuccessActions href={indexedHref} /> : null}
     {visibleError ? <p className={styles.error} role={!hash && error ? "alert" : "status"}>{hash ? "Your transaction is saved. Confirmation will update automatically." : launchFeedback(visibleError)}</p> : null}
     {!hasUnresolved && (plan?.status === "expired" || plan?.status === "action_required" || plan?.continuation) ? <p className={styles.notice}>Continue with your bot using launch ID <code>{id}</code>. Replanning uses the existing API and must preserve all completed steps.</p> : null}
+    {plan?.manualReview ? <CustomLaunchDiscussion review={plan.manualReview} launchId={id} onUpdated={load} /> : null}
     <details className={styles.details}><summary>Details and review</summary>
     <CustomLaunchProgress status={String(resource.status)} review={plan?.manualReview} launchId={id} chainId="4663" indexed={!!indexedHref} />
     {visibleError ? <pre>{safeDeveloperDetails(visibleError,"4663")}</pre> : null}
@@ -231,7 +232,6 @@ export function DeveloperUniversalLaunchFlow({ entry, highlighted = false, autoP
     <dl className={styles.summary}><div><dt>Controller</dt><dd><code>{entry.controller}</code></dd></div><div><dt>Launch ID</dt><dd><code>{id}</code></dd></div></dl>
       {ownAttempt ? <p>Saved wallet attempt · nonce {BigInt(ownAttempt.nonce).toString()}</p> : null}
     <CustomLaunchAssessment value={(plan?.preflight as unknown as Record<string, unknown>)?.reviewReadiness} review={plan?.manualReview} subjectHash={plan?.manualReview?.subjectHash} chainId={plan?.manualReview?.chainId} tradeChecks={plan?.manualReview?.tradeChecks} />
-    {plan?.manualReview ? <CustomLaunchDiscussion review={plan.manualReview} launchId={id} onUpdated={load} /> : null}
       <pre>{JSON.stringify({ manifestDigest: plan?.manifestDigest, components: plan?.plan.components, markets: plan?.plan.markets, feeObligations: plan?.plan.feeObligations,
         transaction: visibleReview?.transaction, decodedOperation: visibleReview?.decodedOperation, controllerAuthorization: visibleReview?.controllerAuthorization,
         preconditions: visibleReview?.preconditions, postconditions: visibleReview?.postconditions, recovery: ownAttempt, continuation: plan?.continuation, status: resource.status }, null, 2)}</pre></details>

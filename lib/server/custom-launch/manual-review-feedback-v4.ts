@@ -3,6 +3,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { getAddress, isAddress } from "viem";
 import { parseCustomLaunchReview } from "@/lib/custom-launch-review";
+import { tryParseViewChainId } from "@/lib/view-chain";
 import { createPrivyWalletPrincipalAuthenticatorV1, WalletPrincipalAuthenticationErrorV1, type WalletPrincipalAuthenticatorV1 } from "../creator-article/wallet-principal.server";
 import { createWalletAdminBffAssertionV2, requireWalletAdminBffAssertionKeyV2 } from "./wallet-admin-bff-assertion-v2";
 
@@ -30,7 +31,7 @@ export function createManualReviewFeedbackBridgeV4(input: { authenticator: Walle
     const respond = (status: number, body: unknown) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", Vary: "Authorization, X-Privy-Identity-Token" } });
     try {
       const url = new URL(request.url);
-      if (request.method !== "POST" || url.search || request.headers.get("origin") && request.headers.get("origin") !== url.origin) return respond(400, { error: "Invalid launch start request." });
+      if (request.method !== "POST" || url.search || request.headers.get("origin") && request.headers.get("origin") !== url.origin) return respond(400, { error: "Invalid review request." });
       const principal = await input.authenticator.authenticate(request);
       let value;
       try { value = JSON.parse(await readBoundedBody(request, 20000)); }
@@ -38,7 +39,8 @@ export function createManualReviewFeedbackBridgeV4(input: { authenticator: Walle
       const keys = value?.operation === "ownerRead" ? "chainId,launchId,operation,walletAddress" : value?.operation === "reply"
         ? "chainId,launchId,links,message,operation,revision,subjectHash,walletAddress" : "chainId,launchId,operation,replacementReviewId,revision,subjectHash,walletAddress";
       if (!value || Array.isArray(value) || !["ownerRead", "reply", "replace"].includes(value.operation)
-        || Object.keys(value).sort().join(",") !== keys || !["1", "4663"].includes(value.chainId) || !REVIEW_UUID_V4.test(value.launchId)
+        || Object.keys(value).sort().join(",") !== keys || typeof value.chainId !== "string"
+        || tryParseViewChainId(value.chainId) === null || !REVIEW_UUID_V4.test(value.launchId)
         || typeof value.walletAddress !== "string" || !isAddress(value.walletAddress)
         || (value.operation !== "ownerRead" && (!/^sha256:[0-9a-f]{64}$/u.test(value.subjectHash) || !Number.isSafeInteger(value.revision) || value.revision < 1))
         || (value.operation === "reply" && (typeof value.message !== "string" || !value.message.trim() || value.message.length > 12000 || !reviewLinksV4(value.links)))
@@ -54,10 +56,15 @@ export function createManualReviewFeedbackBridgeV4(input: { authenticator: Walle
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${input.websiteToken}`,
           "X-Programmable-Privy-User-Id": principal.privyUserId, "X-Programmable-Wallet-Address": getAddress(value.walletAddress), ...assertion },
         cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(value.operation === "ownerRead" ? 65000 : 15000)]) });
-      if (!response.ok) return respond([400, 403, 404, 409, 429].includes(response.status) ? response.status : 503, { error: response.status === 409 ? "This review changed. Refresh before sending." : "Could not save your reply. Refresh and try again." });
+      if (!response.ok) {
+        const status = [400, 403, 404, 409, 429].includes(response.status) ? response.status : 503;
+        if (value.operation === "ownerRead") return respond(status, { error: status === 404
+          ? "No review was found for this launch and wallet on the selected chain." : "Could not load review details. Try again." });
+        return respond(status, { error: status === 409 ? "This review changed. Refresh before sending." : "Could not update this review. Try again." });
+      }
       const result = JSON.parse(await readBoundedBody(response, 1024 * 1024));
       return respond(200, { review: parseCustomLaunchReview(result.review), ...(value.operation === "ownerRead" && result.assessment ? { assessment: result.assessment } : {}) });
-    } catch (error) { return respond(error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503, { error: "Could not save your reply. Reconnect your wallet and try again." }); }
+    } catch (error) { return respond(error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503, { error: "Could not complete this review request. Check your wallet connection and try again." }); }
   };
 }
 
@@ -65,5 +72,5 @@ export async function sendReviewedLaunchFeedbackV4(request: Request) {
   try { return await createManualReviewFeedbackBridgeV4({ authenticator: createPrivyWalletPrincipalAuthenticatorV1(),
     backendBaseUrl: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_API_BASE_URL!, websiteToken: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_WEBSITE_TOKEN!,
     bffAssertionKeyV2: process.env.PROGRAMMABLE_CUSTOM_LAUNCH_BFF_ASSERTION_KEY_V2!, fetchBackend: fetch })(request); }
-  catch { return Response.json({ error: "Launch preparation is temporarily unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
+  catch { return Response.json({ error: "Review messages are temporarily unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } }); }
 }
