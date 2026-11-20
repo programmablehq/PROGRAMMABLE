@@ -180,6 +180,12 @@ for(const width of [360,1440])test(`platform first visit supports app and API id
  const input=page.getByRole('textbox',{name:'Describe your project or ask a question',exact:true});
  await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
  await page.reload();await expect(input).toHaveValue('Build a shared scoreboard with a frontend, backend and persistent scores.');
+ const otherStarter=page.getByRole('button',{name:'Connect an external API',exact:true});
+ await otherStarter.click();
+ const edited=(await input.inputValue())+' Keep yesterday’s scores.';
+ await input.fill(edited);await expect(otherStarter).toBeDisabled();
+ await page.reload();await expect(input).toHaveValue(edited);await expect(otherStarter).toBeDisabled();
+ await input.fill('');await expect(otherStarter).toBeEnabled();
  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(f.calls).toEqual([]);expect(f.chats.size).toBe(0);
 });
 
