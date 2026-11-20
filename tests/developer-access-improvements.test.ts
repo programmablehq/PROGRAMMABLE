@@ -76,6 +76,17 @@ describe("developer setup and diagnostics", () => {
     expect(await response.json()).toMatchObject({ chainId, reachable: true, createState: expected, authorizesKey: false });
     expect(fetcher.mock.calls[0][0]).toBe(`https://api.programmable.market/v4/chains/${chainId}/capabilities`);
   });
+  it("keeps Robinhood history available when new plans are paused", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({
+      schemaVersion: "programmable.custom-launch-capabilities.v1",
+      chainId: "4663",
+      availability: { operations: { read: { state: "active" }, create: { state: "disabled" } } },
+    })));
+    const response = await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"));
+    expect(await response.json()).toMatchObject({
+      chainId: "4663", reachable: true, readState: "active", createState: "disabled", authorizesKey: false,
+    });
+  });
   it("does not treat an unrelated or failed response as available", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ chainId: "1", availability: { operations: { create: { state: "active" } } } }))));
     const response = await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"));

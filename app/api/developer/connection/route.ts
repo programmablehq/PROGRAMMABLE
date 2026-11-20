@@ -1,6 +1,20 @@
 import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
+
+function operationState(value: unknown) {
+  switch (value) {
+    case "active":
+    case "canary":
+    case "disabled":
+    case "degraded":
+    case "unavailable":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
 /** Public availability only. Wallet/key authorization is checked separately by the existing authenticated key route. */
 export async function GET(request: Request) {
   const chainId = new URL(request.url).searchParams.get("chainId");
@@ -15,14 +29,16 @@ export async function GET(request: Request) {
     const data = await response.json();
     const matches = (chainId === "4663" ? data.chainId : data.chain?.id) === chainId;
     if (!matches || data.schemaVersion !== "programmable.custom-launch-capabilities.v1") throw new Error("invalid");
-    let createState = data.availability?.operations?.create?.state;
+    const operations = data.availability?.operations;
+    const readState = chainId === "4663" ? operationState(operations?.read?.state) : undefined;
+    let createState = operations?.create?.state;
     if (chainScoped) {
       createState = data.mode;
       if (createState === "active" && data.publicLaunchAuthorized !== true) createState = "unavailable";
     } else if (chainId === "1") {
       createState = data.profile?.productionLaunchAuthorized === true ? "active" : "unavailable";
     }
-    return NextResponse.json({ chainId, reachable: true, createState: ["active", "canary", "disabled", "degraded"].includes(createState) ? createState : "unavailable",
+    return NextResponse.json({ chainId, reachable: true, readState, createState: operationState(createState) ?? "unavailable",
       checkedAt: new Date().toISOString(), authorizesKey: false }, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({
