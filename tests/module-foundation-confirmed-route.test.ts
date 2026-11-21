@@ -42,13 +42,27 @@ describe("confirmed launch hint", () => {
     await POST(request(body));
     expect(verify).toHaveBeenCalledTimes(1);
   });
+  it("acknowledges the same receipt when it finalizes during RPC verification", async () => {
+    const { POST } = await import("@/app/api/module-foundation/confirmed/route");
+    indexed.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    verify.mockRejectedValueOnce(new Error("The launch is not confirmed."));
+    const result = await POST(request({ ...body, chainId: 4663 }));
+    expect(result.status).toBe(200);
+    expect(indexed.mock.calls).toEqual([[token, transactionHash], [token, transactionHash]]);
+    expect(save).not.toHaveBeenCalled();
+  });
   it("does not publish a failed receipt and does not expose RPC errors", async () => {
     const { POST } = await import("@/app/api/module-foundation/confirmed/route");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     verify.mockRejectedValue(new Error("private RPC credentials"));
     const result = await POST(request(body));
     expect(result.status).toBe(503);
     expect(result.headers.get("retry-after")).toBe("15");
     expect(await result.text()).not.toContain("credentials");
+    expect(warning).toHaveBeenCalledWith("module-foundation-confirmation-pending", {
+      chainId: 1, phase: "verify-receipt", reason: "verification-unavailable", receiptRef: expect.stringMatching(/^[a-f0-9]{24}$/),
+    });
+    warning.mockRestore();
     expect(save).not.toHaveBeenCalled();
   });
   it("respects the server cooldown and can recover the same receipt after a failed batch", async () => {

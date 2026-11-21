@@ -156,9 +156,9 @@ capabilities and readiness. The authenticated API server selects `robinhood-laun
 `robinhood-production-launch` from the chain binding; callers cannot select a policy profile.
 
 Create one platform API key at <https://programmable.market/developers/api-keys> and provide it through
-`PROGRAMMABLE_API_KEY`. Follow the user's explicit Ethereum, Robinhood, Base or HyperEVM choice, then verify that chain's discovery
-contract and the grants reported for the key. A grant does not select the chain. The key authorizes API requests; the user separately reviews and signs their onchain launch
-transaction and pays gas.
+`PROGRAMMABLE_API_KEY`. Use the network selected during [launch intake](#start-with-the-launch-details). Verify its live discovery
+contract and the chain grants on the key. For Elysium, check [current readiness](https://api.programmable.market/v4/chains/99901/readiness)
+before packing. The launch wallet signs the onchain transaction and pays gas.
 
 Public guide, coverage, capabilities, readiness, initial-buy-quote and finalized-feed reads need no API key.
 Authenticated preflight/create needs `custom-launch:create`; list/detail reads need `custom-launch:read`. The
