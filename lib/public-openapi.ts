@@ -52,7 +52,7 @@ export const programmablePublicOpenApi = {
   openapi: "3.1.0",
   info: {
     title: "Programmable developer APIs",
-    version: "1.19.1",
+    version: "1.19.2",
     summary:
       "Ethereum, Robinhood, Base and HyperEVM Explore feeds, Custom launch contracts and release discovery.",
     description:
@@ -1611,6 +1611,7 @@ export const programmablePublicOpenApi = {
                 description:
                   "HTTP correlation identifier for this error response, not a Custom launch resource requestId.",
               },
+              retryable: { type: "boolean" },
               details: {},
             },
             additionalProperties: false,

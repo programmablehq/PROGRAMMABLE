@@ -27,7 +27,7 @@ describe("profile selected public Robinhood API contract", () => {
 
   it("preserves the historical launch profile while website OpenAPI adds completed and early index observations", async () => {
     const actual = await document("4.0.0");
-    expect(actual.info.version).toBe("1.19.1");
+    expect(actual.info.version).toBe("1.19.2");
     expect(actual.paths["/api/explore/base"].get).toMatchObject({
       operationId: "listBaseExploreLaunches", security: [],
       responses: { "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/BaseExplorePage" } } } } },
@@ -42,6 +42,9 @@ describe("profile selected public Robinhood API contract", () => {
       finalizedFeedUrl: "https://api.programmable.market/v4/chains/8453/finalized-custom-launches",
     });
     const previous = JSON.parse(JSON.stringify(actual));
+    const errorFields = previous.components.schemas.CustomLaunchApiError.properties.error.properties;
+    expect(errorFields.retryable).toEqual({ type: "boolean" });
+    delete errorFields.retryable;
     for (const path of ["/api/explore", "/api/explore/token"]) {
       const headers = previous.paths[path].get.responses["503"].headers;
       expect(headers.Link).toEqual({ description: "An alternate JSON resource on the selected chain. Follow its URL using its own response schema.",
