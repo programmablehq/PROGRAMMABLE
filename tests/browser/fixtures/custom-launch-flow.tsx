@@ -94,8 +94,10 @@ if (["unknown", "release-change-unknown", "release-change-known"].includes(mode)
   if (mode === "release-change-known") rememberLaunchHashV1(attempt, hash);
 }
 
+const fixtureServerFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), window.location.origin);
+  if (url.pathname === "/api/custom-launch-reviews/feedback") return fixtureServerFetch(input, init);
   if (legacyWorkspace) {
     const source = url.searchParams.get("source") ?? url.searchParams.get("chainId") ?? "combined";
     const cursor = url.searchParams.get("cursor");

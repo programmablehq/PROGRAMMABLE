@@ -111,6 +111,60 @@ test("pending review cannot prepare or sign", async ({ page }) => {
   expect(await page.evaluate(() => window.__customLaunchFixture.sends())).toBe(0);
 });
 
+test("review replies follow the latest discussion revision and retain drafts on conflict", async ({ page }) => {
+  const subjectHash = `sha256:${"ab".repeat(32)}`;
+  const requested = "Please share the existing liquidity report.";
+  const followUp = "Please include the fee report too.";
+  const draft = "Both reports are attached.";
+  const link = "https://example.com/reports";
+  const messages = [requested, followUp];
+  const writes: number[] = [];
+  let revision = 2;
+  await page.route("**/api/custom-launch-reviews/feedback", async route => {
+    const body = route.request().postDataJSON();
+    if (body.operation === "reply") {
+      writes.push(body.revision);
+      expect(body.subjectHash).toBe(subjectHash);
+      expect(body.message).toBe(draft);
+      expect(body.links).toEqual([link]);
+      if (writes.length === 1) {
+        revision = 3;
+        return route.fulfill({ status: 409, json: { error: "This review changed. Refresh before sending." } });
+      }
+      revision = 4;
+      messages.push(draft);
+    } else {
+      expect(body.operation).toBe("ownerRead");
+    }
+    const submittedAt = "2026-10-01T00:00:00Z";
+    return route.fulfill({ json: { review: {
+      schemaVersion: "programmable.custom-launch-manual-review.v1", chainId: "4663",
+      reviewId: "20000000-0000-4000-8000-000000000001", subjectHash, controller: `0x${"11".repeat(20)}`,
+      state: "pending", revision, submittedAt, approvedAt: null, expiresAt: null, reason: null,
+      discussion: messages.slice(0, revision - 1).map((message, index) => ({
+        revision: index + 2, createdAt: submittedAt, author: message === draft ? "applicant" : "reviewer", message, links: [],
+      })),
+    }, assessment: {} } });
+  });
+  await page.goto(origin + "?scenario=manual-review");
+  await page.getByText("Review messages", { exact: true }).click();
+  await expect(page.getByText(requested, { exact: true })).toBeVisible();
+  const message = page.getByLabel("Reply or deployment details");
+  const documents = page.getByLabel(/Document links/);
+  const send = page.getByRole("button", { name: "Send reply" });
+  await message.fill(draft);
+  await documents.fill(link);
+  await send.click();
+  await expect(page.getByText(followUp, { exact: true })).toBeVisible();
+  await expect(message).toHaveValue(draft);
+  await expect(documents).toHaveValue(link);
+  expect(writes).toEqual([2]);
+  await send.click();
+  await expect(page.getByText(draft, { exact: true })).toBeVisible();
+  await expect(message).toHaveValue("");
+  expect(writes).toEqual([2, 3]);
+});
+
 test("an expired graph permit shows its review and allows an explicit receipt check", async ({ page }) => {
   await page.clock.install();
   await page.goto(origin + "?scenario=renewed-permit&chainId=99901&launchId=80000000-0000-4000-8000-000000099901");
