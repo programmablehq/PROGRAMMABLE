@@ -174,6 +174,8 @@ const nextConfig: NextConfig = {
     return {
       beforeFiles: [
         // Keep the documented URLs current while retaining the release-bound CLI source files.
+        { source: "/openapi/custom-launch-v1.json", destination: "/openapi/custom-launch-v1.4.1.json" },
+        { source: "/openapi/custom-launch-v2.json", destination: "/openapi/custom-launch-v2.0.1.json" },
         ...["base", "hyperevm", "elysium"].map((chain) => ({
           source: `/openapi/${chain}-custom-launch-v1.json`,
           destination: `/openapi/${chain}-custom-launch-v1.1.json`,
