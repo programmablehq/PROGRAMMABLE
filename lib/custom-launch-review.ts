@@ -90,7 +90,9 @@ export function customLaunchReviewDescription(review: CustomLaunchReview, now = 
   if (review.supersededBy) return `Replaced by request ${review.supersededBy.launchId}. Continue with that request.`;
   if (review.state === "rejected" && review.reason) return review.reason;
   if (review.requiresRepack === true) return "Repack this launch with the current contract bindings for the 24-hour signing window, then submit it for review.";
-  if (customLaunchReviewLabel(review, now) === "Approved") return `Approved. Launch by ${new Date(review.expiresAt!).toLocaleString()}.`;
+  const label = customLaunchReviewLabel(review, now);
+  if (label === "Approved") return `Approved. Launch by ${new Date(review.expiresAt!).toLocaleString()}.`;
+  if (label === "Reply requested") return "Open Review messages to see what the reviewer needs from you.";
   if (review.state === "pending") {
     const status = customLaunchReviewOverdue(review, now)
       ? "The review is taking longer than expected. Keep this submission."
