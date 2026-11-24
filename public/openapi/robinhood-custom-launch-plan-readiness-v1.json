@@ -1,0 +1,191 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Programmable Robinhood Custom Launch Plan Readiness",
+    "version": "1.0.0",
+    "description": "Read the active Robinhood plan runtime before preparing or submitting a Custom Launch Plan."
+  },
+  "servers": [
+    {
+      "url": "https://api.programmable.market"
+    }
+  ],
+  "paths": {
+    "/v4/chains/4663/custom-launch-plans/readiness": {
+      "get": {
+        "operationId": "getRobinhoodCustomLaunchPlanReadiness",
+        "summary": "Read plan readiness and launch mode",
+        "description": "Call this endpoint without credentials or query parameters. A successful response can report disabled or canary mode. Require active mode for public plan submission and read the current chain capabilities for the supported profile.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Plan history and finality are ready. Check mode for admission.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyPlanReadiness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request contains unsupported query parameters."
+          },
+          "503": {
+            "description": "A required dependency is unavailable. Read reasonCodes and wait for Retry-After before checking again.",
+            "headers": {
+              "Retry-After": {
+                "description": "Delay in seconds before another readiness check.",
+                "schema": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlanReadiness"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "NullableDigest": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^sha256:[a-f0-9]{64}$"
+      },
+      "NullableGitObject": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "pattern": "^[a-f0-9]{40}$"
+      },
+      "PlanReadiness": {
+        "type": "object",
+        "required": [
+          "schemaVersion",
+          "chainId",
+          "releaseId",
+          "manifestDigest",
+          "policyDigest",
+          "sourceCommit",
+          "sourceTree",
+          "trustRootsDigest",
+          "executorBindingsDigest",
+          "mode",
+          "readsReady",
+          "finalityReady",
+          "reasonCodes"
+        ],
+        "properties": {
+          "schemaVersion": {
+            "const": "programmable.custom-launch-plan-runtime-readiness.v1"
+          },
+          "chainId": {
+            "const": "4663"
+          },
+          "releaseId": {
+            "$ref": "#/components/schemas/NullableDigest"
+          },
+          "manifestDigest": {
+            "$ref": "#/components/schemas/NullableDigest"
+          },
+          "policyDigest": {
+            "$ref": "#/components/schemas/NullableDigest"
+          },
+          "sourceCommit": {
+            "$ref": "#/components/schemas/NullableGitObject"
+          },
+          "sourceTree": {
+            "$ref": "#/components/schemas/NullableGitObject"
+          },
+          "trustRootsDigest": {
+            "$ref": "#/components/schemas/NullableDigest"
+          },
+          "executorBindingsDigest": {
+            "$ref": "#/components/schemas/NullableDigest"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "disabled",
+              "canary",
+              "active"
+            ],
+            "description": "Release admission mode. Public submissions require active mode."
+          },
+          "readsReady": {
+            "type": "boolean"
+          },
+          "finalityReady": {
+            "type": "boolean"
+          },
+          "sourceWorkerReady": {
+            "type": "boolean"
+          },
+          "distribution": {
+            "type": "object",
+            "required": [
+              "configured",
+              "enabled",
+              "started",
+              "running"
+            ],
+            "properties": {
+              "configured": {
+                "type": "boolean"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "started": {
+                "type": "boolean"
+              },
+              "running": {
+                "type": "boolean"
+              }
+            }
+          },
+          "reasonCodes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReadyPlanReadiness": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PlanReadiness"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "readsReady": {
+                "const": true
+              },
+              "finalityReady": {
+                "const": true
+              },
+              "reasonCodes": {
+                "type": "array",
+                "maxItems": 0
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

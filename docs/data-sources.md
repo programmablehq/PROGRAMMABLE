@@ -53,4 +53,5 @@ separate `customLaunchReadiness` links: Ethereum
 [`/v3/capabilities`](https://api.programmable.market/v3/capabilities), or Robinhood
 [`custom-launch-plans/readiness`](https://api.programmable.market/v4/chains/4663/custom-launch-plans/readiness)
 and [`custom-launch-capabilities`](https://api.programmable.market/v4/chains/4663/custom-launch-capabilities).
-Require the selected chain's current create authorization before submitting.
+Require the selected chain's current create authorization before submitting. On Robinhood, require `mode: "active"` for public
+plan submission. Read the [Robinhood plan readiness OpenAPI reference](https://programmable.market/openapi/robinhood-custom-launch-plan-readiness-v1.json).
