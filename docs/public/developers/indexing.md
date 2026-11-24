@@ -30,13 +30,15 @@ For historical Ethereum Classic launches, read the public [Classic identity snap
 The website feeds are the shortest path to discovering currently listed coins:
 
 ```text
-https://programmable.market/api/explore/ethereum?page=1&pageSize=50&sort=newest
+https://programmable.market/api/explore/ethereum?view=indexed&page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/robinhood?page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/base?page=1&pageSize=50&sort=newest
 https://programmable.market/api/explore/hyperevm?page=1&pageSize=50&sort=newest
 ```
 
-Read every page through `page.totalPages`, deduplicate by chain and token address, and retain each record's `sourceEvidence`. These are website discovery feeds. For a complete onchain history, backfill the original sources in the selected guide, including historical releases and launches excluded from the website's display.
+Use `view=indexed` to page through the Ethereum catalog. The default `view=live` can include entries marked `confirming` while their receipts are being indexed. The `X-Programmable-Explore-View` response header identifies the selected view.
+
+Read every page through `page.totalPages`. Deduplicate by chain ID and token address. Keep each page's `sourceEvidence` with its rows and preserve the Ethereum entries' `provenance`. For a complete onchain history, backfill the original sources in the selected guide, including historical releases and launches excluded from the website's display.
 
 For a verified integration:
 
