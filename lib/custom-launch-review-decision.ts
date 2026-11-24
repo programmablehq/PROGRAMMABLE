@@ -12,6 +12,20 @@ export class ReviewHttpError extends Error {
   constructor(message: string, readonly status: number) { super(message); }
 }
 
+export function reviewHttpErrorForResponse(status: number, code: unknown) {
+  switch (code) {
+    case "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED":
+      return new ReviewHttpError("Record passing buy and sell checks for the 0.3% platform fee collected by this pool before approving.", status);
+    case "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT":
+      return new ReviewHttpError("The embedded deadline does not cover the 24-hour launch window. Ask the team to repack it.", status);
+    case "REVIEW_LAUNCH_PROTECTION_REQUIRED":
+      return new ReviewHttpError("Save the launch protection report for this submission before approving.", status);
+  }
+  return new ReviewHttpError(status === 409 ? "This review changed. Refresh before deciding."
+    : status === 403 ? "This wallet is not authorized to review launches."
+    : "Could not load launch reviews. Try again.", status);
+}
+
 function uncertain(error: unknown) {
   return error instanceof ReviewHttpError ? error.status >= 500
     : error instanceof SyntaxError || error instanceof TypeError && /fetch|network/i.test(error.message)
