@@ -35,6 +35,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   const credentials=useRef(headers);useEffect(()=>{credentials.current=headers;},[headers]);
   const [scope,setScope]=useState<string>(),[projects,setProjects]=useState<ProjectItem[]>([]),[selected,setSelected]=useState<string>();
   const [project,setProject]=useState<ProjectRevision>(),[runs,setRuns]=useState<ProjectRun[]>([]),[input,setInput]=useState("");
+  const [draftSuggestionBlocked, setDraftSuggestionBlocked] = useState(false);
   const [tab,setTab]=useState<Tab>("project"),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
   const [ready,setReady]=useState(false),[dirty,setDirty]=useState(false),[launchLocked,setLaunchLocked]=useState(false);
   const [workspaceLoadAttempt, setWorkspaceLoadAttempt] = useState(0);
@@ -189,6 +190,7 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
     generation.current++;await saveSelection(id,submitted??resultIntent);
     if(loaded)setProjects(current=>[{projectId:loaded.projectId,revisionId:loaded.revisionId,title:loaded.document.title,updatedAt:loaded.createdAt},...current.filter(p=>p.projectId!==id)]);
     setProject(loaded);setRuns([]);setSyncingRun(undefined);setInput(drafts.current.get(id??newDraft)??"");setError("");setSelected(id);setNotice("");setHistoryOpen(false);setMobilePane("chat");
+    setDraftSuggestionBlocked(false);
     if(id&&id===selected&&!loaded)await refresh();
   }
   async function choose(id:string){if(locked||busy)return;await runTask(async()=>{if(legacyOpen)await beforeLeaveLegacy?.();await activate(id);onProject?.();focusContent();});}
@@ -257,6 +259,17 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
   },[scope]);
   function update(saved:ProjectRevision){setProject(current=>current?.projectId===saved.projectId?saved:current);setNotice(`Version ${saved.ordinal} saved.`);}
   function openResult(run:ProjectRun){if(!project)return;setTab(resultTab(project,run.operation));setMobilePane("result");}
+  function suggestPrompt(prompt: string, mode: ProjectRun["operation"] = "build") {
+    setMobilePane("chat");
+    requestAnimationFrame(() => composer.current?.focus());
+    if (input.trim()) {
+      setDraftSuggestionBlocked(true);
+      return;
+    }
+    setDraftSuggestionBlocked(false);
+    setOperation(mode);
+    setInput(prompt);
+  }
   const query=historyQuery.trim().toLocaleLowerCase();
   const history=[...projects.filter(item=>!query||item.title.toLocaleLowerCase().includes(query)).map(item=>({kind:"project" as const,id:item.projectId,title:item.title,date:item.updatedAt,active:!legacyOpen&&selected===item.projectId})),
     ...conversations.map(item=>({kind:"coin" as const,id:item.id,title:item.title,date:item.updatedAt,active:legacyOpen&&legacyId===item.id}))]
@@ -291,23 +304,46 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
                 {!runs.length?<ProjectStart disabled={busy || !ready || locked || hasPending} draft={input} onChoose={prompt=>{setInput(prompt);setOperation("build");composer.current?.focus();}}/>:
                 runs.slice().reverse().map(run=><article className={styles.message} key={run.runId}><div className={styles.user}>{run.prompt}</div><div className={styles.reply}>{run.summary?<MessageContent content={summaryText(run)} assistant/>:<div className={styles.working}><span className={styles.workDot} data-active={isActiveRun(run.status)} aria-hidden="true"/><p>{workExplanation(progress[run.runId])??workStatus(run,progress[run.runId])}</p></div>}</div>
                   {completedWork(progress[run.runId]).length>0&&<ul className={styles.completedWork}>{completedWork(progress[run.runId]).map(text=><li key={text}><CheckCheck size={14} aria-hidden="true"/>{text}</li>)}</ul>}
-                  <div className={styles.runMeta}><span>{workStatus(run,progress[run.runId])}</span>{isActiveRun(run.status)&&<button type="button" disabled={busy} onClick={()=>void runTask(async()=>{await api(`/runs?projectId=${selected}&runId=${run.runId}`,{method:"DELETE"});await refresh();})}><Square size={12} aria-hidden="true"/>Stop</button>}{run.status==="retryable"&&<button type="button" disabled={busy} onClick={()=>void runTask(async()=>{await api("/runs",{method:"PATCH",body:{projectId:selected,runId:run.runId,expectedCursor:run.cursor}});await refresh();})}>Resume saved work</button>}{run.status==="succeeded"&&(run.operation!=="plan"||completedWork(progress[run.runId]).length>0)&&<button type="button" onClick={()=>openResult(run)}>View result</button>}{["failed","waiting_user","cancelled"].includes(run.status)&&run.summary!=="provider-refused"&&!active&&run===latest&&<button type="button" disabled={busy||locked} onClick={()=>{setOperation(run.operation);setInput("Continue from the saved project. Finish the original request, preserve all requirements and use the saved results to address the remaining step.");setMobilePane("chat");composer.current?.focus();}}>Continue from here</button>}</div>
+                  <div className={styles.runMeta}>
+                    <span>{workStatus(run,progress[run.runId])}</span>
+                    {isActiveRun(run.status)&&<button type="button" disabled={busy} onClick={()=>void runTask(async()=>{await api(`/runs?projectId=${selected}&runId=${run.runId}`,{method:"DELETE"});await refresh();})}><Square size={12} aria-hidden="true"/>Stop</button>}
+                    {run.status==="retryable"&&<button type="button" disabled={busy} onClick={()=>void runTask(async()=>{await api("/runs",{method:"PATCH",body:{projectId:selected,runId:run.runId,expectedCursor:run.cursor}});await refresh();})}>Resume saved work</button>}
+                    {run.status==="succeeded"&&(run.operation!=="plan"||completedWork(progress[run.runId]).length>0)&&<button type="button" onClick={()=>openResult(run)}>View result</button>}
+                    {["failed","waiting_user","cancelled"].includes(run.status)&&run.summary!=="provider-refused"&&!active&&run===latest&&
+                      <button type="button" disabled={busy||locked} onClick={() => suggestPrompt(
+                        "Continue from the saved project. Finish the original request, preserve all requirements and use the saved results to address the remaining step.",
+                        run.operation,
+                      )}>Continue from here</button>}
+                  </div>
                   <details className={styles.runDetails}><summary>Run details</summary><p>{run.usedUnits} of {run.reservedUnits} work units · {run.cursor} saved steps</p>{progress[run.runId]?.events.map(step=><p key={step.cursor}>{step.cursor}. {step.capabilityId}{step.ok===false?" · needs attention":""}{step.message?` · ${step.message}`:""}</p>)}</details>
                 </article>)}
               </div>
               <form className={styles.composer} onSubmit={event=>{event.preventDefault();void submit();}}>
-                <label htmlFor="platform-prompt">{selected?"Message your project":"Describe your idea"}</label><textarea ref={composer} id="platform-prompt" value={input} maxLength={24000} disabled={!ready||busy} aria-invalid={Boolean(error&&containsInlineCredential(input))} onChange={event=>setInput(event.target.value)} onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void submit();}}} placeholder="Tell me what you want to build or change…"/>
+                <label htmlFor="platform-prompt">{selected?"Message your project":"Describe your idea"}</label>
+                <textarea ref={composer} id="platform-prompt" value={input} maxLength={24000} disabled={!ready||busy} aria-invalid={Boolean(error&&containsInlineCredential(input))}
+                  aria-describedby={draftSuggestionBlocked ? "platform-prompt-help" : undefined}
+                  onChange={event => {setDraftSuggestionBlocked(false);setInput(event.target.value);}}
+                  onKeyDown={event=>{if(event.key==="Enter"&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void submit();}}} placeholder="Tell me what you want to build or change…"/>
                 <footer><label><span className={styles.srOnly}>Work mode</span><select aria-label="Work mode" value={operation} disabled={busy||Boolean(active)||hasPending} onChange={event=>setOperation(event.target.value as ProjectRun["operation"])}><option value="build">Build</option><option value="plan">Discuss</option><option value="test">Check</option><option value="deploy">Publish</option></select></label><button type="submit" aria-label="Send" className={styles.primary} disabled={!ready||busy||Boolean(active)||Boolean(syncingRun)||locked||!input.trim()}><ArrowUp size={16} aria-hidden="true"/>{busy?"Sending…":"Send"}</button></footer>
                 {operation==="build"&&<label className={styles.previewPreference}><input type="checkbox" checked={previewAfterBuild} disabled={busy||Boolean(active)||hasPending} onChange={event=>setPreviewAfterBuild(event.target.checked)}/>Preview apps after successful checks</label>}
-                <small>{operation==="plan"?"Discussion keeps your source unchanged. ":operation==="deploy"?"Publishing uses the saved checks for this version. ":""}{dirty?"Save or discard your file edit to continue.":active?"Your progress is saved. You can leave and return later.":"Enter to send · Shift + Enter for a new line"}</small>
+                <small id="platform-prompt-help" aria-live="polite">
+                  {draftSuggestionBlocked ? "Send or clear your draft before using this suggestion." : <>
+                    {operation==="plan"?"Discussion keeps your source unchanged. ":operation==="deploy"?"Publishing uses the saved checks for this version. ":""}{dirty?"Save or discard your file edit to continue.":active?"Your progress is saved. You can leave and return later.":"Enter to send · Shift + Enter for a new line"}
+                  </>}
+                </small>
               </form>
             </section>
             {selected&&<section className={styles.inspector} data-active={mobilePane==="result"} aria-label="Project workspace"><div className={styles.tabs} role="tablist" aria-label="Project tools">{tabs.map((item,index)=><button key={item.id} id={`platform-tab-${item.id}`} role="tab" type="button" aria-selected={tab===item.id} aria-controls={`platform-panel-${item.id}`} tabIndex={tab===item.id?0:-1} onClick={()=>setTab(item.id)} onKeyDown={event=>{const delta=event.key==="ArrowRight"?1:event.key==="ArrowLeft"?-1:0;if(delta||event.key==="Home"||event.key==="End"){event.preventDefault();const next=tabs[event.key==="Home"?0:event.key==="End"?tabs.length-1:(index+delta+tabs.length)%tabs.length];setTab(next.id);document.getElementById(`platform-tab-${next.id}`)?.focus();}}}><item.icon size={15} aria-hidden="true"/>{item.label}</button>)}</div>
               {!project?<p className={styles.panel} role="status">Opening your project…</p>:<>
-                <div id="platform-panel-project" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-project" hidden={tab!=="project"}><ProjectOverview project={project} disabled={busy||Boolean(active)||locked} onFiles={()=>setTab("files")} onResult={()=>setTab("runtime")} onBuild={()=>{setOperation("build");setInput("Build the complete saved plan and run its relevant checks. Preserve every saved requirement.");setMobilePane("chat");requestAnimationFrame(()=>composer.current?.focus());}} onEdit={(id,text)=>{setOperation("build");setInput(`Change requirement ${id}: ${text}\n`);setMobilePane("chat");requestAnimationFrame(()=>composer.current?.focus());}}/><button className={styles.refreshState} type="button" disabled={busy} onClick={()=>void runTask(()=>refresh())}><RefreshCw size={14} aria-hidden="true"/>Refresh saved state</button></div>
+                <div id="platform-panel-project" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-project" hidden={tab!=="project"}>
+                  <ProjectOverview project={project} disabled={busy||Boolean(active)||locked} onFiles={()=>setTab("files")} onResult={()=>setTab("runtime")}
+                    onBuild={() => suggestPrompt("Build the complete saved plan and run its relevant checks. Preserve every saved requirement.")}
+                    onEdit={(id, text) => suggestPrompt(`Change requirement ${id}: ${text}\n`)}/>
+                  <button className={styles.refreshState} type="button" disabled={busy} onClick={()=>void runTask(()=>refresh())}><RefreshCw size={14} aria-hidden="true"/>Refresh saved state</button>
+                </div>
                 <div id="platform-panel-files" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-files" hidden={tab!=="files"}><ProjectFiles key={project.projectId} project={project} api={api} onProject={update} onDirty={setDirty} disabled={launchLocked}/></div>
                 <div id="platform-panel-connections" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-connections" hidden={tab!=="connections"}>{tab==="connections"&&<Suspense fallback={<p role="status">Opening connections…</p>}><ProjectConnections key={project.projectId} projectId={project.projectId} api={api}/></Suspense>}</div>
-                <div id="platform-panel-runtime" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-runtime" hidden={tab!=="runtime"}>{tab==="runtime"&&<Suspense fallback={<p role="status">Opening results…</p>}><ProjectRuntime key={project.projectId} project={project} api={api} onPrompt={text=>{setOperation("build");setInput(text);setMobilePane("chat");composer.current?.focus();}} account={account} headers={scopedHeaders} generalLaunchEnabled={generalLaunchEnabled} onLaunchLocked={setLaunchLocked} autoPreviewRunId={resultIntent?.projectId===project.projectId&&resultIntent.preview&&runs.some(run=>run.runId===resultIntent.runId&&run.status==="succeeded")?resultIntent.runId:undefined}/></Suspense>}</div>
+                <div id="platform-panel-runtime" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-runtime" hidden={tab!=="runtime"}>{tab==="runtime"&&<Suspense fallback={<p role="status">Opening results…</p>}><ProjectRuntime key={project.projectId} project={project} api={api} onPrompt={suggestPrompt} account={account} headers={scopedHeaders} generalLaunchEnabled={generalLaunchEnabled} onLaunchLocked={setLaunchLocked} autoPreviewRunId={resultIntent?.projectId===project.projectId&&resultIntent.preview&&runs.some(run=>run.runId===resultIntent.runId&&run.status==="succeeded")?resultIntent.runId:undefined}/></Suspense>}</div>
                 <div id="platform-panel-repository" className={styles.panel} role="tabpanel" aria-labelledby="platform-tab-repository" hidden={tab!=="repository"}>{tab==="repository"&&<Suspense fallback={<p role="status">Opening import and export…</p>}><ProjectRepository key={project.projectId} project={project} api={api} onProject={update}/></Suspense>}</div>
               </>}
             </section>}
