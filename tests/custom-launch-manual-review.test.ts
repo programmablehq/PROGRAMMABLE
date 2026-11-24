@@ -165,11 +165,18 @@ describe("24-hour review and launch windows", () => {
     expect(customLaunchReviewAllowsSigning({ ...started, launchDeadline: "2026-10-09T05:00:00Z" }, Date.parse(approved.expiresAt) - 1)).toBe(false);
   });
   it("marks pending applications overdue after 24 hours without changing their state", () => {
-    const pending = { ...review, state: "pending" as const, approvedAt: null, expiresAt: null };
+    const pending = { ...review, state: "pending" as const, approvedAt: null, expiresAt: null,
+      reason: "Attach the deployment evidence for this submission." };
     const due = Date.parse(pending.submittedAt) + 86400000;
     expect(customLaunchReviewOverdue(pending, due - 1)).toBe(false);
     expect(customLaunchReviewOverdue(pending, due)).toBe(true);
     expect(customLaunchReviewLabel(pending, due)).toBe("Review pending");
+    expect(customLaunchReviewDescription(pending, due - 1)).toContain("This submission is open");
+    const guidance = customLaunchReviewDescription(pending, due);
+    expect(guidance).toContain("Keep this submission.");
+    expect(guidance).toContain("Review messages");
+    expect(guidance).toContain("launch window starts after approval");
+    expect(guidance).not.toContain(pending.reason);
   });
   it.each(["1", "4663", "8453", "999"] as const)("starts chain %s through the signed owner-bound backend", async chainId => {
     const owner = "0x2222222222222222222222222222222222222222" as const;

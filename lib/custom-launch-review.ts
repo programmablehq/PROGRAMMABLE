@@ -86,15 +86,17 @@ export function customLaunchReviewLabel(review: CustomLaunchReview, now = Date.n
   return review.state === "pending" ? (review.discussion?.at(-1)?.author === "reviewer" ? "Reply requested" : "Review pending") : "Approval expired";
 }
 
-export function customLaunchReviewDescription(review: CustomLaunchReview) {
+export function customLaunchReviewDescription(review: CustomLaunchReview, now = Date.now()) {
   if (review.supersededBy) return `Replaced by request ${review.supersededBy.launchId}. Continue with that request.`;
-  if (review.state === "pending" && review.reason) return review.reason;
   if (review.state === "rejected" && review.reason) return review.reason;
   if (review.requiresRepack === true) return "Repack this launch with the current contract bindings for the 24-hour signing window, then submit it for review.";
-  if (customLaunchReviewLabel(review) === "Approved") return `Approved. Launch by ${new Date(review.expiresAt!).toLocaleString()}.`;
-  if (review.state === "pending") return customLaunchReviewOverdue(review)
-    ? "Review is overdue. Your application remains open. Your 24-hour launch window starts only after approval."
-    : "Your launch is waiting for Programmable approval. Review target: 24 hours from submission. Your separate 24-hour launch window starts after approval.";
+  if (customLaunchReviewLabel(review, now) === "Approved") return `Approved. Launch by ${new Date(review.expiresAt!).toLocaleString()}.`;
+  if (review.state === "pending") {
+    const status = customLaunchReviewOverdue(review, now)
+      ? "The review is taking longer than expected. Keep this submission."
+      : "This submission is open and awaiting review.";
+    return `${status} Use Review messages for replies and documents. Your 24-hour launch window starts after approval.`;
+  }
   if (review.state === "rejected") return review.reason || "Programmable requested changes to this launch.";
   return "The approval window has ended. A new approval is required before signing.";
 }
