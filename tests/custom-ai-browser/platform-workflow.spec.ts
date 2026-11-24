@@ -1,4 +1,5 @@
 import {once} from "node:events";
+import {createHash,randomUUID} from "node:crypto";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 import {test,expect} from "@playwright/test";
@@ -19,7 +20,7 @@ test("creates, runs and edits a real persisted project, then isolates another ac
   await expect(page.getByLabel("Your projects",{exact:true})).toBeEnabled();await page.reload();await page.getByRole("tab",{name:"Files",exact:true}).click();await page.getByRole("button",{name:"index.js",exact:true}).click();await expect(page.getByRole("textbox",{name:"index.js",exact:true})).toHaveValue("export const count = 2;\n");
   await page.getByLabel("Fixture account",{exact:true}).selectOption("bob");await expect(page.getByRole("textbox",{name:"Describe your idea"})).toBeVisible();await expect(page.getByText("Baue einen Zähler für unser Spiel.",{exact:true})).toHaveCount(0);expect(errors).toEqual([]);
 });
-test("saves a new file and keeps later typing until its own save", async ({ page }) => {
+test("saves later typing and updates an open clean editor to the current project version", async ({ page, request }) => {
   await page.goto(origin);
   await page.getByRole("button", { name: "New project", exact: true }).click();
   await page.getByRole("tab", { name: "Files", exact: true }).click();
@@ -55,6 +56,30 @@ test("saves a new file and keeps later typing until its own save", async ({ page
   await page.getByRole("tab", { name: "Files", exact: true }).click();
   await page.getByRole("button", { name: path, exact: true }).click();
   await expect(editor).toHaveValue(latest);
+
+  const projectId = await projects.inputValue();
+  const projectUrl = `${origin}/api/custom-ai/platform/projects`;
+  const headers = { Authorization: "Bearer fixture-alice", "X-Custom-AI-Cache-Scope": "fixture:alice" };
+  const head = await request.get(projectUrl + "?" + new URLSearchParams({ projectId }), { headers });
+  expect(head.ok()).toBe(true);
+  const { project: saved } = await head.json();
+  const newerSource = "contract Counter { uint public count; bool public ready; }";
+  const externalUpdate = await request.patch(projectUrl, { headers, data: {
+    projectId, expectedRevisionId: saved.revisionId, idempotencyKey: randomUUID(),
+    patch: { fileChanges: [{
+      operation: "write", path, beforeHash: `sha256:${createHash("sha256").update(latest).digest("hex")}`,
+      content: newerSource,
+    }] },
+  } });
+  expect(externalUpdate.status()).toBe(200);
+  await page.getByRole("tab", { name: "Project", exact: true }).click();
+  await page.getByRole("button", { name: "Refresh saved state", exact: true }).click();
+  await expect(page.getByText(`Version ${saved.ordinal + 1} · saved`, { exact: false })).toBeVisible();
+  await page.getByRole("tab", { name: "Files", exact: true }).click();
+  await expect(editor).toHaveValue(newerSource);
+  await editor.fill(newerSource + "\n");
+  await save.click();
+  await expect(projects).toBeEnabled();
 });
 test("keeps one queued request through refresh and stops that saved run",async({page,request})=>{
   await request.post(`${origin}/fixture/pause`,{data:{paused:true}});await page.goto(origin);await page.getByRole("button",{name:"New project",exact:true}).click();

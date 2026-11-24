@@ -16,6 +16,11 @@ export function ProjectFiles({project,api,onProject,onDirty,disabled=false}:{pro
   const [history,setHistory]=useState<{revisionId:string;attempt:number;revisions:RevisionItem[];error?:string}>();
   const currentHistory=history?.revisionId===revisionId&&history.attempt===historyAttempt?history:undefined;
   const dirty = edit !== undefined && edit.text !== edit.original;
+  // Refresh a clean file from the current snapshot. Unsaved edits keep their original revision.
+  if (edit && !dirty && !busy && edit.revision !== revisionId) {
+    const text = project.document.files[edit.path];
+    setEdit(typeof text === "string" ? { ...edit, text, original: text, revision: revisionId } : undefined);
+  }
   useEffect(() => { onDirty(dirty); }, [dirty, onDirty]);
   useEffect(() => {
     if(!historyOpen)return;
