@@ -70,9 +70,12 @@ export function createPrivateBlobReadCache(input: Readonly<{
       return replay(body);
     }
 
+    const previous = bodies.get(key);
+    const signal = options.abortSignal ?? AbortSignal.timeout(5_000);
+    const forgetObservedBody = () => {
+      if (bodies.get(key) === previous) forget(key);
+    };
     const read = async (): Promise<SavedBody | null> => {
-      const previous = bodies.get(key);
-      const signal = options.abortSignal ?? AbortSignal.timeout(5_000);
       const requestOptions = {
         access: "private", token: options.token, useCache: false,
         headers: { "accept-encoding": "identity" },
@@ -86,7 +89,7 @@ export function createPrivateBlobReadCache(input: Readonly<{
       if (result?.statusCode === 304 && (!previous || result.blob.etag !== previous.blob.etag)) {
         // An unbound 304 cannot authenticate a saved body. Fetch the current
         // representation once, using the same credential and deadline.
-        forget(key);
+        forgetObservedBody();
         result = await getBlob(path, requestOptions);
         signal.throwIfAborted();
         if (result?.statusCode === 304) {
@@ -94,15 +97,15 @@ export function createPrivateBlobReadCache(input: Readonly<{
         }
       }
       if (!result) {
-        forget(key);
+        forgetObservedBody();
         return null;
       }
       if (result.statusCode === 304) {
         if (!previous || result.blob.etag !== previous.blob.etag) {
-          forget(key);
+          forgetObservedBody();
           throw new Error("Blob 304 has no matching authenticated body");
         }
-        remember(key, previous);
+        if (bodies.get(key) === previous) remember(key, previous);
         input.onRead?.({ kind: "not-modified", bytes: previous.bytes });
         return previous;
       }
@@ -123,11 +126,14 @@ export function createPrivateBlobReadCache(input: Readonly<{
       // but can never become a reusable authenticated body.
       if (STRONG_ETAG.test(result.blob.etag) && (!encoding || encoding === "identity")
         && (length === null || Number(length) === bytes)) remember(key, body);
-      else forget(key);
+      else forgetObservedBody();
       input.onRead?.({ kind: "download", bytes });
       return body;
     };
-    const task = read().catch(error => { forget(key); throw error; });
+    const task = read().catch(error => {
+      if (!signal.aborted) forgetObservedBody();
+      throw error;
+    });
     // A caller with its own cancellation signal owns that read. Joining it
     // would let that caller's cancellation terminate another reader's work.
     if (!options.abortSignal) pending.set(key, task);

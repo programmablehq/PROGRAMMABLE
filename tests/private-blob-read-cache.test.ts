@@ -158,4 +158,28 @@ describe("authenticated private Blob revalidation", () => {
     expect(await text(await first)).toBe(body);
     expect(getBlob).toHaveBeenCalledTimes(1);
   });
+
+  it("revalidates a newer authenticated body after an older read is cancelled", async () => {
+    const controller = new AbortController();
+    const updated = '{"entries":["newer"]}';
+    let finishOlder!: (value: GetBlobResult) => void;
+    const getBlob = vi.fn<typeof get>()
+      .mockResolvedValueOnce(response())
+      .mockImplementationOnce(() => new Promise(resolve => { finishOlder = resolve; }))
+      .mockResolvedValueOnce(response(updated, versionB))
+      .mockImplementationOnce(async (_path, request) => request?.ifNoneMatch === versionB ? unchanged(versionB) : response(updated, versionB));
+    const onRead = vi.fn();
+    const read = createPrivateBlobReadCache({ getBlob, onRead });
+
+    expect(await text(await read(path, options, 1024))).toBe(body);
+    const older = read(path, { ...options, abortSignal: controller.signal }, 1024);
+    expect(await text(await read(path, options, 1024))).toBe(updated);
+    controller.abort(new Error("Read deadline expired"));
+    finishOlder(unchanged());
+    await expect(older).rejects.toThrow("Read deadline expired");
+
+    expect(await text(await read(path, options, 1024))).toBe(updated);
+    expect(getBlob.mock.lastCall?.[1]?.ifNoneMatch).toBe(versionB);
+    expect(onRead.mock.calls.map(([event]) => event.kind)).toEqual(["download", "download", "not-modified"]);
+  });
 });
