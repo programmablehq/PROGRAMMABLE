@@ -46,7 +46,9 @@ export const ROUTER_CUSTOM_SNAPSHOT_CURRENT_READ_TIMEOUT_MS = 3_000;
 const ROUTER_CUSTOM_SNAPSHOT_SOURCE_REFRESH_TIMEOUT_MS = 30_000;
 const ROUTER_CUSTOM_SNAPSHOT_MAXIMUM_FUTURE_SKEW_MS = 60_000;
 const ROUTER_CUSTOM_SNAPSHOT_DURABLE_READ_TIMEOUT_MS = 2_000;
-const ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS = 2_000;
+// The background save can include a reread and one retry after an ETag conflict.
+const ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS = 5_000;
+const ROUTER_CUSTOM_SNAPSHOT_SLOW_SAVE_MS = 2_000;
 const ROUTER_CUSTOM_SNAPSHOT_ENVELOPE_SCHEMA_VERSION =
   "programmable.router-custom-identity-snapshot-envelope.v1" as const;
 const ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH = [
@@ -77,6 +79,10 @@ type RouterCustomReadOptionsV1 = Readonly<{
   deadlineMs?: number;
   signal?: AbortSignal;
 }>;
+
+type RouterCustomSnapshotPersistenceProgress = {
+  phase: "read-saved" | "put" | "read-conflict-winner" | "retry-put";
+};
 
 export type RouterCustomIdentitySnapshotDependenciesV1 = Readonly<{
   now?: () => number;
@@ -450,8 +456,9 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
     replaceAfterReorg?: boolean;
     previousRecord?: Awaited<ReturnType<typeof readDurableRouterCustomIdentitySnapshotRecordV1>>;
     signal?: AbortSignal;
+    progress?: RouterCustomSnapshotPersistenceProgress;
   }> = {},
-) {
+): Promise<boolean> {
   const token = resolveDurableExploreBlobToken();
   if (!token) throw new Error(
     "Router Custom durable snapshot storage is not configured",
@@ -474,7 +481,7 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
           "Router Custom durable snapshot cannot delete finalized identities after a reorg",
         );
       }
-      return;
+      return false;
     }
     if (previousBlock === nextBlock) {
       if (
@@ -488,7 +495,7 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
           "Router Custom durable snapshot conflicts at one block",
         );
       }
-      return;
+      return false;
     }
     if (
       !routerCustomSnapshotPreservesFinalizedIdentitiesV1(
@@ -502,6 +509,10 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
     }
   }
   const { put, BlobPreconditionFailedError } = await import("@vercel/blob");
+  options.signal?.throwIfAborted();
+  if (options.progress) {
+    options.progress.phase = options.progress.phase === "read-conflict-winner" ? "retry-put" : "put";
+  }
   try {
     await put(
       ROUTER_CUSTOM_SNAPSHOT_BLOB_PATH,
@@ -517,13 +528,16 @@ async function persistDurableRouterCustomIdentitySnapshotV1(
         abortSignal: options.signal, token,
       },
     );
+    return true;
   } catch (error) {
     if (!options.previousRecord || !(error instanceof BlobPreconditionFailedError)) throw error;
     options.signal?.throwIfAborted();
     // A concurrent writer changed this exact Blob. Validate its winning
     // snapshot and ETag before attempting at most one further conditional put.
-    await persistDurableRouterCustomIdentitySnapshotV1(snapshot, {
+    if (options.progress) options.progress.phase = "read-conflict-winner";
+    return await persistDurableRouterCustomIdentitySnapshotV1(snapshot, {
       replaceAfterReorg: options.replaceAfterReorg, signal: options.signal,
+      progress: options.progress,
     });
   }
 }
@@ -700,22 +714,34 @@ export function createRouterCustomIdentitySnapshotReaderV1(
       }
       snapshotConflict = null;
       cacheSnapshot(snapshot);
+      const controller = dependencies.persistDurableSnapshot ? undefined : new AbortController();
+      const progress: RouterCustomSnapshotPersistenceProgress = { phase: "read-saved" };
+      const startedAt = performance.now();
       try {
-        await withinDuration(
+        const written = await withinDuration<boolean | void>(
           () => persistDurableSnapshot(snapshot, {
             replaceAfterReorg: source.reorgDetected,
-            ...(!dependencies.persistDurableSnapshot && {
-              previousRecord: savedRecord, signal: AbortSignal.timeout(ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS),
+            ...(controller && {
+              previousRecord: savedRecord, signal: controller.signal, progress,
             }),
           }),
           ROUTER_CUSTOM_SNAPSHOT_PERSIST_TIMEOUT_MS,
         );
+        const durationMs = Math.round(performance.now() - startedAt);
+        if (written && durationMs >= ROUTER_CUSTOM_SNAPSHOT_SLOW_SAVE_MS) {
+          console.info("Router Custom durable snapshot persisted after storage delay", {
+            phase: progress.phase, durationMs, asOfBlock: snapshot.asOfBlock,
+          });
+        }
       } catch (error) {
+        controller?.abort();
         if (error instanceof RouterCustomSnapshotConflictError) {
           cached = null;
           throw error;
         }
         console.warn("Router Custom durable snapshot persistence unavailable", {
+          phase: progress.phase,
+          durationMs: Math.round(performance.now() - startedAt),
           name: error instanceof Error
             ? error.name
             : "RouterCustomSnapshotPersistError",
