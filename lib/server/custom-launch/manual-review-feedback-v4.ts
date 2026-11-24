@@ -64,7 +64,24 @@ export function createManualReviewFeedbackBridgeV4(input: { authenticator: Walle
       }
       const result = JSON.parse(await readBoundedBody(response, 1024 * 1024));
       return respond(200, { review: parseCustomLaunchReview(result.review), ...(value.operation === "ownerRead" && result.assessment ? { assessment: result.assessment } : {}) });
-    } catch (error) { return respond(error instanceof WalletPrincipalAuthenticationErrorV1 || error instanceof StartInputError ? error.status : 503, { error: "Could not complete this review request. Check your wallet connection and try again." }); }
+    } catch (error) {
+      if (error instanceof WalletPrincipalAuthenticationErrorV1) {
+        if (error.status === 401) {
+          const response = respond(401, { error: error.code === "session_required"
+            ? "Sign in with the wallet that submitted this launch."
+            : "Sign in again with the wallet that submitted this launch." });
+          response.headers.set("WWW-Authenticate", error.code === "access_token_invalid"
+            ? 'Bearer realm="Programmable", error="invalid_token"'
+            : 'Bearer realm="Programmable"');
+          return response;
+        }
+        if (error.status === 403) return respond(403, { error: "Connect the wallet that submitted this launch." });
+        return respond(503, { error: "Could not verify your wallet session. Try again in a moment." });
+      }
+      return respond(error instanceof StartInputError ? error.status : 503, {
+        error: "Could not complete this review request. Check your wallet connection and try again.",
+      });
+    }
   };
 }
 

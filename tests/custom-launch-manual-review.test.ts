@@ -3,6 +3,7 @@ import { createHash, createHmac } from "node:crypto";
 vi.mock("server-only", () => ({}));
 import { createManualReviewStartBridgeV1 } from "../lib/server/custom-launch/manual-review-start-v1";
 import { createManualReviewFeedbackBridgeV4 } from "../lib/server/custom-launch/manual-review-feedback-v4";
+import { WalletPrincipalAuthenticationErrorV1 } from "../lib/server/creator-article/wallet-principal.server";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
 import { createManualReviewBridgeV1 } from "../lib/server/custom-launch/manual-review-bridge-v1";
 import { reviewHttpErrorForResponse } from "../lib/custom-launch-review-decision";
@@ -23,6 +24,28 @@ function request(body: unknown) { return new Request(`https://programmable.marke
 const decision = { reviewId: review.reviewId, subjectHash: review.subjectHash, revision: 1, decision: "approve", reason: "Reviewed" };
 
 describe("applicant review feedback", () => {
+  it.each([
+    [401, "session_required", "Sign in with the wallet that submitted this launch.", 'Bearer realm="Programmable"'],
+    [401, "access_token_invalid", "Sign in again with the wallet that submitted this launch.", 'Bearer realm="Programmable", error="invalid_token"'],
+    [403, "ethereum_wallet_required", "Connect the wallet that submitted this launch.", null],
+    [503, "wallet_session_unavailable", "Could not verify your wallet session. Try again in a moment.", null],
+  ] as const)("gives applicants the action for a %i %s wallet session", async (status, code, message, challenge) => {
+    const fetchBackend = vi.fn<typeof fetch>();
+    const route = createManualReviewFeedbackBridgeV4({
+      authenticator: { authenticate: async () => { throw new WalletPrincipalAuthenticationErrorV1(status, code); } },
+      backendBaseUrl: "https://api.programmable.market", websiteToken: "w".repeat(43), bffAssertionKeyV2: "b".repeat(43), fetchBackend,
+    });
+    const response = await route(new Request("https://programmable.market/api/custom-launch-reviews/feedback", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operation: "ownerRead", chainId: review.chainId, launchId: review.reviewId, walletAddress: review.controller }),
+    }));
+    expect(response.status).toBe(status);
+    expect(await response.json()).toEqual({ error: message });
+    expect(response.headers.get("WWW-Authenticate")).toBe(challenge);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(fetchBackend).not.toHaveBeenCalled();
+  });
+
   it.each(["8453", "999", "99901"] as const)("forwards owner reads and replies on chain %s", async chainId => {
     const saved = { ...review, chainId, state: "pending" as const, approvedAt: null, expiresAt: null };
     const fetchBackend = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ review: saved }));
