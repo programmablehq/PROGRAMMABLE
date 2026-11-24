@@ -296,6 +296,7 @@ function fixture(mutate = () => {}) {
       const body = listBody(url.pathname.endsWith("ethereum") ? 1 : 4663, Number(url.searchParams.get("page")));
       spec = { body, status: 200, headers: { "content-type": "application/json", "x-content-type-options": "nosniff",
         "x-programmable-indexing-status": body.status } };
+      if (body.chainId === 1) spec.headers["x-programmable-explore-view"] = url.searchParams.get("view") ?? "live";
     } else if (url.pathname.startsWith("/token/")) {
       const ethereum = url.searchParams.get("chain") === "1";
       const item = ethereum ? ethereumItem(1) : robinhoodItem();
@@ -436,7 +437,8 @@ for (const unavailable of [false, true]) test(`staged ${unavailable ? "unavailab
   let firstPages = 0;
   const waits = [], retries = [];
   const f = fixture(({ url, spec }) => {
-    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1 && ++firstPages === 1) incompleteEthereum(spec, unavailable);
+    if (url.pathname === "/api/explore/ethereum" && url.searchParams.get("view") === "indexed"
+      && spec.body.page.number === 1 && ++firstPages === 1) incompleteEthereum(spec, unavailable);
   });
   const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl,
     waitImpl: async delay => { waits.push(delay); }, onCatalogRetry: retry => retries.push(retry) }));
@@ -515,7 +517,7 @@ test("a staged count change discards both catalog walks before collecting a cohe
   let firstPages = 0;
   const waits = [], retries = [];
   const f = fixture(({ url, spec }) => {
-    if (url.pathname !== "/api/explore/ethereum") return;
+    if (url.pathname !== "/api/explore/ethereum" || url.searchParams.get("view") !== "indexed") return;
     if (spec.body.page.number === 1) firstPages += 1;
     else if (firstPages === 1) addEthereumPageItem(spec);
   });
@@ -847,13 +849,34 @@ test("current Ethereum sources, finalized module sources and stale observations 
 
 test("fresh provisional Ethereum receipts stay separate from canonical token page evidence", async () => {
   const f = fixture(({ url, spec }) => {
-    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
-      spec.body.items[1] = confirmingEthereumItem();
+    if (url.pathname === "/api/explore/ethereum" && url.searchParams.get("view") === "live") {
+      const removed = spec.body.items.pop();
+      spec.body.items.unshift(confirmingEthereumItem(80));
+      spec.body.presentations = spec.body.presentations.filter(item => item.tokenAddress !== removed.tokenAddress);
+      spec.body.page.totalItems += 1;
     }
   });
   const result = await runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl }));
   assert.equal(result.chains[0].confirmingItems, 1);
+  assert.equal(result.chains[0].totalItems, 51);
   assert.equal(result.chains[0].tokenPage.tokenAddress, ethereumItem(1).tokenAddress);
+  const ethereum = f.calls.filter(call => call.url.pathname === "/api/explore/ethereum");
+  assert.equal(ethereum.filter(call => call.url.searchParams.get("view") === "indexed").length, 2);
+  assert.equal(ethereum.filter(call => call.url.searchParams.get("view") === "live").length, 1);
+});
+
+test("the indexed Ethereum view requires a matching header and canonical rows", async () => {
+  for (const mutate of [
+    spec => { delete spec.headers["x-programmable-explore-view"]; },
+    spec => { spec.body.items[1] = confirmingEthereumItem(); },
+  ]) {
+    const f = fixture(({ url, spec }) => {
+      if (url.pathname === "/api/explore/ethereum" && url.searchParams.get("view") === "indexed" && spec.body.page.number === 1) {
+        mutate(spec);
+      }
+    });
+    await assert.rejects(runIndexedWebsiteReadSmoke(input({ fetchImpl: f.fetchImpl })), /indexed website/u);
+  }
 });
 
 test("provisional receipts reject expiry, malformed identity and canonical-provenance confusion", async () => {
@@ -871,7 +894,7 @@ test("provisional receipts reject expiry, malformed identity and canonical-prove
     item => { delete item.confirmation; },
   ]) {
     const f = fixture(({ url, spec }) => {
-      if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
+      if (url.pathname === "/api/explore/ethereum" && url.searchParams.get("view") === "live") {
         const item = confirmingEthereumItem(); mutate(item); spec.body.items[1] = item;
       }
     });
@@ -881,7 +904,7 @@ test("provisional receipts reject expiry, malformed identity and canonical-prove
 
 test("provisional receipts cannot exceed the observer's bounded launch window", async () => {
   const f = fixture(({ url, spec }) => {
-    if (url.pathname === "/api/explore/ethereum" && spec.body.page.number === 1) {
+    if (url.pathname === "/api/explore/ethereum" && url.searchParams.get("view") === "live") {
       spec.body.items = spec.body.items.map((item, index) => index > 0 && index <= 33 ? confirmingEthereumItem(index + 1) : item);
     }
   });

@@ -165,9 +165,15 @@ export const chainExplorePaths = {
   "/api/explore/ethereum": { get: {
     operationId: "listEthereumExploreLaunches", summary: "Read Ethereum launch pages",
     description: "Combines the verified Classic catalog and finalized Ethereum Router identities. ready means both sources are current; partial means one source is unavailable; stale means a saved source is being used. No source yields unavailable. updatedAt is the oldest included source observation. Market values are null. Unknown or repeated query parameters are rejected; no chain override is accepted. This presentation feed is not a complete archive or proof of tradability.",
-    tags: ["Discovery"], security: [], parameters: parameters("ethereum"), responses: {
+    tags: ["Discovery"], security: [], parameters: [...parameters("ethereum"), {
+      name: "view", in: "query", schema: { type: "string", enum: ["live", "indexed"], default: "live" },
+      description: "Use indexed to count and page only verified catalog identities. The live view can include confirming receipts as they become available.",
+    }], responses: {
       "200": { ...response(statusPage("EthereumExplorePage", ["ready", "partial", "stale"]), "Current, partial or saved verified identities."),
-        headers: headers(["ready", "partial", "stale"], ["public, max-age=0, s-maxage=15", "no-store"]) },
+        headers: {
+          ...headers(["ready", "partial", "stale"], ["public, max-age=0, s-maxage=15", "no-store"]),
+          "X-Programmable-Explore-View": { schema: { enum: ["live", "indexed"] } },
+        } },
       "400": response(ref("ChainExploreInvalidQuery"), "Unsupported, duplicated or out-of-range query."),
       "503": { ...response({ oneOf: [statusPage("EthereumExplorePage", ["unavailable"]), ref("EthereumExploreUnavailable")] }, "No usable source, or a source conflict/read failure."),
         headers: headers(["unavailable"], ["no-store"]) },

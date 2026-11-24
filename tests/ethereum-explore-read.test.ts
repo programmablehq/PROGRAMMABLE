@@ -139,6 +139,27 @@ describe("Ethereum verified Explore adapter", () => {
     const search = await readEthereumLaunches(1,"$C19",{sort:"newest"},8,dependencies);
     expect(search.items.map(item=>item.tokenAddress)).toEqual([entry(19).tokenAddress]);
   });
+  it("keeps indexed pages stable while the live view has a confirming receipt", async () => {
+    const entries = Array.from({ length: 8 }, (_, i) => entry(i + 31));
+    const scan = vi.mocked(readConfirmingEthereumLaunches).mockClear();
+    const confirming = confirmingCustomLaunch();
+    scan.mockResolvedValueOnce([confirming]);
+    const readers = { classic: source(entries), custom: source([]) };
+    const filters = { sort: "newest", mode: "all" } as const;
+    const live = await readEthereumLaunches(1, "", filters, 6, readers);
+    expect(live.items[0]).toMatchObject({ launchId: confirming.launchId, confirmation: "confirming" });
+    expect(live.page.totalItems).toBe(9);
+
+    const indexed = { ...filters, view: "indexed" } as const;
+    const [first, second] = await Promise.all([
+      readEthereumLaunches(1, "", indexed, 6, readers),
+      readEthereumLaunches(2, "", indexed, 6, readers),
+    ]);
+    expect([first.page.totalItems, second.page.totalItems]).toEqual([8, 8]);
+    expect([...first.items, ...second.items].map(row => row.tokenAddress))
+      .toEqual([...entries].reverse().map(entry => entry.tokenAddress));
+    expect(scan).toHaveBeenCalledOnce();
+  });
   it("retains available identities and explicitly reports a missing source", async () => {
     const result = await readEthereumLaunches(1,"",{sort:"newest"},10,{classic:source([entry(1)]),custom:unavailable});
     expect(result.status).toBe("partial"); expect(result.items).toHaveLength(1);
