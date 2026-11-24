@@ -8,6 +8,13 @@ describe("Ethereum Explore HTTP boundary", () => {
     const response = await GET(new Request("https://website.invalid/api/explore/ethereum?chain=4663"));
     expect(response.status).toBe(400); expect(mocks.read).not.toHaveBeenCalled();
   });
+  it("selects and identifies the indexed view", async () => {
+    mocks.read.mockResolvedValue({ chainId: 1, status: "ready", items: [] });
+    const response = await GET(new Request("https://website.invalid/api/explore/ethereum?view=indexed"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-programmable-explore-view")).toBe("indexed");
+    expect(mocks.read.mock.calls[0]?.[2]).toMatchObject({ view: "indexed" });
+  });
   it.each(["partial", "stale", "unavailable"])("exposes %s without caching it as a ready catalog", async status => {
     const result = { chainId: 1, status, items: [] };
     mocks.read.mockResolvedValue(result);

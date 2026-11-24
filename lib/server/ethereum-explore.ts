@@ -150,7 +150,7 @@ export async function readEthereumLaunches(page = 1, query = "", filters = ETHER
   dependencies?: Dependencies, onTiming?: (durations: { catalog: number; confirmingWait: number; enrichment: number }) => void) {
   const started = performance.now();
   // The receipt observer covers Custom and Module launches, both in the Custom category.
-  const observations = filters.mode === "classic" ? null : readConfirmingEthereumLaunches().catch(() => []);
+  const observations = filters.mode === "classic" || filters.view === "indexed" ? null : readConfirmingEthereumLaunches().catch(() => []);
   const catalog = await readEthereumExploreCatalog(dependencies);
   const catalogReady = performance.now();
   const observed = observations ? await observations : [];

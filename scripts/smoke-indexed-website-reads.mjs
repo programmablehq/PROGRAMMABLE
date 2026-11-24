@@ -330,18 +330,28 @@ async function observeReads(input, target, headers, observedAt) {
   }
   const results = await Promise.allSettled(INDEXED_WEBSITE_ROUTES.map(async route => {
     let first;
-    let confirmingItems = 0;
     const identities = new Set();
     const pages = [];
-    async function observePage(number) {
-      const result = await request(`${route.path}?page=${number}&pageSize=${PAGE_SIZE}&sort=newest&mode=all`, "application/json");
+    async function readPage(number, view) {
+      const query = new URLSearchParams({ page: String(number), pageSize: String(PAGE_SIZE), sort: "newest", mode: "all" });
+      if (view) query.set("view", view);
+      const result = await request(`${route.path}?${query}`, "application/json");
       let body;
       try { body = JSON.parse(result.text); } catch { throw new Error("indexed website JSON is invalid"); }
+      const nowMs = view === "live" ? input.nowMs ?? Date.now() : Date.parse(observedAt);
       if (input.targetKind === "staged" && route.chainId === 1 && number === 1 &&
-        isIncompleteEthereumCatalog(body, result.response, expectations, Date.parse(observedAt))) {
+        isIncompleteEthereumCatalog(body, result.response, expectations, nowMs)) {
         throw new IncompleteEthereumCatalogError(`indexed website ethereum response status (${responseStatusSummary(body, result.response)}) is incomplete`);
       }
-      validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs: Date.parse(observedAt) });
+      validateIndexedWebsiteList({ body, response: result.response, route, pageNumber: number, expectations, nowMs });
+      if (view) check(result.response.headers.get("x-programmable-explore-view") === view, `Ethereum ${view} view`);
+      return { body, bodyDigest: result.bodyDigest, nowMs };
+    }
+    async function observePage(number) {
+      const { body, bodyDigest } = await readPage(number, route.chainId === 1 ? "indexed" : undefined);
+      if (route.chainId === 1) {
+        check(body.items.every(item => item.confirmation === undefined), "indexed Ethereum identities");
+      }
       first ??= body;
       if (body.page.totalItems !== first.page.totalItems) {
         throw new ChangingCatalogError(`indexed website catalog changed during pagination: chain=${route.chainId}, page=${number}, ` +
@@ -355,14 +365,12 @@ async function observeReads(input, target, headers, observedAt) {
         }
         check(!identities.has(launchIdentity(item)), "duplicate launch across pages; rerun smoke");
         identities.add(launchIdentity(item));
-        if (item.confirmation === "confirming") confirmingItems += 1;
       }
       pages[number - 1] = { number, status: body.status, count: body.items.length, updatedAt: body.updatedAt,
-        sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest: result.bodyDigest };
+        sourceEvidence: body.sourceEvidence, ...(body.sources ? { sources: body.sources } : {}), bodyDigest };
     }
     await observePage(1);
-    // A serial full-catalog walk can outlast the short-lived receipt overlay.
-    // Bound read concurrency while retaining every page and integrity check.
+    // Bound read concurrency across the entire indexed catalog.
     for (let number = 2; number <= first.page.totalPages; number += PAGE_CONCURRENCY) {
       const batch = await Promise.allSettled(Array.from({ length: Math.min(PAGE_CONCURRENCY, first.page.totalPages - number + 1) },
         (_, index) => observePage(number + index)));
@@ -371,6 +379,13 @@ async function observeReads(input, target, headers, observedAt) {
       if (failure) throw failure.reason;
     }
     check(identities.size === first.page.totalItems, "catalog count");
+    let liveReceiptPage;
+    if (route.chainId === 1) {
+      const { body, bodyDigest, nowMs } = await readPage(1, "live");
+      liveReceiptPage = { observedAt: new Date(nowMs).toISOString(), bodyDigest,
+        confirmingItems: body.items.filter(item => item.confirmation === "confirming").length };
+    }
+    const confirmingItems = liveReceiptPage?.confirmingItems ?? 0;
     check(confirmingItems <= 32, "provisional receipt count");
     const canonical = first.items.filter(row => row.confirmation !== "confirming");
     const item = canonical.find(row => typeof row.name === "string" && row.name.length > 0) ?? canonical[0];
@@ -416,6 +431,7 @@ async function observeReads(input, target, headers, observedAt) {
     const status = pages.some(page => page.status === "stale") ? "stale"
       : pages.some(page => page.status === "syncing") ? "syncing" : "ready";
     return { chainId: route.chainId, status, totalItems: identities.size, confirmingItems, pages,
+      ...(liveReceiptPage ? { liveReceiptPage } : {}),
       tokenPage: { path: tokenPath, tokenAddress: item.tokenAddress, bodyDigest: token.bodyDigest } };
   }));
   const failures = results.filter(result => result.status === "rejected");
