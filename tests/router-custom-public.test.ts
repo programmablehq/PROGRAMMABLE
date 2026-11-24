@@ -715,6 +715,7 @@ describe("finalized Router Custom public projection", () => {
     vi.useFakeTimers();
     let finishWrite!: () => void;
     const kept: Promise<unknown>[] = [];
+    const refreshComplete = vi.fn();
     const readDurableSnapshot = vi.fn().mockRejectedValue(new Error("no saved snapshot"));
     const reader = createRouterCustomIdentitySnapshotReaderV1({
       now: Date.now, currentReadTimeoutMs: 10,
@@ -727,8 +728,12 @@ describe("finalized Router Custom public projection", () => {
       await vi.advanceTimersByTimeAsync(10);
       await expect(pending).resolves.toMatchObject({ status: "current" });
       expect(readDurableSnapshot).toHaveBeenCalledOnce();
+      void kept[0]!.then(refreshComplete);
+      await vi.advanceTimersByTimeAsync(2_300);
+      expect(refreshComplete).not.toHaveBeenCalled();
       finishWrite();
       await Promise.all(kept);
+      expect(refreshComplete).toHaveBeenCalledOnce();
       await expect(reader()).resolves.toMatchObject({ status: "current" });
     } finally { vi.useRealTimers(); }
   });
