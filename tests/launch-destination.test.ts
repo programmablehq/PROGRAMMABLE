@@ -1,8 +1,22 @@
 import { describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { CustomLaunchCompletion } from "@/components/custom-launch-completion";
 import { indexedLaunchDestination, launchDestinationIdentity, parseLaunchDestination, type DestinationEntry } from "@/lib/launch-destination";
 const identity={chainId:"1" as const,launchId:`0x${"1".repeat(64)}`,controller:`0x${"2".repeat(40)}`,transactionHash:`0x${"3".repeat(64)}`};
 const entry:DestinationEntry={...identity,tokenAddress:`0x${"4".repeat(40)}`};
 describe("confirmed launch destination",()=>{
+  it("describes Explore availability for a saved finalized launch", () => {
+    const incomplete = renderToStaticMarkup(createElement(CustomLaunchCompletion, {
+      ...identity,
+      launchId: null,
+    }));
+    expect(incomplete).toContain("Launch finalized. Explore link unavailable for this record.");
+    expect(incomplete).not.toContain("once it is indexed");
+
+    const awaitingIndex = renderToStaticMarkup(createElement(CustomLaunchCompletion, identity));
+    expect(awaitingIndex).toContain("once it is indexed on Explore");
+  });
   it("resolves only a unique exact launch, controller, transaction and chain",()=>{
     const result=indexedLaunchDestination([entry],identity)!;
     expect(result.href).toBe(`/token/${entry.tokenAddress}?chain=1`);
