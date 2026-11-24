@@ -20,9 +20,11 @@ contract AutomaticHookForkTest is Test {
     address constant TEAM = 0x9F5856A3578Faba96A6E8Dfd9C10563A1E598f62;
 
     function _launch(bool robinhood) private {
-        vm.createSelectFork(
-            robinhood ? "https://rpc.mainnet.chain.robinhood.com" : "https://ethereum-rpc.publicnode.com"
-        );
+        string memory rpc = robinhood
+            ? vm.envOr("FOUNDATION_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com"))
+            : "https://ethereum-rpc.publicnode.com";
+        vm.createSelectFork(rpc);
+        assertEq(block.chainid, robinhood ? 4663 : 1);
         vm.deal(address(this), 1 ether);
         IPoolManager manager = IPoolManager(
             robinhood ? 0x8366a39CC670B4001A1121B8F6A443A643e40951 : 0x000000000004444c5dc75cB358380D2e3dE08A90
