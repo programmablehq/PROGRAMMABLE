@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
-export const maxDuration = 10;
+export const maxDuration = 25;
 
 function operationState(value: unknown) {
   switch (value) {
@@ -23,8 +23,10 @@ export async function GET(request: Request) {
   try {
     const path = chainScoped ? `v4/chains/${chainId}/capabilities`
       : chainId === "1" ? "v3/capabilities" : "v4/chains/4663/custom-launch-capabilities";
+    // The Elysium capability handler allows 20 seconds for cold verification.
+    const timeoutMs = chainId === "99901" ? 22_000 : 5_000;
     const response = await fetch(`https://api.programmable.market/${path}`,
-      { cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(5000)]), headers: { accept: "application/json" } });
+      { cache: "no-store", redirect: "error", signal: AbortSignal.any([request.signal, AbortSignal.timeout(timeoutMs)]), headers: { accept: "application/json" } });
     if (!response.ok) throw new Error("unavailable");
     const data = await response.json();
     const matches = (chainId === "4663" ? data.chainId : data.chain?.id) === chainId;

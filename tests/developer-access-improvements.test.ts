@@ -87,6 +87,36 @@ describe("developer setup and diagnostics", () => {
       chainId: "4663", reachable: true, readState: "active", createState: "disabled", authorizesKey: false,
     });
   });
+  it("reports unavailable launches when the Elysium capability read is slow", async () => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(delay => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), delay);
+      return controller.signal;
+    });
+    try {
+      vi.stubGlobal("fetch", vi.fn((_url: string, options: RequestInit) => new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(Response.json({
+          schemaVersion: "programmable.custom-launch-capabilities.v1",
+          chain: { id: "99901" }, mode: "active", publicLaunchAuthorized: false,
+        })), 9_500);
+        options.signal!.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(options.signal!.reason);
+        }, { once: true });
+      })));
+      const pending = GET(new Request("https://programmable.market/api/developer/connection?chainId=99901"));
+      await vi.advanceTimersByTimeAsync(9_500);
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        chainId: "99901", reachable: true, createState: "unavailable", authorizesKey: false,
+      });
+    } finally {
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
+  });
   it("does not treat an unrelated or failed response as available", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ chainId: "1", availability: { operations: { create: { state: "active" } } } }))));
     const response = await GET(new Request("https://programmable.market/api/developer/connection?chainId=4663"));

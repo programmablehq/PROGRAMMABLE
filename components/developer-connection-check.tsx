@@ -30,15 +30,24 @@ export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
   const [busy, setBusy] = useState(false), [result, setResult] = useState<string[]>([]), [error, setError] = useState("");
   const [retryAfterSeconds, setRetryAfterSeconds] = useState(0);
   const generation = useRef(0);
-  useEffect(() => { generation.current++; }, [chainId, apiKey.id]);
+  const checkController = useRef<AbortController | null>(null);
+  useEffect(() => {
+    generation.current++;
+    return () => {
+      generation.current++;
+      checkController.current?.abort();
+    };
+  }, [chainId, apiKey.id]);
   useEffect(() => {
     if (!retryAfterSeconds) return;
     const timer = window.setTimeout(() => setRetryAfterSeconds(0), retryAfterSeconds * 1000);
     return () => window.clearTimeout(timer);
   }, [retryAfterSeconds]);
   async function check() {
-    if (!chainId || busy || retryAfterSeconds) return;
+    if (!chainId || checkController.current || retryAfterSeconds) return;
     const run = ++generation.current;
+    const controller = new AbortController();
+    checkController.current = controller;
     setBusy(true); setResult([]); setError("");
     try {
       const key = await verify();
@@ -53,7 +62,11 @@ export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
         "Your agent verifies the secret when it connects."];
       setResult(keyDetails);
       if (!actions.length) return;
-      const response = await fetch(`/api/developer/connection?chainId=${chainId}`, { cache: "no-store", signal: AbortSignal.timeout(8000) }).catch(() => null);
+      const timeoutMs = chainId === "99901" ? 27_000 : 8_000;
+      const response = await fetch(`/api/developer/connection?chainId=${chainId}`, {
+        cache: "no-store",
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(timeoutMs)]),
+      }).catch(() => null);
       if (!response) throw new Error("API_CONNECTION_UNAVAILABLE");
       if (!response.ok) {
         if (run !== generation.current) return;
@@ -74,7 +87,10 @@ export function DeveloperConnectionCheck({ apiKey, chainId, verify, connect }: {
       }
       setResult([...keyDetails, ...(operations.length ? operations : ["Public launch API reached"])]);
     } catch (caught) { if (run === generation.current) setError(caught instanceof Error ? caught.message : "API_KEY_CHECK_FAILED"); }
-    finally { setBusy(false); }
+    finally {
+      checkController.current = null;
+      setBusy(false);
+    }
   }
   return <div className={styles.connectionCheck} key={chainId}>
     <button type="button" className={styles.secondaryButton} disabled={!chainId || busy || retryAfterSeconds > 0} onClick={() => void check()}>{busy ? "Checking connection…" : "Check connection"}</button>
