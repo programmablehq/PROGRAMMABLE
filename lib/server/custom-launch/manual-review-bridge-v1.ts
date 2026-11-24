@@ -81,7 +81,13 @@ export function createManualReviewBridgeV1(input: {
         )]) });
       if (backend.status === 409) {
         const error = JSON.parse(await boundedBody(backend, 65536));
-        const code = ["REVIEW_EMBEDDED_DEADLINE_TOO_SHORT", "REVIEW_REPLAN_REQUIRED", "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED"].includes(error?.error?.code) ? error.error.code : "REVIEW_CHANGED_REFRESH";
+        const backendCode = error?.error?.code;
+        const code = [
+          "REVIEW_EMBEDDED_DEADLINE_TOO_SHORT",
+          "REVIEW_REPLAN_REQUIRED",
+          "REVIEW_PLATFORM_FEE_EVIDENCE_REQUIRED",
+          "REVIEW_LAUNCH_PROTECTION_REQUIRED",
+        ].includes(backendCode) ? backendCode : "REVIEW_CHANGED_REFRESH";
         return Response.json({ error: { code } }, { status: 409, headers });
       }
       if (!backend.ok) throw new InputError([400, 403, 404, 409].includes(backend.status) ? backend.status : 503,

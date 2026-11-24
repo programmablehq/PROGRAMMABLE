@@ -5,6 +5,7 @@ import { createManualReviewStartBridgeV1 } from "../lib/server/custom-launch/man
 import { createManualReviewFeedbackBridgeV4 } from "../lib/server/custom-launch/manual-review-feedback-v4";
 import { WEBSITE_ADMIN_WALLET } from "../lib/admin-access";
 import { createManualReviewBridgeV1 } from "../lib/server/custom-launch/manual-review-bridge-v1";
+import { reviewHttpErrorForResponse } from "../lib/custom-launch-review-decision";
 import { customLaunchReviewNeedsStart, customLaunchReviewOverdue, customLaunchReviewAllowsSigning, customLaunchReviewDescription, customLaunchReviewLabel, type CustomLaunchReview } from "../lib/custom-launch-review";
 
 const review: CustomLaunchReview = { schemaVersion: "programmable.custom-launch-manual-review.v1", reviewId: "10000000-0000-4000-8000-000000000001",
@@ -47,6 +48,20 @@ describe("applicant review feedback", () => {
 });
 
 describe("manual launch approval", () => {
+  it("explains missing launch protection evidence after the protected approval response", async () => {
+    const { route, fetchBackend } = fixture();
+    fetchBackend.mockResolvedValueOnce(Response.json({
+      error: { code: "REVIEW_LAUNCH_PROTECTION_REQUIRED", message: "Backend assessment details" },
+    }, { status: 409 }));
+
+    const response = await route(request(decision));
+    const body = await response.json();
+    expect(response.status).toBe(409);
+    expect(body).toEqual({ error: { code: "REVIEW_LAUNCH_PROTECTION_REQUIRED" } });
+    expect(reviewHttpErrorForResponse(response.status, body.error.code).message)
+      .toBe("Save the launch protection report for this submission before approving.");
+  });
+
   it("waits for a cold source review beyond 60 seconds and still bounds an unresponsive backend", async () => {
     vi.useFakeTimers();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(milliseconds => {
