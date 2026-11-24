@@ -568,6 +568,39 @@ describe("developer launch history same-origin bridge", () => {
       .not.toBe(headers[0]!.get("x-programmable-bff-assertion-nonce"));
   });
 
+  it("retries an authenticated detail when the successful response body stalls", async () => {
+    vi.useFakeTimers();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(delay => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(new DOMException("slow body", "TimeoutError")), delay);
+      return controller.signal;
+    });
+    try {
+      const cancel = vi.fn();
+      const incomplete = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode("{")); },
+        cancel,
+      });
+      fetchBackend.mockResolvedValueOnce(new Response(incomplete))
+        .mockResolvedValueOnce(backendJsonV3({ ...launchV3(), chainId: "99901" }));
+      const pending = bridge().get(new Request(
+        `https://programmable.market/api/developer/custom-launches/${V3_LAUNCH_ID}?walletAddress=${WALLET}&version=v3&chainId=99901`,
+      ), V3_LAUNCH_ID);
+      await vi.advanceTimersByTimeAsync(1_000);
+      const response = await pending;
+      expect(response.status).toBe(200);
+      expect((await response.json()).requestId).toBe(V3_LAUNCH_ID);
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetchBackend).toHaveBeenCalledTimes(2);
+      const headers = fetchBackend.mock.calls.map(([, init]) => new Headers((init as RequestInit).headers));
+      expect(headers[1]!.get("x-programmable-bff-assertion-nonce"))
+        .not.toBe(headers[0]!.get("x-programmable-bff-assertion-nonce"));
+    } finally {
+      timeout.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
   it.each(["authentication", "first read"])("shares the detail deadline with %s", async stage => {
     let now = Date.now();
     const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
