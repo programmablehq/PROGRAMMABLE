@@ -28,6 +28,29 @@ test("the Base OpenAPI validates the actual public finalized feed", () => {
   execFileSync(process.execPath, ["scripts/generate-base-custom-openapi.mjs", "--check"], { cwd: root });
 });
 
+test("each chain documents reason codes in its unavailable readiness response", () => {
+  for (const [slug, chainId] of [["base", "8453"], ["hyperevm", "999"], ["elysium", "99901"]]) {
+    const doc = JSON.parse(fs.readFileSync(path.join(directory, `${slug}-custom-launch-v1.1.json`)));
+    const responses = doc.paths[`/v4/chains/${chainId}/readiness`].get.responses;
+    const schema = responses["503"].content["application/json"].schema;
+    const checkReadiness = ajv.compile(schema);
+    const blocked = {
+      schemaVersion: `programmable.${slug}-custom-readiness.v1`,
+      chainId,
+      releaseId: "sha256:" + "a".repeat(64),
+      sourceCommit: "a".repeat(40),
+      mode: "active",
+      ready: false,
+      publicLaunchAuthorized: false,
+      reasonCodes: [`${slug.toUpperCase()}_VERIFICATION_UNAVAILABLE`],
+    };
+    assert.deepEqual(schema, responses["200"].content["application/json"].schema);
+    assert.equal(checkReadiness(blocked), true, JSON.stringify(checkReadiness.errors));
+    assert.equal(checkReadiness({ ...blocked, chainId: "1" }), false);
+    assert.equal(checkReadiness({ ...blocked, reasonCodes: undefined }), false);
+  }
+});
+
 test("the Base contract rejects substituted chains, checkpoint schemas and fee policies", () => {
   for (const change of [
     row => { row.chainId = "1"; },

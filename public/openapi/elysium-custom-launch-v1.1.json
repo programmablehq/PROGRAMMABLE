@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Programmable Elysium Custom Launch API",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Elysium chain 99901. Exact-source Custom Launch only. The request uses the graph V3 schema on a chain-qualified V4 URL. Module Mode and partner credentials are not enabled on this route."
   },
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
@@ -491,7 +491,49 @@
             }
           },
           "503": {
-            "description": "Release prerequisites are unavailable; retry with backoff."
+            "description": "Release prerequisites are unavailable. Read reasonCodes for the blocked requirements and retry with backoff.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "chainId",
+                    "releaseId",
+                    "mode",
+                    "ready",
+                    "publicLaunchAuthorized",
+                    "reasonCodes"
+                  ],
+                  "properties": {
+                    "chainId": {
+                      "const": "99901"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "enum": [
+                        "disabled",
+                        "canary",
+                        "active"
+                      ]
+                    },
+                    "publicLaunchAuthorized": {
+                      "type": "boolean"
+                    },
+                    "releaseId": {
+                      "type": "string"
+                    },
+                    "reasonCodes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
