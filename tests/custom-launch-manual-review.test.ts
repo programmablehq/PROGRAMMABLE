@@ -266,8 +266,16 @@ it("keeps concrete review feedback visible when a repack is also required", () =
   expect(customLaunchReviewDescription(rejected)).toBe(rejected.reason);
   expect(customLaunchReviewLabel({ ...rejected, supersededBy: {reviewId: review.reviewId, launchId: review.reviewId} })).toBe("Replaced");
 });
-it("does not let a discussion reply grant signing permission", () => {
-  const pending = {...review, state: "pending" as const, discussion: [{revision: 3,createdAt: "2026-10-10T12:00:00Z",author: "reviewer" as const,message: "Please link the source",links: []}]};
+it("shows the reviewer request as the next step until the applicant responds", () => {
+  const now = Date.parse("2026-10-11T12:00:00Z");
+  const pending = { ...review, state: "pending" as const, approvedAt: null, expiresAt: null, revision: 3,
+    discussion: [{ revision: 3, createdAt: "2026-10-10T12:00:00Z", author: "reviewer" as const, message: "Please link the source", links: [] }] };
   expect(customLaunchReviewLabel(pending)).toBe("Reply requested");
+  expect(customLaunchReviewDescription(pending, now)).toBe("Open Review messages to see what the reviewer needs from you.");
   expect(customLaunchReviewAllowsSigning(pending)).toBe(false);
+  const replied = { ...pending, revision: 4, discussion: [...pending.discussion,
+    { revision: 4, createdAt: "2026-10-11T10:00:00Z", author: "applicant" as const, message: "I attached the source.", links: [] }] };
+  expect(customLaunchReviewLabel(replied)).toBe("Review pending");
+  expect(customLaunchReviewDescription(replied, now)).toContain("The review is taking longer than expected.");
+  expect(customLaunchReviewAllowsSigning(replied)).toBe(false);
 });
