@@ -88,7 +88,17 @@ for(const summary of ["provider-refused","incomplete"])test(`keeps editing avail
   await expect(page.getByRole("region",{name:"Project chat"}).getByText(/AI provider declined/)).toBeVisible();
   await expect(continuation).toHaveCount(0);
  }else await expect(continuation).toBeVisible();
- await expect(input).toBeEnabled();await input.fill("Explain the saved requirements instead");expect(starts).toBe(1);
+ const draft="Explain the saved requirements instead";
+ await expect(input).toBeEnabled();await input.fill(draft);
+ if(summary==="incomplete"){
+  const mode=page.getByRole("combobox",{name:"Work mode"});
+  await mode.selectOption("plan");await continuation.click();
+  await expect(input).toHaveValue(draft);await expect(mode).toHaveValue("plan");await expect(input).toBeFocused();
+  await expect(page.getByText("Send or clear your draft before using this suggestion.",{exact:true})).toBeVisible();
+  await input.clear();await continuation.click();
+  await expect(input).toHaveValue(/^Continue from the saved project\./);await expect(mode).toHaveValue("build");
+ }
+ expect(starts).toBe(1);
 });
 
 test("recovers a lost first-project response with the same project after reload",async({page,request})=>{
