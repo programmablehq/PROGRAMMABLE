@@ -65,6 +65,8 @@ const DEFAULT_HISTORY_READ_TIMEOUT_MS = 15_000;
 const MAXIMUM_HISTORY_READ_DURATION_MS = 25_000;
 const DEFAULT_PAGE_SIZE = 5;
 const MAXIMUM_PAGE_SIZE = 10;
+const HISTORY_CURSOR_GUIDANCE =
+  "Use nextCursor from the previous response, or omit cursor to start again.";
 const UUID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const CANONICAL_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
@@ -426,7 +428,9 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           url.searchParams.set("limit", source === "custom_launch_plan_v1" ? "1" : "5");
           const cursor = search.get("cursor");
           if (cursor) {
-            if (cursor.length > 4096 || /[\u0000-\u001f]/.test(cursor)) throw new BrowserRequestErrorV1(400, "pagination_invalid");
+            if (cursor.length > 4096 || /[\u0000-\u001f]/.test(cursor)) {
+              throw new BrowserRequestErrorV1(400, "pagination_invalid", HISTORY_CURSOR_GUIDANCE);
+            }
             url.searchParams.set("cursor", cursor);
           }
         }
@@ -1019,12 +1023,13 @@ async function expiredGraphOverview(
 }
 
 function parsePageSize(value: string) {
-  if (!/^[1-9][0-9]?$/u.test(value)) {
-    throw new BrowserRequestErrorV1(400, "pagination_invalid");
-  }
   const parsed = Number(value);
-  if (parsed > MAXIMUM_PAGE_SIZE) {
-    throw new BrowserRequestErrorV1(400, "pagination_invalid");
+  if (!/^[1-9][0-9]?$/u.test(value) || parsed > MAXIMUM_PAGE_SIZE) {
+    throw new BrowserRequestErrorV1(
+      400,
+      "pagination_invalid",
+      `Use a whole number from 1 to ${MAXIMUM_PAGE_SIZE} for limit.`,
+    );
   }
   return parsed;
 }
@@ -1043,7 +1048,7 @@ type CombinedHistoryCursor = Readonly<{
 
 function parseCombinedHistoryCursor(value: string): CombinedHistoryCursor {
   const invalid = () => {
-    throw new BrowserRequestErrorV1(400, "pagination_invalid");
+    throw new BrowserRequestErrorV1(400, "pagination_invalid", HISTORY_CURSOR_GUIDANCE);
   };
   if (
     value.length < 16 ||
@@ -1168,7 +1173,7 @@ function compareLaunchHistoryEntries(
 function canonicalCursor(value: JsonValue | undefined, source: "browser" | "backend") {
   const invalid = () => {
     if (source === "browser") {
-      throw new BrowserRequestErrorV1(400, "pagination_invalid");
+      throw new BrowserRequestErrorV1(400, "pagination_invalid", HISTORY_CURSOR_GUIDANCE);
     }
     throw new BackendContractErrorV1();
   };
@@ -2362,7 +2367,7 @@ function mappedError(error: unknown) {
     return errorResponse(error.status, error.code);
   }
   if (error instanceof BrowserRequestErrorV1) {
-    return errorResponse(error.status, error.code);
+    return errorResponse(error.status, error.code, undefined, error.publicMessage);
   }
   if (error instanceof PreservedBackendPublicErrorV1) {
     return errorResponse(
@@ -2440,7 +2445,11 @@ function errorResponse(
 }
 
 class BrowserRequestErrorV1 extends Error {
-  constructor(readonly status: number, readonly code: string) {
+  constructor(
+    readonly status: number,
+    readonly code: string,
+    readonly publicMessage?: string,
+  ) {
     super(code);
     this.name = "BrowserRequestErrorV1";
   }
