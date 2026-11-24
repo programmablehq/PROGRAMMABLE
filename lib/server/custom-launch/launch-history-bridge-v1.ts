@@ -28,6 +28,7 @@ import {
   PreservedBackendPublicErrorV1,
   readPreservedBackendPublicErrorV1,
 } from "./backend-public-error-v1";
+import { discardBodyV1, readBoundedUtf8BodyV1 } from "./bounded-utf8-body-v1";
 import {
   createWalletAdminBffAssertionV2,
   requireWalletAdminBffAssertionKeyV2,
@@ -388,20 +389,27 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
     }
   };
 
-  const fetchHistoryRead = (
+  const readHistoryResponse = (
     request: Request,
     principal: AuthenticatedWalletPrincipalV1,
     walletAddress: `0x${string}`,
     backendUrl: URL,
     deadline: number,
+    maximumBytes: number,
     cancelled?: AbortSignal,
-  ) => withHistoryReadBudget(request, deadline, signal => input.fetchBackend(backendUrl, {
-    method: "GET",
-    headers: walletAdminHeaders(principal, walletAddress, "GET", backendUrl, Buffer.alloc(0)),
-    cache: "no-store",
-    redirect: "error",
-    signal,
-  }), cancelled);
+  ) => withHistoryReadBudget<HistoryReadResponseV1>(request, deadline, async signal => {
+    const response = await input.fetchBackend(backendUrl, {
+      method: "GET",
+      headers: walletAdminHeaders(principal, walletAddress, "GET", backendUrl, Buffer.alloc(0)),
+      cache: "no-store",
+      redirect: "error",
+      signal,
+    });
+    if (!response.ok) return { ok: false, response };
+    // The provider may send headers before the complete authenticated body.
+    const resource = await readBoundedBackendJson(response, maximumBytes, 16, signal);
+    return { ok: true, resource };
+  }, cancelled);
 
   return Object.freeze({
     async universal(request: Request, launchId?: string, stepId?: string, transactionHint?: "v2" | "v3") {
@@ -520,12 +528,25 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
           if (cursorState?.cursor) {
             backendUrl.searchParams.set("cursor", cursorState.cursor);
           }
-          const backend = await fetchHistoryRead(
-            request, principal, walletAddress, backendUrl, deadline, cancelled.signal,
+          const read = await readHistoryResponse(
+            request, principal, walletAddress, backendUrl, deadline,
+            version === "v4" ? MAXIMUM_BACKEND_V4_BODY_BYTES : MAXIMUM_BACKEND_LIST_BODY_BYTES,
+            cancelled.signal,
           );
-          // Optional legacy versions may be absent. A missing route on an
-          // active EVM chain is an error, not proof of an empty wallet history.
-          if (query.chainId === "1" && version !== "v1" && backend.status === 404) {
+          if (!read.ok) {
+            const backend = read.response;
+            // Only optional Ethereum history versions can be absent.
+            const legacyRouteMissing = query.chainId === "1" && version !== "v1" && backend.status === 404;
+            if (legacyRouteMissing) {
+              discardBodyV1(backend);
+            } else {
+              const error = await mappedBackendError(backend);
+              if (!(version === "v3" && error instanceof PreservedBackendPublicErrorV1
+                && error.status === 503
+                && error.code === "CUSTOM_LAUNCH_V3_INTEGRATION_PENDING" && error.retryAfter === "30")) {
+                throw error;
+              }
+            }
             return Object.freeze({
               version,
               launches: Object.freeze([] as DeveloperCustomLaunch[]),
@@ -533,29 +554,7 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
               done: true,
             });
           }
-          if (version === "v3" && backend.status === 503) {
-            const pending = await readPreservedBackendPublicErrorV1(
-              backend.clone(),
-            );
-            if (
-              pending?.code === "CUSTOM_LAUNCH_V3_INTEGRATION_PENDING"
-              && pending.retryAfter === "30"
-            ) {
-              return Object.freeze({
-                version,
-                launches: Object.freeze([] as DeveloperCustomLaunch[]),
-                nextCursor: null,
-                done: true,
-              });
-            }
-          }
-          if (!backend.ok) throw await mappedBackendError(backend);
-          const record = jsonRecord(await readBoundedBackendJson(
-            backend,
-            version === "v4"
-              ? MAXIMUM_BACKEND_V4_BODY_BYTES
-              : MAXIMUM_BACKEND_LIST_BODY_BYTES,
-          ));
+          const record = jsonRecord(read.resource);
           const expectedSchema = version === "v1"
             ? CUSTOM_LAUNCH_LIST_SCHEMA_V1
             : version === "v2"
@@ -656,24 +655,25 @@ export function createDeveloperLaunchHistoryBridgeV1(input: Readonly<{
             const expectedOwner = walletAddress.toLowerCase();
             const overviewBudget = AbortSignal.timeout(3_000);
             const overview = await expiredGraphOverview(backendUrl, launchId.toLowerCase(),
-              expectedOwner, walletInput.chainId, url => fetchHistoryRead(request, principal, walletAddress, url, deadline, overviewBudget));
+              expectedOwner, walletInput.chainId, (url, limit) =>
+                readHistoryResponse(request, principal, walletAddress, url, deadline, limit, overviewBudget));
             if (overview) return overview;
           }
-          const backend = await fetchHistoryRead(
+          const read = await readHistoryResponse(
             request, principal, walletAddress, backendUrl, deadline,
+            version === "v4" ? MAXIMUM_BACKEND_V4_BODY_BYTES : MAXIMUM_BACKEND_RESOURCE_BODY_BYTES,
           );
-          if (backend.status === 404) return null;
-          if (!backend.ok) throw await mappedBackendError(backend);
-          const resource = await readBoundedBackendJson(
-            backend,
-            version === "v4"
-              ? MAXIMUM_BACKEND_V4_BODY_BYTES
-              : MAXIMUM_BACKEND_RESOURCE_BODY_BYTES,
-          );
+          if (!read.ok) {
+            if (read.response.status === 404) {
+              discardBodyV1(read.response);
+              return null;
+            }
+            throw await mappedBackendError(read.response);
+          }
           return version === "v4"
-            ? parseLaunchV4(resource, walletAddress.toLowerCase())
+            ? parseLaunchV4(read.resource, walletAddress.toLowerCase())
             : parseLaunch(
-                resource,
+                read.resource,
                 walletAddress.toLowerCase(),
                 version,
                 { requireAuthorizedArtifactBinding: true, chainId: walletInput.chainId },
@@ -961,24 +961,29 @@ function exactWalletQuery(request: Request, allowOverview = false) {
   });
 }
 
+type HistoryReadResponseV1 =
+  | { ok: true; resource: JsonValue }
+  | { ok: false; response: Response };
+
 // Expired signed permits can require a historical receipt scan across both RPCs.
 // A dashboard overview can use the recorded, non-executable wallet entry. Explicit
 // reconciliation and transaction preparation still request the full resource.
 async function expiredGraphOverview(
   detailUrl: URL, launchId: string, owner: string, chainId: "1" | "8453" | "999" | "99901",
-  read: (url: URL) => Promise<Response>,
+  read: (url: URL, maximumBytes: number) => Promise<HistoryReadResponseV1>,
 ): Promise<DeveloperCustomLaunch | null> {
   const statusUrl = new URL(detailUrl);
   statusUrl.searchParams.set("view", "status");
   const optionalRead = async (url: URL, limit: number) => {
     try {
-      const response = await read(url);
+      const result = await read(url, limit);
+      if (result.ok) return jsonRecord(result.resource);
+      const response = result.response;
       if (response.status === 404 || response.status === 429 || response.status >= 500) {
-        await response.body?.cancel();
+        discardBodyV1(response);
         return null;
       }
-      if (!response.ok) throw await mappedBackendError(response);
-      return jsonRecord(await readBoundedBackendJson(response, limit));
+      throw await mappedBackendError(response);
     } catch (error) {
       if (error instanceof Error && error.name === "TimeoutError") return null;
       throw error;
@@ -2204,6 +2209,7 @@ async function readBoundedBackendJson(
   response: Response,
   maximumBytes: number,
   maximumDepth = 16,
+  signal?: AbortSignal,
 ): Promise<JsonValue> {
   const contentLength = response.headers.get("content-length");
   const declaredLength = contentLength === null ? null : Number(contentLength);
@@ -2213,35 +2219,20 @@ async function readBoundedBackendJson(
       declaredLength < 0 ||
       declaredLength > maximumBytes
     )
-  ) throw new BackendContractErrorV1();
-  if (!response.body) throw new BackendContractErrorV1();
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder("utf-8", { fatal: true });
-  let totalBytes = 0;
-  let text = "";
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      totalBytes += value.byteLength;
-      if (totalBytes > maximumBytes) {
-        await reader.cancel();
-        throw new BackendContractErrorV1();
-      }
-      text += decoder.decode(value, { stream: true });
-    }
-    text += decoder.decode();
-  } catch (error) {
-    if (error instanceof BackendContractErrorV1) throw error;
+  ) {
+    discardBodyV1(response);
     throw new BackendContractErrorV1();
   }
-  if (!text) throw new BackendContractErrorV1();
   try {
+    const text = await readBoundedUtf8BodyV1(response, maximumBytes, {
+      signal, timeoutMs: MAXIMUM_HISTORY_READ_DURATION_MS,
+    });
     return parseStrictJson(text, {
       maximumBytes,
       maximumDepth,
     });
   } catch {
+    signal?.throwIfAborted();
     throw new BackendContractErrorV1();
   }
 }
