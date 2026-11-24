@@ -47,10 +47,14 @@ describe("Ethereum verified Explore adapter", () => {
     };
     vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue(current);
     const calls = vi.mocked(readWebsiteRouterCustomIdentitySnapshotV1).mock.calls.length;
-    await expect(readEthereumIndexHealth()).resolves.toEqual({ status: "ready", updatedAt: "2026-10-27T01:00:00Z" });
+    const reportSource = vi.fn();
+    await expect(readEthereumIndexHealth(reportSource)).resolves.toEqual({ status: "ready", updatedAt: "2026-10-27T01:00:00Z" });
+    expect(reportSource.mock.calls).toEqual(expect.arrayContaining([["classic", "current"], ["custom", "current"]]));
     expect(readWebsiteRouterCustomIdentitySnapshotV1).toHaveBeenCalledTimes(calls);
+    reportSource.mockClear();
     vi.mocked(readFinalizedRouterCustomIdentitySnapshotCoreV1).mockResolvedValue({ ...current, status: "last-known-good" });
-    await expect(readEthereumIndexHealth()).resolves.toMatchObject({ status: "stale" });
+    await expect(readEthereumIndexHealth(reportSource)).resolves.toMatchObject({ status: "stale" });
+    expect(reportSource.mock.calls).toEqual(expect.arrayContaining([["classic", "current"], ["custom", "last-known-good"]]));
   });
 
   it("keeps a fresh receipt's public presentation available without promoting it to a canonical token", async () => {

@@ -22,6 +22,15 @@ const component = (name: string) => ({
   $ref: `#/components/schemas/${name}`,
 });
 
+const operationsHealthResponseHeaders = {
+  "Cache-Control": { description: "Health responses are not stored by clients or shared caches.", schema: { const: "no-store" } },
+  "X-Programmable-Indexing-Status": { description: "Overall website launch indexing status.", schema: { enum: ["ready", "degraded", "unavailable"] } },
+  "X-Programmable-Ethereum-Index-Sources": {
+    description: "Classic and Custom catalog observations for the current health read. Values are current, last-known-good for a saved snapshot, unavailable for a failed source read, or unobserved when a source did not settle within the health deadline.",
+    schema: { type: "string", pattern: "^classic=(current|last-known-good|unavailable|unobserved), custom=(current|last-known-good|unavailable|unobserved)$" },
+  },
+} as const;
+
 const exploreIndexResetStateResponseHeaders = {
   "Cache-Control": {
     description:
@@ -121,12 +130,12 @@ export const programmablePublicOpenApi = {
               component("OperationsHealth"),
               "Website launch indexes are ready or degraded.",
             ),
-            headers: {
-              "Cache-Control": { description: "Health responses are not stored by clients or shared caches.", schema: { const: "no-store" } },
-              "X-Programmable-Indexing-Status": { description: "Overall website launch indexing status.", schema: { enum: ["ready", "degraded", "unavailable"] } },
-            },
+            headers: operationsHealthResponseHeaders,
           },
-          "503": jsonResponse(component("OperationsHealth"), "All website launch indexes are unavailable; the same no-store and indexing-status headers apply."),
+          "503": {
+            ...jsonResponse(component("OperationsHealth"), "All website launch indexes are unavailable."),
+            headers: operationsHealthResponseHeaders,
+          },
         },
       },
     },

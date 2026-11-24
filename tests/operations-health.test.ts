@@ -18,6 +18,7 @@ import { programmablePublicOpenApi } from "../lib/public-openapi";
 
 const NOW = "2026-10-08T02:00:00.000Z";
 const UPDATED = "2026-10-08T01:59:50.000Z";
+const ETHEREUM_SOURCES_HEADER = "x-programmable-ethereum-index-sources";
 const ajv = new Ajv2020({ allErrors: true, strict: false });
 addFormats(ajv);
 const validate = ajv.compile(programmablePublicOpenApi.components.schemas.OperationsHealth);
@@ -26,7 +27,11 @@ beforeEach(() => {
   vi.resetModules();
   vi.useFakeTimers();
   vi.setSystemTime(new Date(NOW));
-  readers.ethereum.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, entries: [] });
+  readers.ethereum.mockReset().mockImplementation(async reportSource => {
+    reportSource?.("classic", "current");
+    reportSource?.("custom", "current");
+    return { status: "ready", updatedAt: UPDATED, entries: [] };
+  });
   readers.elysium.mockReset().mockResolvedValue({ status:"ready",updatedAt:UPDATED,items:[] });
   readers.hyperevm.mockReset().mockResolvedValue({ status:"ready",updatedAt:UPDATED,items:[] });
   readers.base.mockReset().mockResolvedValue({ status: "ready", updatedAt: UPDATED, items: [] });
@@ -116,6 +121,31 @@ describe("observed website indexing health", () => {
     expect(body.status).toBe("degraded");
     expect(body.indexes.map(index => index.status)).toEqual(["unavailable", "ready", "ready"]);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("reports only the Ethereum sources observed before the shared deadline", async () => {
+    const { response } = await getHealth();
+    expect(response.headers.get(ETHEREUM_SOURCES_HEADER)).toBe("classic=current, custom=current");
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    let finishLate!: () => void;
+    readers.ethereum.mockImplementationOnce(async reportSource => {
+      reportSource("classic", "current");
+      await new Promise<void>(resolve => { finishLate = resolve; });
+      reportSource("custom", "current");
+      return { status: "ready", updatedAt: UPDATED };
+    });
+    const { GET } = await import("../app/api/ops/health/route");
+    const pending = GET();
+    await vi.advanceTimersByTimeAsync(5_000);
+    const timedOut = await pending;
+    const body = await timedOut.json();
+    expect(validate(body)).toBe(true);
+    expect(body.indexes[0]).toMatchObject({ chainId: 1, status: "stale", updatedAt: UPDATED });
+    expect(timedOut.headers.get(ETHEREUM_SOURCES_HEADER)).toBe("classic=current, custom=unobserved");
+    finishLate();
+    expect((await GET()).headers.get(ETHEREUM_SOURCES_HEADER)).toBe("classic=current, custom=unobserved");
+    expect(readers.ethereum).toHaveBeenCalledTimes(2);
   });
 
   it("coalesces reads and refreshes after the observation cache expires", async () => {

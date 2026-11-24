@@ -1,6 +1,6 @@
 import "server-only";
 
-import { readEthereumIndexHealth } from "./ethereum-explore";
+import { readEthereumIndexHealth, type EthereumIndexSources } from "./ethereum-explore";
 import { readHyperEvmExploreCatalog } from "./hyperevm-explore";
 import { readElysiumExploreCatalog } from "./elysium-explore";
 import { readBaseExploreCatalog } from "./base-explore";
@@ -11,14 +11,14 @@ const READ_TIMEOUT_MS = 5_000;
 type IndexStatus = "ready" | "partial" | "syncing" | "stale" | "unavailable";
 type IndexObservation = { status: IndexStatus; updatedAt: string | null };
 type Readers = {
-  ethereum: () => Promise<IndexObservation>;
+  ethereum: typeof readEthereumIndexHealth;
   robinhood: () => Promise<IndexObservation>;
   base: () => Promise<IndexObservation>;
   hyperevm?: () => Promise<IndexObservation>;
   elysium?: () => Promise<IndexObservation>;
 };
 
-async function boundedObservation(read: Readers["ethereum"]): Promise<IndexObservation> {
+async function boundedObservation(read: () => Promise<IndexObservation>): Promise<IndexObservation> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -35,8 +35,12 @@ async function boundedObservation(read: Readers["ethereum"]): Promise<IndexObser
 }
 
 async function observe(readers: Readers) {
+  const ethereumSources: EthereumIndexSources = { classic: "unobserved", custom: "unobserved" };
+  const ethereumObservation = boundedObservation(() => readers.ethereum((source, status) => {
+    ethereumSources[source] = status;
+  })).then(index => ({ ...index, sources: { ...ethereumSources } }));
   const [ethereum, robinhood, base, hyperevm, elysium] = await Promise.all([
-    boundedObservation(readers.ethereum), boundedObservation(readers.robinhood), boundedObservation(readers.base),
+    ethereumObservation, boundedObservation(readers.robinhood), boundedObservation(readers.base),
     readers.hyperevm ? boundedObservation(readers.hyperevm) : Promise.resolve(null),
     readers.elysium ? boundedObservation(readers.elysium) : Promise.resolve(null),
   ]);
@@ -49,6 +53,7 @@ async function observe(readers: Readers) {
     scope: "website-launch-indexes" as const,
     status,
     checkedAt: new Date().toISOString(),
+    ethereumSources: ethereum.sources,
     indexes: [
       { chainId: 1, status: ethereum.status, updatedAt: ethereum.updatedAt,
         catalogUrl: "https://programmable.market/api/explore/ethereum" },

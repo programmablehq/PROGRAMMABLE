@@ -16,6 +16,7 @@ import type { RobinhoodCoinMarket } from "@/lib/robinhood-presentation";
 import type { readEthereumPublicTokenMetadata } from "./ethereum-public-token-metadata";
 
 type SourceStatus = "current" | "last-known-good" | "unavailable";
+export type EthereumIndexSources = Record<"classic" | "custom", SourceStatus | "unobserved">;
 type SourceEvidence = {
   source: "codex-classic-launches" | "canonical-classic-launcher-rpc" | "canonical-launch-stamp-router";
   asOfBlock: string;
@@ -123,10 +124,24 @@ export async function readEthereumExploreCatalog(dependencies: Dependencies = re
 }
 
 /** Index health needs verified identities, not optional images or metadata. */
-export async function readEthereumIndexHealth() {
-  const catalog = await readEthereumExploreCatalog({
-    ...readers,
+export async function readEthereumIndexHealth(reportSource?: (source: keyof EthereumIndexSources, status: SourceStatus) => void) {
+  const healthReaders = {
+    classic: readers.classic,
     custom: readFinalizedRouterCustomIdentitySnapshotCoreV1,
+  };
+  async function readSource(source: keyof EthereumIndexSources) {
+    let status: SourceStatus = "unavailable";
+    try {
+      const catalog = await healthReaders[source]();
+      status = catalog.status;
+      return catalog;
+    } finally {
+      reportSource?.(source, status);
+    }
+  }
+  const catalog = await readEthereumExploreCatalog({
+    classic: () => readSource("classic"),
+    custom: () => readSource("custom"),
   });
   return { status: catalog.status, updatedAt: catalog.updatedAt };
 }
