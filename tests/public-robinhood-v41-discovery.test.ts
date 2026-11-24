@@ -72,6 +72,13 @@ describe("profile selected public Robinhood API contract", () => {
     const health = JSON.parse(readFileSync(new URL("./fixtures/public-ops-health-website-v116.json", import.meta.url), "utf8"));
     previous.paths["/api/ops/health"].get = health.operation;
     previous.components.schemas.OperationsHealth = health.schema;
+    const ethereumOperation = previous.paths["/api/explore/ethereum"].get;
+    expect(ethereumOperation.parameters.pop()).toMatchObject({
+      name: "view", in: "query", schema: { type: "string", enum: ["live", "indexed"], default: "live" },
+    });
+    const ethereumHeaders = ethereumOperation.responses["200"].headers;
+    expect(ethereumHeaders["X-Programmable-Explore-View"]).toEqual({ schema: { enum: ["live", "indexed"] } });
+    delete ethereumHeaders["X-Programmable-Explore-View"];
     previous.components.schemas.EthereumExplorePage.properties.presentations.items.properties.market = { type: "null" };
     const ethereumItems = previous.components.schemas.EthereumExplorePage.properties.items;
     expect(ethereumItems.items.oneOf).toHaveLength(2);
