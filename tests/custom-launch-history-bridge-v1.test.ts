@@ -843,7 +843,7 @@ describe("developer launch history same-origin bridge", () => {
     },
   );
 
-  it("rejects non-linked wallets and malformed opaque cursors before backend access", async () => {
+  it("rejects non-linked wallets and provides recovery guidance for invalid pagination", async () => {
     const foreign = await bridge().list(new Request(
       `https://programmable.market/api/developer/custom-launches?walletAddress=${OTHER_WALLET}`,
     ));
@@ -853,7 +853,21 @@ describe("developer launch history same-origin bridge", () => {
       `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&cursor=not-a-cursor`,
     ));
     expect(malformed.status).toBe(400);
-    expect((await malformed.json()).error.code).toBe("pagination_invalid");
+    expect((await malformed.json()).error).toEqual({
+      code: "pagination_invalid",
+      message: "Use nextCursor from the previous response, or omit cursor to start again.",
+      requestId: malformed.headers.get("x-request-id"),
+    });
+
+    const invalidLimit = await bridge().list(new Request(
+      `https://programmable.market/api/developer/custom-launches?walletAddress=${WALLET}&limit=100`,
+    ));
+    expect(invalidLimit.status).toBe(400);
+    expect((await invalidLimit.json()).error).toEqual({
+      code: "pagination_invalid",
+      message: "Use a whole number from 1 to 10 for limit.",
+      requestId: invalidLimit.headers.get("x-request-id"),
+    });
     expect(fetchBackend).not.toHaveBeenCalled();
   });
 
