@@ -29,6 +29,32 @@ describe("custom launch review evidence", () => {
     expect(html).toContain("Current 0.3% pool fee requirement met.");
     expect(html).not.toContain("Historical evidence");
   });
+  it("shows applicants only the current pending submission's passed fork checks", () => {
+    const currentReport = { ...report, reviewId: review.reviewId, platformFeeBps: 30, feeCollection: "pool",
+      feePolicyVersion: "programmable.custom-launch-pool-fee.v1", digestEncoding: "canonical-json-v1" };
+    const pending: CustomLaunchReview = { ...review, state: "pending", approvedAt: null, expiresAt: null, tradeChecks: currentReport };
+    const applicant = (current: CustomLaunchReview, showApplicantTradeResult = true) =>
+      renderToStaticMarkup(createElement(CustomLaunchAssessment, {
+        value: undefined, subjectHash, chainId: "1", review: current, showApplicantTradeResult, tradeChecks: currentReport,
+      }));
+    const html = applicant(pending);
+    expect(html).toMatch(/Fork checks passed.*buying, selling and the 0\.3% platform fee/);
+    expect(html).not.toContain("Fork check results");
+    expect(html).not.toContain("Platform fee requirement met");
+    for (const reviewWithoutCurrentEvidence of [
+      { ...pending, tradeChecks: null },
+      { ...pending, tradeChecks: { ...currentReport, reviewId: "another-review" } },
+      { ...pending, tradeChecks: { ...currentReport, subjectHash: "different" } },
+      { ...pending, tradeChecks: { ...currentReport, chainId: "4663" } },
+      { ...pending, tradeChecks: { ...currentReport, platformFeeBps: 10 } },
+      { ...pending, requiresRepack: true },
+      { ...pending, supersededBy: { reviewId: "replacement", launchId: "replacement-launch" } },
+      { ...pending, state: "approved" as const },
+    ]) {
+      expect(applicant(reviewWithoutCurrentEvidence)).toBe("");
+    }
+    expect(applicant(pending, false)).toBe("");
+  });
   it("keeps absent, stale, wrong-chain and inconsistent reports pending", () => {
     for (const value of [null, { ...report, subjectHash: "different" }, { ...report, chainId: "4663" }, { ...report, checks: [] }]) {
       expect(render(value)).toContain("checks are pending for this version");

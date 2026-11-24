@@ -2,18 +2,30 @@ import { customLaunchTradeEvidence } from "@/lib/custom-launch-trade-evidence";
 import type { CustomLaunchReview } from "@/lib/custom-launch-review";
 
 const record = (v: unknown): Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : {};
-export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subjectHash, chainId, review }: { value: unknown; admin?: boolean; tradeChecks?: unknown; subjectHash?: string; chainId?: string; review?: CustomLaunchReview }) {
+export function CustomLaunchAssessment({ value, admin = false, tradeChecks, subjectHash, chainId, review, showApplicantTradeResult = false }: {
+  value: unknown;
+  admin?: boolean;
+  tradeChecks?: unknown;
+  subjectHash?: string;
+  chainId?: string;
+  review?: CustomLaunchReview;
+  showApplicantTradeResult?: boolean;
+}) {
   const a = record(value), timing = record(a.timing), fees = record(a.fees), trading = record(a.trading);
-  const evidence = customLaunchTradeEvidence(tradeChecks ?? a.operatorTradeChecks, subjectHash, chainId);
+  const currentReview = review && !review.supersededBy && review.subjectHash === subjectHash && review.chainId === chainId ? review : undefined;
+  const savedReport = admin ? tradeChecks ?? a.operatorTradeChecks : currentReview?.tradeChecks;
+  const evidence = customLaunchTradeEvidence(savedReport, subjectHash, chainId);
+  const applicantTradePassed = showApplicantTradeResult && !admin && currentReview?.state === "pending"
+    && !currentReview.requiresRepack && currentReview.tradeChecks?.reviewId === currentReview.reviewId && evidence.currentPlatformFee;
   const preparation = record(a.preparation);
   const notes = Array.isArray(preparation.notes) ? preparation.notes.map(record).filter(note => typeof note.message === "string") : [];
   // Approval supplies review context, not proof that a particular purchase occurred.
   // Keep source heuristics available without presenting them as new blockers.
-  const reviewed = review?.state === "approved" && !review.supersededBy
-    && review.subjectHash === subjectHash && review.chainId === chainId;
+  const reviewed = currentReview?.state === "approved";
   const deadlines = Array.isArray(timing.deadlines) ? timing.deadlines.map(record).filter(d => d.state !== "covers_window") : [];
-  if (!Object.keys(a).length && !evidence.report) return null;
+  if (!Object.keys(a).length && !applicantTradePassed && !(admin && evidence.report)) return null;
   return <section aria-label="Launch readiness">
+    {applicantTradePassed ? <p>Fork checks passed for buying, selling and the 0.3% platform fee.</p> : null}
     {notes.length ? <details open={!reviewed}><summary>{reviewed ? "Automated hints from before review" : "Before launch"}</summary>
       {reviewed ? <p>These source checks were recorded before approval. They are not a new rejection. Read the review decision for the checked launch behavior; current launch status determines the next step.</p> : null}
       {notes.map((note, i) => <div key={i}><p>{note.code === "INITIAL_BUY_NOT_ESTABLISHED"

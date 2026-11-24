@@ -104,7 +104,8 @@ function LaunchDiscussion({ review: listedReview, launchId, onUpdated }: Discuss
     {assessmentError ? <div><p role="status">{assessmentError}</p>
       <button type="button" className={styles.secondaryButton} onClick={() => void readAssessment()}>Retry review details</button>
     </div> : null}
-    <CustomLaunchAssessment value={currentDetails?.assessment} review={review} subjectHash={review.subjectHash} chainId={review.chainId} tradeChecks={review.tradeChecks} />
+    <CustomLaunchAssessment value={currentDetails?.assessment} review={review} subjectHash={review.subjectHash} chainId={review.chainId}
+      showApplicantTradeResult={account?.toLowerCase() === review.controller.toLowerCase()} />
     {review.discussion?.map(entry => <div key={entry.revision}>
       <strong>{entry.author === "reviewer" ? "Programmable" : "Your team"}</strong>
       <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.message}</p>
