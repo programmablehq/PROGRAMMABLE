@@ -134,13 +134,30 @@ const paths = {};
 for (const route of ["/v3/capabilities", "/v3/finalized-custom-launches", "/v3/custom-launches/preflight", "/v3/custom-launches", "/v3/custom-launches/{launchId}"]) {
   paths[route.replace("/v3", prefix)] = replace(source.paths[route]);
 }
+const readinessContent = {
+  "application/json": {
+    schema: {
+      type: "object",
+      required: ["chainId", "releaseId", "mode", "ready", "publicLaunchAuthorized", "reasonCodes"],
+      properties: {
+        chainId: { const: network.id },
+        ready: { type: "boolean" },
+        mode: { enum: ["disabled", "canary", "active"] },
+        publicLaunchAuthorized: { type: "boolean" },
+        releaseId: { type: "string" },
+        reasonCodes: { type: "array", items: { type: "string" } },
+      },
+    },
+  },
+};
 paths[prefix + "/readiness"] = { get: { operationId: `${network.slug}CustomReadiness`, security: [],
   summary: `Current ${network.name} release readiness`, responses: {
     "200": { description: "The selected release is ready. Public creation additionally requires mode active and publicLaunchAuthorized true.",
-      content: { "application/json": { schema: { type: "object", required: ["chainId", "releaseId", "mode", "ready", "publicLaunchAuthorized", "reasonCodes"],
-        properties: { chainId: { const: network.id }, ready: { type: "boolean" }, mode: { enum: ["disabled", "canary", "active"] },
-          publicLaunchAuthorized: { type: "boolean" }, releaseId: { type: "string" }, reasonCodes: { type: "array", items: { type: "string" } } } } } } },
-    "503": { description: "Release prerequisites are unavailable; retry with backoff." },
+      content: readinessContent },
+    "503": {
+      description: "Release prerequisites are unavailable. Read reasonCodes for the blocked requirements and retry with backoff.",
+      content: readinessContent,
+    },
   } } };
 // Keep only schemas actually referenced by the selected chain's routes.
 const names = new Set();
@@ -153,7 +170,7 @@ const scan = value => {
   for (const child of Object.values(value)) scan(child);
 };
 scan(paths);
-const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.1.0",
+const output = { openapi: "3.1.0", info: { title: `Programmable ${network.name} Custom Launch API`, version: "1.1.1",
   description: `${network.name} chain ${network.id}. Exact-source Custom Launch only. The request uses the graph V3 schema on a chain-qualified V4 URL. Module Mode and partner credentials are not enabled on this route.` },
   jsonSchemaDialect: source.jsonSchemaDialect, servers: [{ url: "https://api.programmable.market" }],
   externalDocs: { url: `https://programmable.market/developers/${network.slug}-custom-launch-api-v1.md` },

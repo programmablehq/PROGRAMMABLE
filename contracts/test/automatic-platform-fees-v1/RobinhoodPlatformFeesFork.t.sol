@@ -19,7 +19,9 @@ contract RobinhoodPlatformFeesForkTest is Test {
     RobinhoodPlatformFeeRouterV1 router;
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.mainnet.chain.robinhood.com");
+        string memory rpc = vm.envOr("FOUNDATION_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com"));
+        vm.createSelectFork(rpc);
+        assertEq(block.chainid, 4663);
         vm.deal(address(this), 1 ether);
         router = new RobinhoodPlatformFeeRouterV1(vm.addr(SIGNER_KEY));
     }
