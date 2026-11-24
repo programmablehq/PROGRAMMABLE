@@ -7,6 +7,7 @@ import {
   CUSTOM_LAUNCH_API_SCHEMA_V1,
   PLATFORM_MODULE_SOURCE_WALLET_V1,
 } from "../lib/server/custom-launch/api-key-bridge-v1";
+import { WalletPrincipalAuthenticationErrorV1 } from "../lib/server/creator-article/wallet-principal.server";
 
 const WALLET = "0x1111111111111111111111111111111111111111" as const;
 const OTHER_WALLET = "0x2222222222222222222222222222222222222222" as const;
@@ -98,6 +99,28 @@ describe("developer API key same-origin bridge", () => {
       assertionNonce: () => ASSERTION_NONCE,
     });
   }
+
+  it("explains a missing or invalid wallet session on both key listings", async () => {
+    const routes = [["list", ""], ["listV2", "/v2"]] as const;
+    const cases = [
+      { code: "session_required", challenge: 'Bearer realm="Programmable"', message: "Sign in to manage your API keys." },
+      { code: "access_token_invalid", challenge: 'Bearer realm="Programmable", error="invalid_token"', message: "Sign in again to renew your wallet session." },
+    ];
+    for (const [operation, suffix] of routes) {
+      for (const expected of cases) {
+        authenticate.mockRejectedValueOnce(new WalletPrincipalAuthenticationErrorV1(401, expected.code));
+        const response = await bridge()[operation](new Request(
+          `https://programmable.market/api/developer/api-keys${suffix}?walletAddress=${WALLET}`,
+        ));
+        expect(response.status).toBe(401);
+        expect(response.headers.get("www-authenticate")).toBe(expected.challenge);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        const { body } = await correlatedError(response);
+        expect(body.error).toMatchObject({ code: expected.code, message: expected.message });
+      }
+    }
+    expect(fetchBackend).not.toHaveBeenCalled();
+  });
 
   it("lists only canonical metadata and sends the verified identity server-to-server", async () => {
     fetchBackend.mockResolvedValueOnce(backendJson({
