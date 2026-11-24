@@ -22,7 +22,10 @@ export function CustomLaunchCompletion({chainId,launchId,controller,transactionH
     setResolved({scope,href:destination.href});
   },15000,true);
   return <div className={styles.completion}>
-    {!href ? <p role="status">Your launch is confirmed. Your coin will appear here once it is indexed on Explore.</p> : null}
-    {href?<CustomLaunchSuccessActions href={href} />:null}
+    {href ? <CustomLaunchSuccessActions href={href} /> : (
+      <p role="status">{identity
+        ? "Your launch is confirmed. Your coin will appear here once it is indexed on Explore."
+        : "Launch finalized. Explore link unavailable for this record."}</p>
+    )}
   </div>;
 }
