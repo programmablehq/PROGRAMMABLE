@@ -48,6 +48,8 @@ Ethereum and Robinhood launch pages show **Review → Launch → Complete**. Use
 
 Automatic preparation requires the submitting wallet to be connected and signed in on the open launch page. It does not sign or broadcast. Temporary preparation failures retry up to three times, honoring the server's `Retry-After`; authentication, approval and validation failures need the indicated action. The 24-hour window still starts at manual approval.
 
+If your Ethereum approval expires before you sign, keep the original launch link with `chainId=1`. Share the launch ID and your intended signing time in UTC with support. An eligible request can receive a new 24-hour approval for the same build. After approval, open the original link with the submitting wallet to continue.
+
 After signing, the page saves the transaction hash and follows confirmation automatically. If a Robinhood wallet loses its response, the page searches for the matching original transaction. **I already sent it** provides manual recovery when the wallet or RPC cannot supply that transaction. Do not send another transaction to resolve an unknown result.
 
 API-only bots continue using the published owner start and polling endpoints. The website's automatic preparation does not change the API request schema, approval policy or signing permissions.
