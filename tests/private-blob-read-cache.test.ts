@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { get, GetBlobResult } from "@vercel/blob";
+import type { get, head, GetBlobResult } from "@vercel/blob";
 vi.mock("server-only", () => ({}));
 import { createPrivateBlobReadCache } from "@/lib/server/private-blob-read-cache";
 
@@ -8,7 +8,7 @@ const versionB = `"${"b".repeat(32)}"`;
 const path = "indexes/test/snapshot.json";
 const options = { token: "private-test-credential" };
 const body = '{"entries":["one","two"]}';
-function response(text = body, etag = versionA): GetBlobResult {
+function response(text = body, etag = versionA): Extract<GetBlobResult, { statusCode: 200 }> {
   return {
     statusCode: 200, stream: new Response(text).body!,
     headers: new Headers({ "content-length": String(Buffer.byteLength(text)) }),
@@ -54,6 +54,39 @@ describe("authenticated private Blob revalidation", () => {
     expect(await text(current)).toBe(updated);
     expect(await text(await read(path, options, 1024))).toBe(updated);
     expect(getBlob.mock.calls[2]?.[1]?.ifNoneMatch).toBe(versionB);
+  });
+
+  it("confirms a headerless 304 with authenticated metadata without downloading the body again", async () => {
+    const initial = response();
+    const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(unchanged(""));
+    const headBlob = vi.fn<typeof head>().mockResolvedValueOnce(initial.blob);
+    const onRead = vi.fn();
+    const read = createPrivateBlobReadCache({ getBlob, headBlob, onRead });
+
+    await text(await read(path, options, 1024));
+    expect(await text(await read(path, options, 1024))).toBe(body);
+    expect(getBlob).toHaveBeenCalledTimes(2);
+    expect(headBlob).toHaveBeenCalledOnce();
+    expect(headBlob).toHaveBeenCalledWith(path, {
+      token: options.token, abortSignal: getBlob.mock.lastCall?.[1]?.abortSignal,
+    });
+    expect(onRead).toHaveBeenLastCalledWith({ kind: "metadata-not-modified", bytes: Buffer.byteLength(body) });
+  });
+
+  it("downloads the current version when metadata no longer matches a headerless 304", async () => {
+    const current = response('{"entries":["three"]}', versionB);
+    const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(response())
+      .mockResolvedValueOnce(unchanged("")).mockResolvedValueOnce(current);
+    const headBlob = vi.fn<typeof head>().mockResolvedValueOnce(current.blob);
+    const read = createPrivateBlobReadCache({ getBlob, headBlob });
+
+    await text(await read(path, options, 1024));
+    const result = await read(path, options, 1024);
+    expect(result?.blob.etag).toBe(versionB);
+    expect(await text(result)).toBe('{"entries":["three"]}');
+    expect(getBlob).toHaveBeenCalledTimes(3);
+    expect(getBlob.mock.lastCall?.[1]?.ifNoneMatch).toBeUndefined();
   });
 
   it("never substitutes saved data for denied access, missing objects or an unbound 304", async () => {

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { get, type GetBlobResult } from "@vercel/blob";
+import { get, head, type GetBlobResult } from "@vercel/blob";
 import { readBoundedUtf8BodyV1 } from "./custom-launch/bounded-utf8-body-v1";
 
 type FullBlob = Extract<GetBlobResult, { statusCode: 200 }>;
@@ -14,7 +14,7 @@ type SavedBody = Readonly<{
   blob: FullBlob["blob"];
 }>;
 type ReadEvent = Readonly<{
-  kind: "download" | "not-modified" | "shared";
+  kind: "download" | "not-modified" | "metadata-not-modified" | "shared";
   bytes: number;
 }>;
 
@@ -23,6 +23,7 @@ const STRONG_ETAG = /^"[\da-f]{32}"$/iu;
 /** Cached bodies are used only after an authenticated origin 304, never by age. */
 export function createPrivateBlobReadCache(input: Readonly<{
   getBlob?: typeof get;
+  headBlob?: typeof head;
   maximumCacheBytes?: number;
   maximumEntries?: number;
   onRead?: (event: ReadEvent) => void;
@@ -86,7 +87,30 @@ export function createPrivateBlobReadCache(input: Readonly<{
         ...(previous ? { ifNoneMatch: previous.blob.etag } : {}),
       });
       signal.throwIfAborted();
-      if (result?.statusCode === 304 && (!previous || result.blob.etag !== previous.blob.etag)) {
+      if (result?.statusCode === 304) {
+        if (previous) {
+          let metadataMatches = false;
+          // The Blob origin can omit the ETag on a conditional hit. The
+          // authenticated metadata endpoint can confirm that exact version.
+          if (result.blob.etag === "" && !result.headers.has("etag")) {
+            const metadata = await (input.headBlob ?? head)(path, {
+              token: options.token, abortSignal: signal,
+            }).catch(() => null);
+            signal.throwIfAborted();
+            metadataMatches = metadata !== null
+              && metadata.etag === previous.blob.etag
+              && metadata.pathname === previous.blob.pathname
+              && metadata.size === previous.bytes;
+          }
+          if (result.blob.etag === previous.blob.etag || metadataMatches) {
+            if (bodies.get(key) === previous) remember(key, previous);
+            input.onRead?.({
+              kind: metadataMatches ? "metadata-not-modified" : "not-modified",
+              bytes: previous.bytes,
+            });
+            return previous;
+          }
+        }
         // An unbound 304 cannot authenticate a saved body. Fetch the current
         // representation once, using the same credential and deadline.
         forgetObservedBody();
@@ -99,15 +123,6 @@ export function createPrivateBlobReadCache(input: Readonly<{
       if (!result) {
         forgetObservedBody();
         return null;
-      }
-      if (result.statusCode === 304) {
-        if (!previous || result.blob.etag !== previous.blob.etag) {
-          forgetObservedBody();
-          throw new Error("Blob 304 has no matching authenticated body");
-        }
-        if (bodies.get(key) === previous) remember(key, previous);
-        input.onRead?.({ kind: "not-modified", bytes: previous.bytes });
-        return previous;
       }
       const headers = new Headers(Array.from(result.headers.entries()));
       const text = await readBoundedUtf8BodyV1(
@@ -147,20 +162,28 @@ let downloadedBytes = 0;
 let avoidedBytes = 0;
 let revalidatedReads = 0;
 let sharedReads = 0;
+let metadataConfirmedReads = 0;
+let metadataAvoidedBytes = 0;
 export const getRevalidatedPrivateBlob = createPrivateBlobReadCache({
   onRead(event) {
     if (event.kind === "download") downloadedBytes += event.bytes;
     else {
       avoidedBytes += event.bytes;
-      if (event.kind === "not-modified") revalidatedReads++;
-      else sharedReads++;
+      if (event.kind === "shared") sharedReads++;
+      else revalidatedReads++;
+      if (event.kind === "metadata-not-modified") {
+        metadataConfirmedReads++;
+        metadataAvoidedBytes += event.bytes;
+      }
     }
     if (avoidedBytes > 0 && Date.now() - lastReportedAt >= 60_000) {
       console.info("private-blob-read-cache", {
         downloadedBytes, avoidedBytes, revalidatedReads, sharedReads,
+        metadataConfirmedReads, metadataAvoidedBytes,
       });
       lastReportedAt = Date.now();
       downloadedBytes = avoidedBytes = revalidatedReads = sharedReads = 0;
+      metadataConfirmedReads = metadataAvoidedBytes = 0;
     }
   },
 });
