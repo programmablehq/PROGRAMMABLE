@@ -29,7 +29,6 @@ export function createPrivateBlobReadCache(input: Readonly<{
   onRead?: (event: ReadEvent) => void;
 }> = {}) {
   const getBlob = input.getBlob ?? get;
-  const headBlob = input.headBlob ?? head;
   const maximumCacheBytes = input.maximumCacheBytes ?? 32 * 1024 * 1024;
   const maximumEntries = input.maximumEntries ?? 64;
   const bodies = new Map<string, SavedBody>();
@@ -94,7 +93,7 @@ export function createPrivateBlobReadCache(input: Readonly<{
           // The Blob origin can omit the ETag on a conditional hit. The
           // authenticated metadata endpoint can confirm that exact version.
           if (result.blob.etag === "" && !result.headers.has("etag")) {
-            const metadata = await headBlob(path, {
+            const metadata = await (input.headBlob ?? head)(path, {
               token: options.token, abortSignal: signal,
             }).catch(() => null);
             signal.throwIfAborted();
