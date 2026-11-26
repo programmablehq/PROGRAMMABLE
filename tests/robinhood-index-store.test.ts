@@ -22,7 +22,7 @@ describe("Robinhood index atomic reads", () => {
     const saved = await store.read();
     expect(saved).toMatchObject({ etag, snapshot });
     expect(blob.get).toHaveBeenCalledWith("website-index/robinhood/launches-v1.json", expect.objectContaining({
-      access: "private", useCache: false, headers: { "accept-encoding": "identity" },
+      access: "private", useCache: false, headers: { "accept-encoding": "gzip" },
     }));
     expect(blob.head).not.toHaveBeenCalled();
     blob.put.mockRejectedValue(new Error("Precondition failed"));
@@ -35,9 +35,10 @@ describe("Robinhood index atomic reads", () => {
     blob.get.mockResolvedValueOnce(response(JSON.stringify({ ...snapshot, chainId: 1 })));
     await expect(indexStore().read()).rejects.toThrow("Invalid Robinhood index");
   });
-  it("rejects compressed or weak response ETags instead of converting them to object versions", async () => {
-    blob.get.mockResolvedValueOnce(response(body, { "content-encoding": "br" }));
-    await expect(indexStore().read()).rejects.toThrow("metadata invalid");
+  it("rejects unsupported encodings and weak ETags that cannot bind an object version", async () => {
+    blob.get.mockResolvedValueOnce(response(body, { "content-encoding": "br" }))
+      .mockResolvedValueOnce(response(body, { "content-encoding": "br" }));
+    await expect(indexStore().read()).rejects.toThrow("unsupported encoding");
     const weak = response(); weak.blob.etag = `W/${etag}`;
     blob.get.mockResolvedValueOnce(weak);
     await expect(indexStore().read()).rejects.toThrow("metadata invalid");

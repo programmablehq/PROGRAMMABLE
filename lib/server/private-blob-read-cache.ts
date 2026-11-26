@@ -12,15 +12,17 @@ type SavedBody = Readonly<{
   weight: number;
   headers: Headers;
   blob: FullBlob["blob"];
+  compressed: boolean;
 }>;
 type ReadEvent = Readonly<{
   kind: "download" | "not-modified" | "metadata-not-modified" | "shared";
   bytes: number;
+  compressed?: true;
 }>;
 
 const STRONG_ETAG = /^"[\da-f]{32}"$/iu;
 
-/** Cached bodies are used only after an authenticated origin 304, never by age. */
+/** Reuse requires an authenticated origin 304 confirming the saved version. */
 export function createPrivateBlobReadCache(input: Readonly<{
   getBlob?: typeof get;
   headBlob?: typeof head;
@@ -76,26 +78,59 @@ export function createPrivateBlobReadCache(input: Readonly<{
     const forgetObservedBody = () => {
       if (bodies.get(key) === previous) forget(key);
     };
+    const readMetadata = () => (input.headBlob ?? head)(path, {
+      token: options.token, abortSignal: signal,
+    }).catch(() => null);
+    const readOrigin = (encoding: "gzip" | "identity", etag?: string) => getBlob(path, {
+      access: "private", token: options.token, useCache: false,
+      headers: { "accept-encoding": encoding }, abortSignal: signal,
+      ...(etag ? { ifNoneMatch: etag } : {}),
+    });
+
+    const readBody = async (result: FullBlob, allowGzip: boolean): Promise<SavedBody | null> => {
+      const headers = new Headers(Array.from(result.headers.entries()));
+      const encoding = headers.get("content-encoding")?.toLowerCase() ?? "identity";
+      const compressed = allowGzip && encoding === "gzip";
+      const etag = compressed ? result.blob.etag.replace(/^W\//u, "") : result.blob.etag;
+      if (encoding !== "identity" && (!compressed || !STRONG_ETAG.test(etag))) {
+        void result.stream.cancel().catch(() => undefined);
+        return null;
+      }
+      const metadata = compressed ? readMetadata() : null;
+      const text = await readBoundedUtf8BodyV1(
+        new Response(result.stream, { headers }), maximumBytes, { signal },
+      );
+      signal.throwIfAborted();
+      const bytes = Buffer.byteLength(text, "utf8");
+      let blob = { ...result.blob };
+      if (metadata) {
+        const canonical = await metadata;
+        signal.throwIfAborted();
+        // The SDK returns a decoded stream and a weak representation ETag for
+        // gzip. Bind the decoded bytes to the canonical origin version before
+        // returning a tag that callers can use for a conditional write.
+        const bodyEtag = `"${createHash("md5").update(text, "utf8").digest("hex")}"`;
+        if (canonical?.pathname !== path || canonical.etag !== etag
+          || canonical.size !== bytes || bodyEtag !== etag) return null;
+        headers.delete("content-encoding");
+        headers.set("content-length", String(bytes));
+        headers.set("etag", canonical.etag);
+        blob = { ...blob, size: canonical.size, etag: canonical.etag };
+      }
+      return { text, bytes, weight: text.length * 2, headers, blob, compressed };
+    };
+
     const read = async (): Promise<SavedBody | null> => {
-      const requestOptions = {
-        access: "private", token: options.token, useCache: false,
-        headers: { "accept-encoding": "identity" },
-        abortSignal: signal,
-      } as const;
-      let result = await getBlob(path, {
-        ...requestOptions,
-        ...(previous ? { ifNoneMatch: previous.blob.etag } : {}),
-      });
+      let result = await readOrigin("gzip", previous?.blob.etag);
       signal.throwIfAborted();
       if (result?.statusCode === 304) {
         if (previous) {
           let metadataMatches = false;
           // The Blob origin can omit the ETag on a conditional hit. The
           // authenticated metadata endpoint can confirm that exact version.
-          if (result.blob.etag === "" && !result.headers.has("etag")) {
-            const metadata = await (input.headBlob ?? head)(path, {
-              token: options.token, abortSignal: signal,
-            }).catch(() => null);
+          if ((result.blob.etag === "" && !result.headers.has("etag"))
+            || result.blob.etag === `W/${previous.blob.etag}`) {
+            const metadata = await readMetadata();
             signal.throwIfAborted();
             metadataMatches = metadata !== null
               && metadata.etag === previous.blob.etag
@@ -114,7 +149,7 @@ export function createPrivateBlobReadCache(input: Readonly<{
         // An unbound 304 cannot authenticate a saved body. Fetch the current
         // representation once, using the same credential and deadline.
         forgetObservedBody();
-        result = await getBlob(path, requestOptions);
+        result = await readOrigin("gzip");
         signal.throwIfAborted();
         if (result?.statusCode === 304) {
           throw new Error("Blob 304 has no matching authenticated body");
@@ -124,25 +159,23 @@ export function createPrivateBlobReadCache(input: Readonly<{
         forgetObservedBody();
         return null;
       }
-      const headers = new Headers(Array.from(result.headers.entries()));
-      const text = await readBoundedUtf8BodyV1(
-        new Response(result.stream, { headers }), maximumBytes,
-        { signal },
-      );
-      options.abortSignal?.throwIfAborted();
-      const bytes = Buffer.byteLength(text, "utf8");
-      const body = {
-        text, bytes, weight: text.length * 2,
-        headers, blob: { ...result.blob },
-      };
-      const encoding = result.headers.get("content-encoding");
-      const length = result.headers.get("content-length");
+      let body = await readBody(result, true);
+      if (!body) {
+        forgetObservedBody();
+        const identity = await readOrigin("identity");
+        signal.throwIfAborted();
+        if (!identity) return null;
+        if (identity.statusCode !== 200) throw new Error("Blob identity read did not return a body");
+        body = await readBody(identity, false);
+        if (!body) throw new Error("Blob identity response uses an unsupported encoding");
+      }
+      const length = body.headers.get("content-length");
       // Malformed representations still reach the caller's existing validator,
       // but can never become a reusable authenticated body.
-      if (STRONG_ETAG.test(result.blob.etag) && (!encoding || encoding === "identity")
-        && (length === null || Number(length) === bytes)) remember(key, body);
+      if (STRONG_ETAG.test(body.blob.etag)
+        && (length === null || Number(length) === body.bytes)) remember(key, body);
       else forgetObservedBody();
-      input.onRead?.({ kind: "download", bytes });
+      input.onRead?.({ kind: "download", bytes: body.bytes, ...(body.compressed && { compressed: true as const }) });
       return body;
     };
     const task = read().catch(error => {
@@ -164,10 +197,17 @@ let revalidatedReads = 0;
 let sharedReads = 0;
 let metadataConfirmedReads = 0;
 let metadataAvoidedBytes = 0;
+let compressedReads = 0;
+let compressedDecodedBytes = 0;
 export const getRevalidatedPrivateBlob = createPrivateBlobReadCache({
   onRead(event) {
-    if (event.kind === "download") downloadedBytes += event.bytes;
-    else {
+    if (event.kind === "download") {
+      downloadedBytes += event.bytes;
+      if (event.compressed) {
+        compressedReads++;
+        compressedDecodedBytes += event.bytes;
+      }
+    } else {
       avoidedBytes += event.bytes;
       if (event.kind === "shared") sharedReads++;
       else revalidatedReads++;
@@ -179,11 +219,12 @@ export const getRevalidatedPrivateBlob = createPrivateBlobReadCache({
     if (avoidedBytes > 0 && Date.now() - lastReportedAt >= 60_000) {
       console.info("private-blob-read-cache", {
         downloadedBytes, avoidedBytes, revalidatedReads, sharedReads,
-        metadataConfirmedReads, metadataAvoidedBytes,
+        metadataConfirmedReads, metadataAvoidedBytes, compressedReads, compressedDecodedBytes,
       });
       lastReportedAt = Date.now();
       downloadedBytes = avoidedBytes = revalidatedReads = sharedReads = 0;
       metadataConfirmedReads = metadataAvoidedBytes = 0;
+      compressedReads = compressedDecodedBytes = 0;
     }
   },
 });
