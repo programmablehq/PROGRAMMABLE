@@ -210,6 +210,10 @@ async function readVerifiedSuccessorTokensV1(
   if (!latest.hash || !state.hash || state.hash.toLowerCase() !== legacy.slice.cursor.blockHash.toLowerCase()) {
     throw new Error("Ethereum custom identity snapshot boundary changed");
   }
+  const hydrate = reader.createLaunchStampHydrator(deployment, {
+    client, latestBlock: { number: latest.number, hash: latest.hash, timestamp: latest.timestamp },
+    stateBlock: { number: state.number, hash: state.hash, timestamp: state.timestamp },
+  });
   const tokens: LauncherToken[] = [];
   const blocks = [...new Set(candidates.map(item => item.finality.blockNumber))];
   // Bound concurrent RPC work. Never drop a candidate on a provider failure;
@@ -230,10 +234,7 @@ async function readVerifiedSuccessorTokensV1(
         const key = `${anchor.blockHash}:${anchor.transactionHash}:${anchor.logIndex}`;
         let token = identities.get(key);
         if (!token) {
-          token = (await reader.hydrateLaunchStampAnchor(deployment, anchor, {
-            client, latestBlock: { number: latest.number, hash: latest.hash!, timestamp: latest.timestamp },
-            stateBlock: { number: state.number, hash: state.hash!, timestamp: state.timestamp },
-          })).token;
+          token = (await hydrate(anchor)).token;
           if (identities.size >= 10_000) identities.delete(identities.keys().next().value!);
           identities.set(key, token);
         }

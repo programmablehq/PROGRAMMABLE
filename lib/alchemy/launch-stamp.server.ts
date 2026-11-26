@@ -184,6 +184,12 @@ export type LaunchStampReaderOptions = Readonly<{
   client?: LaunchStampReaderClient;
 }>;
 
+type LaunchStampHydrationOptions = LaunchStampReaderOptions & Readonly<{
+  latestBlock?: LaunchStampCanonicalBlock;
+  stateBlock?: LaunchStampCanonicalBlock;
+  receipt?: TransactionReceipt;
+}>;
+
 type StampRecord = Readonly<{
   kind: number;
   launchWallet: Address;
@@ -266,15 +272,48 @@ async function canonicalBlock(
   };
 }
 
+function readOnce<Key, Value>(
+  pending: Map<Key, Promise<Value>>,
+  key: Key,
+  read: () => Promise<Value>,
+): Promise<Value> {
+  const existing = pending.get(key);
+  if (existing) return existing;
+  const request = read();
+  pending.set(key, request);
+  return request;
+}
+
+// A batch uses one provider and one observed chain boundary. Each new
+// advancement starts with fresh checks, including the persisted cursor.
+function createLaunchStampProofReads(client: LaunchStampReaderClient) {
+  let chainId: Promise<number> | undefined;
+  const blocks = new Map<bigint, Promise<LaunchStampCanonicalBlock>>();
+  const hashes = new Map<string, Promise<Hex | undefined>>();
+  return {
+    client,
+    chainId: () => (chainId ??= client.getChainId()),
+    block: (number: bigint) => readOnce(blocks, number, () => canonicalBlock(client, number)),
+    runtimeHash(address: Address, blockNumber: bigint) {
+      return readOnce(hashes, `${address.toLowerCase()}:${blockNumber}`, async () => {
+        const code = await client.getCode({ address, blockNumber });
+        return code && code !== "0x" ? keccak256(code) : undefined;
+      });
+    },
+  };
+}
+
+type LaunchStampProofReads = ReturnType<typeof createLaunchStampProofReads>;
+
 async function assertRuntimeCodeHash(
-  client: LaunchStampReaderClient,
+  reads: LaunchStampProofReads,
   address: Address,
   expected: Hex,
   blockNumber: bigint,
   label: string,
 ) {
-  const code = await client.getCode({ address, blockNumber });
-  if (!code || code === "0x" || !sameHex(keccak256(code), expected)) {
+  const hash = await reads.runtimeHash(address, blockNumber);
+  if (!hash || !sameHex(hash, expected)) {
     fail(`${label} runtime code hash mismatch`);
   }
 }
@@ -692,11 +731,12 @@ export function createLaunchStampReaderV1(binding: Readonly<{
   }
 
   async function verifyComponents(
-    client: LaunchStampReaderClient,
+    reads: LaunchStampProofReads,
     anchor: LaunchStampAnchor,
     parsed: ParsedLaunchStampReceipt,
     kind: "custom-graph" | "classic",
   ) {
+    const { client } = reads;
     const addresses = new Set<string>();
     let tokenSeen = false;
     let hookSeen = false;
@@ -721,7 +761,7 @@ export function createLaunchStampReaderV1(binding: Readonly<{
           hookSeen = true;
         }
         await assertRuntimeCodeHash(
-          client,
+          reads,
           component.component,
           component.runtimeCodeHash,
           anchor.blockNumber,
@@ -967,14 +1007,11 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     };
   }
 
-  async function hydrateLaunchStampAnchor(
+  async function hydrateWithProofReads(
     deployment: ReadyOnchainDeployment,
     anchor: LaunchStampAnchor,
-    options: LaunchStampReaderOptions & Readonly<{
-      latestBlock?: LaunchStampCanonicalBlock;
-      stateBlock?: LaunchStampCanonicalBlock;
-      receipt?: TransactionReceipt;
-    }> = {},
+    options: Omit<LaunchStampHydrationOptions, "client">,
+    reads: LaunchStampProofReads,
   ): Promise<HydratedLaunchStamp> {
     requireCanonicalDeployment(deployment);
     if (
@@ -983,19 +1020,16 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     ) {
       fail("Launch Stamp anchor is outside the canonical Router binding");
     }
-    const client = options.client ?? createReaderClient(deployment);
-    const chainId = await client.getChainId();
+    const { client } = reads;
+    const chainId = await reads.chainId();
     if (chainId !== 1) fail("Launch Stamp RPC is not Ethereum mainnet");
     const latestNumber = options.latestBlock?.number ?? (await client.getBlockNumber());
     if (latestNumber < anchor.blockNumber + LAUNCH_STAMP_FINALITY_CONFIRMATIONS) {
       fail("Launch Stamp anchor does not have 64 confirmations");
     }
-    const latestBlock = options.latestBlock ?? await canonicalBlock(client, latestNumber);
+    const latestBlock = options.latestBlock ?? await reads.block(latestNumber);
     if (latestBlock.number !== latestNumber) fail("Latest block proof mismatch");
-    const stateBlock = options.stateBlock ?? await canonicalBlock(
-      client,
-      latestNumber - LAUNCH_STAMP_FINALITY_CONFIRMATIONS,
-    );
+    const stateBlock = options.stateBlock ?? await reads.block(latestNumber - LAUNCH_STAMP_FINALITY_CONFIRMATIONS);
     if (
       stateBlock.number > latestNumber - LAUNCH_STAMP_FINALITY_CONFIRMATIONS ||
       stateBlock.number < anchor.blockNumber
@@ -1006,27 +1040,27 @@ export function createLaunchStampReaderV1(binding: Readonly<{
       hash: anchor.transactionHash,
     });
     const parsed = parseLaunchStampReceipt(anchor, receipt);
-    const launchBlock = await canonicalBlock(client, anchor.blockNumber);
+    const launchBlock = await reads.block(anchor.blockNumber);
     if (!sameHex(launchBlock.hash, anchor.blockHash)) {
       fail("Launch Stamp anchor block is no longer canonical");
     }
     await Promise.all([
       assertRuntimeCodeHash(
-        client,
+        reads,
         LAUNCH_STAMP_ROUTER_ADDRESS,
         LAUNCH_STAMP_ROUTER_RUNTIME_CODE_HASH,
         anchor.blockNumber,
         "Launch Stamp Router",
       ),
       assertRuntimeCodeHash(
-        client,
+        reads,
         LAUNCH_STAMP_POOL_MANAGER_ADDRESS,
         LAUNCH_STAMP_POOL_MANAGER_RUNTIME_CODE_HASH,
         anchor.blockNumber,
         "PoolManager",
       ),
       assertRuntimeCodeHash(
-        client,
+        reads,
         deployment.stateView,
         deployment.stateViewRuntimeCodeHash,
         stateBlock.number,
@@ -1036,9 +1070,9 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     const state = await readRouterState(client, anchor, parsed.poolKey);
     const record = validateRouterState(anchor, parsed, state);
     const kind = parsed.route.kind === 1 ? "custom-graph" : "classic";
-    const components = await verifyComponents(client, anchor, parsed, kind);
+    const components = await verifyComponents(reads, anchor, parsed, kind);
     await assertRuntimeCodeHash(
-      client,
+      reads,
       record.routeLauncher,
       record.routeLauncherRuntimeCodeHash,
       anchor.blockNumber,
@@ -1131,6 +1165,24 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     return { token, launchStampProvenance: provenance };
   }
 
+  function createLaunchStampHydrator(
+    deployment: ReadyOnchainDeployment,
+    options: Omit<LaunchStampHydrationOptions, "receipt"> = {},
+  ) {
+    const { client = createReaderClient(deployment), ...boundary } = options;
+    const reads = createLaunchStampProofReads(client);
+    return (anchor: LaunchStampAnchor, receipt?: TransactionReceipt) =>
+      hydrateWithProofReads(deployment, anchor, { ...boundary, receipt }, reads);
+  }
+
+  async function hydrateLaunchStampAnchor(
+    deployment: ReadyOnchainDeployment,
+    anchor: LaunchStampAnchor,
+    options: LaunchStampHydrationOptions = {},
+  ) {
+    return createLaunchStampHydrator(deployment, options)(anchor, options.receipt);
+  }
+
   function validateSliceCursor(cursor: LaunchStampRouterCursor) {
     if (!/^(?:0|[1-9]\d*)$/u.test(cursor.blockNumber)) {
       fail("Launch Stamp Router cursor block is invalid");
@@ -1162,12 +1214,13 @@ export function createLaunchStampReaderV1(binding: Readonly<{
   ): Promise<AdvanceLaunchStampRouterResult> {
     requireCanonicalDeployment(deployment);
     const client = options.client ?? createReaderClient(deployment);
-    if ((await client.getChainId()) !== 1) {
+    const reads = createLaunchStampProofReads(client);
+    if ((await reads.chainId()) !== 1) {
       fail("Launch Stamp RPC is not Ethereum mainnet");
     }
     let workingSlice = slice;
     let cursorNumber = validateSliceCursor(workingSlice.cursor);
-    let cursorBlock = await canonicalBlock(client, cursorNumber);
+    let cursorBlock = await reads.block(cursorNumber);
     let rebuiltAfterReorg = false;
     if (!sameHex(cursorBlock.hash, slice.cursor.blockHash)) {
       if (cursorNumber === LAUNCH_STAMP_ROUTER_START_BLOCK - 1n) {
@@ -1175,7 +1228,7 @@ export function createLaunchStampReaderV1(binding: Readonly<{
       }
       workingSlice = createInitialLaunchStampRouterSlice();
       cursorNumber = LAUNCH_STAMP_ROUTER_START_BLOCK - 1n;
-      cursorBlock = await canonicalBlock(client, cursorNumber);
+      cursorBlock = await reads.block(cursorNumber);
       if (!sameHex(cursorBlock.hash, LAUNCH_STAMP_ROUTER_INITIAL_CURSOR.blockHash)) {
         fail("Launch Stamp Router canonical rebuild anchor mismatch");
       }
@@ -1185,7 +1238,7 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     if (latestNumber < LAUNCH_STAMP_FINALITY_CONFIRMATIONS) {
       fail("Ethereum head is below the Launch Stamp finality depth");
     }
-    const latestBlock = await canonicalBlock(client, latestNumber);
+    const latestBlock = await reads.block(latestNumber);
     const highestSafeNumber = latestNumber - LAUNCH_STAMP_FINALITY_CONFIRMATIONS;
     if (highestSafeNumber < LAUNCH_STAMP_ROUTER_START_BLOCK - 1n) {
       fail("Ethereum head does not finalize the canonical Router deployment");
@@ -1196,17 +1249,17 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     let targetNumber = cursorNumber + MAXIMUM_CATCH_UP_BLOCKS < highestSafeNumber
       ? cursorNumber + MAXIMUM_CATCH_UP_BLOCKS
       : highestSafeNumber;
-    let targetBlock = await canonicalBlock(client, targetNumber);
+    let targetBlock = await reads.block(targetNumber);
     await Promise.all([
       assertRuntimeCodeHash(
-        client,
+        reads,
         LAUNCH_STAMP_ROUTER_ADDRESS,
         LAUNCH_STAMP_ROUTER_RUNTIME_CODE_HASH,
         targetNumber,
         "Launch Stamp Router",
       ),
       assertRuntimeCodeHash(
-        client,
+        reads,
         LAUNCH_STAMP_POOL_MANAGER_ADDRESS,
         LAUNCH_STAMP_POOL_MANAGER_RUNTIME_CODE_HASH,
         targetNumber,
@@ -1239,7 +1292,7 @@ export function createLaunchStampReaderV1(binding: Readonly<{
         fail("A single block exceeds the bounded Launch Stamp hydration limit");
       }
       targetNumber = firstDeferredBlock - 1n;
-      targetBlock = await canonicalBlock(client, targetNumber);
+      targetBlock = await reads.block(targetNumber);
       anchors = anchors.filter((anchor) => anchor.blockNumber <= targetNumber);
       if (anchors.length > MAXIMUM_ANCHORS_PER_ADVANCE) {
         fail("Launch Stamp density could not be reduced at a block boundary");
@@ -1261,12 +1314,11 @@ export function createLaunchStampReaderV1(binding: Readonly<{
     const hydrated = await mapWithConcurrency(
       anchors,
       HYDRATION_CONCURRENCY,
-      (anchor) => hydrateLaunchStampAnchor(deployment, anchor, {
-        client,
+      (anchor) => hydrateWithProofReads(deployment, anchor, {
         latestBlock,
         stateBlock: targetBlock,
         receipt: receipts.get(anchor.transactionHash.toLowerCase()),
-      }),
+      }, reads),
     );
     const tokenAddresses = new Set<string>();
     const launchIds = new Set<string>();
@@ -1332,7 +1384,7 @@ export function createLaunchStampReaderV1(binding: Readonly<{
   }
   // Parsing an observation does not establish finality. Only the scanner and
   // hydrator above may produce canonical launch identities.
-  return Object.freeze({ anchorFromLog, scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice });
+  return Object.freeze({ anchorFromLog, scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createLaunchStampHydrator, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice });
 }
 
 export const { scanLaunchStampAnchors, parseLaunchStampReceipt, hydrateLaunchStampAnchor, createInitialLaunchStampRouterSlice, advanceLaunchStampRouterSlice } = createLaunchStampReaderV1({
