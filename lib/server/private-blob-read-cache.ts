@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { get, head, type GetBlobResult } from "@vercel/blob";
-import { discardBodyV1, readBoundedUtf8BodyV1 } from "./custom-launch/bounded-utf8-body-v1";
+import { readBoundedUtf8BodyV1 } from "./custom-launch/bounded-utf8-body-v1";
 
 type FullBlob = Extract<GetBlobResult, { statusCode: 200 }>;
 type ReadOptions = Readonly<{ token: string; abortSignal?: AbortSignal }>;
@@ -93,7 +93,7 @@ export function createPrivateBlobReadCache(input: Readonly<{
       const compressed = allowGzip && encoding === "gzip";
       const etag = compressed ? result.blob.etag.replace(/^W\//u, "") : result.blob.etag;
       if (encoding !== "identity" && (!compressed || !STRONG_ETAG.test(etag))) {
-        discardBodyV1({ body: result.stream });
+        void result.stream.cancel().catch(() => undefined);
         return null;
       }
       const metadata = compressed ? readMetadata() : null;
