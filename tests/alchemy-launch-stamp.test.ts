@@ -880,6 +880,12 @@ describe("canonical Launch Stamp Router reader", () => {
       { client },
     );
     expect(receiptCalls).toHaveBeenCalledTimes(1);
+    expect(client.getChainId).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(client.getBlock).mock.calls.filter(([request]) => request?.blockNumber === sharedBlock)).toHaveLength(1);
+    const codeReads = vi.mocked(client.getCode).mock.calls.map(([request]) =>
+      `${request.address.toLowerCase()}:${request.blockNumber}`,
+    );
+    expect(codeReads).toHaveLength(new Set(codeReads).size);
     expect(result.slice.tokens).toHaveLength(2);
     expect(result.slice.tokens[0]).toMatchObject({
       name: expect.stringContaining(first.anchor.token.slice(0, 8)),
