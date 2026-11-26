@@ -444,7 +444,7 @@ describe("Alchemy incremental launch registry", () => {
       .toThrow("Router registry is malformed");
   });
 
-  it("requests the object representation for a conditional update", async () => {
+  it("retains the strong object version for a conditional update", async () => {
     blobMocks.get.mockResolvedValueOnce({
       statusCode: 200,
       stream: new Response(JSON.stringify(envelope())).body,
@@ -458,7 +458,7 @@ describe("Alchemy incremental launch registry", () => {
       etag: '"8e8ed5b7c65cfe481ae32dc684e98710"',
       registry: { launchStampRouter: { tokens: [{ name: "Stamped" }] } },
     });
-    expect(blobMocks.get.mock.calls.at(-1)?.[1]).toMatchObject({ headers: { "accept-encoding": "identity" } });
+    expect(blobMocks.get.mock.calls.at(-1)?.[1]).toMatchObject({ useCache: false, headers: { "accept-encoding": "gzip" } });
   });
 
   it("rejects a weak representation ETag as an object version", async () => {

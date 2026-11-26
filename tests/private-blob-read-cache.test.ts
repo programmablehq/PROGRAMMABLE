@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import type { get, head, GetBlobResult } from "@vercel/blob";
 vi.mock("server-only", () => ({}));
@@ -26,6 +27,13 @@ async function text(result: GetBlobResult | null) {
   return new Response(result.stream).text();
 }
 
+function gzipResponse(decodedText: string, etag: string) {
+  const result = response(decodedText, `W/${etag}`);
+  result.headers.delete("content-length");
+  result.headers.set("content-encoding", "gzip");
+  return result;
+}
+
 describe("authenticated private Blob revalidation", () => {
   it("reuses the downloaded body only after the origin confirms its exact ETag", async () => {
     const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(response()).mockResolvedValueOnce(unchanged());
@@ -35,12 +43,54 @@ describe("authenticated private Blob revalidation", () => {
     expect(await text(await read(path, options, 1024))).toBe(body);
     expect(getBlob.mock.calls[1]?.[1]).toMatchObject({
       token: options.token, access: "private", useCache: false, ifNoneMatch: versionA,
-      headers: { "accept-encoding": "identity" },
+      headers: { "accept-encoding": "gzip" },
     });
     expect(onRead.mock.calls.map(([event]) => event)).toEqual([
       { kind: "download", bytes: Buffer.byteLength(body) },
       { kind: "not-modified", bytes: Buffer.byteLength(body) },
     ]);
+  });
+
+  it("binds decoded gzip bytes to the canonical strong tag and reuses that version", async () => {
+    const version = `"${createHash("md5").update(body).digest("hex")}"`;
+    const stored = response(body, version).blob;
+    const getBlob = vi.fn<typeof get>().mockResolvedValueOnce(gzipResponse(body, version))
+      .mockResolvedValueOnce(unchanged(`W/${version}`));
+    const headBlob = vi.fn<typeof head>().mockResolvedValue(stored);
+    const onRead = vi.fn();
+    const read = createPrivateBlobReadCache({ getBlob, headBlob, onRead });
+
+    const result = await read(path, options, 1024);
+    expect(result?.blob).toMatchObject({ etag: version, size: stored.size });
+    expect(result?.headers.get("etag")).toBe(version);
+    expect(result?.headers.get("content-encoding")).toBeNull();
+    expect(await text(result)).toBe(body);
+    expect(await text(await read(path, options, 1024))).toBe(body);
+    expect(getBlob.mock.lastCall?.[1]?.ifNoneMatch).toBe(version);
+    expect(onRead).toHaveBeenNthCalledWith(1, { kind: "download", bytes: stored.size, compressed: true });
+    expect(onRead).toHaveBeenNthCalledWith(2, { kind: "metadata-not-modified", bytes: stored.size });
+  });
+
+  it.each(["version changed", "body differs"])("uses the direct identity response when gzip cannot be bound (%s)", async failure => {
+    const version = `"${createHash("md5").update(body).digest("hex")}"`;
+    const updated = body.replace("one", "six");
+    const current = response(updated, versionB);
+    const getBlob = vi.fn<typeof get>()
+      .mockResolvedValueOnce(gzipResponse(failure === "body differs" ? updated : body, version))
+      .mockResolvedValueOnce(current);
+    const headBlob = vi.fn<typeof head>()
+      .mockResolvedValueOnce(failure === "version changed" ? current.blob : response(body, version).blob);
+    const onRead = vi.fn();
+    const read = createPrivateBlobReadCache({ getBlob, headBlob, onRead });
+
+    const result = await read(path, options, 1024);
+    expect(result?.blob.etag).toBe(versionB);
+    expect(await text(result)).toBe(updated);
+    expect(getBlob).toHaveBeenCalledTimes(2);
+    expect(getBlob.mock.lastCall?.[1]).toMatchObject({
+      token: options.token, useCache: false, headers: { "accept-encoding": "identity" },
+    });
+    expect(onRead).toHaveBeenCalledExactlyOnceWith({ kind: "download", bytes: current.blob.size });
   });
 
   it("returns a new body and ETag when the stored checkpoint changes", async () => {
