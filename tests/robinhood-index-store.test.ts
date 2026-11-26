@@ -29,6 +29,27 @@ describe("Robinhood index atomic reads", () => {
     await expect(store.write(saved!.snapshot, saved!.etag)).rejects.toThrow("Precondition failed");
     expect(blob.put.mock.calls[0][2]).toMatchObject({ ifMatch: etag, allowOverwrite: true });
   });
+  it("reuses an acknowledged upload within a job and reads the winner after a write conflict", async () => {
+    const nextEtag = `"${"b".repeat(32)}"`;
+    const next = { ...snapshot, updatedAt: "2026-10-10T00:01:00.000Z" };
+    const winner = { ...snapshot, updatedAt: "2026-10-10T00:02:00.000Z" };
+    blob.get.mockResolvedValueOnce(response()).mockResolvedValueOnce(response(JSON.stringify(winner)));
+    blob.put.mockResolvedValueOnce({ etag: nextEtag, pathname: "website-index/robinhood/launches-v1.json" })
+      .mockRejectedValueOnce(new Error("Precondition failed"));
+    const onCommittedRead = vi.fn();
+    const store = indexStore(undefined, { reuseCommittedSnapshot: true, onCommittedRead });
+    const saved = await store.read();
+    await store.write(next as Parameters<typeof store.write>[0], saved!.etag);
+    const current = await store.read();
+    expect(current).toEqual({ snapshot: next, etag: nextEtag });
+    expect(blob.get).toHaveBeenCalledTimes(1);
+    expect(onCommittedRead).toHaveBeenCalledOnce();
+    expect(blob.put.mock.calls[0][2].ifMatch).toBe(etag);
+    await expect(store.write(current!.snapshot, current!.etag)).rejects.toThrow("Precondition failed");
+    expect(blob.put.mock.calls[1][2].ifMatch).toBe(nextEtag);
+    expect(await store.read()).toEqual({ snapshot: winner, etag });
+    expect(blob.get).toHaveBeenCalledTimes(2);
+  });
   it("rejects a truncated unencoded response and invalid snapshot contents", async () => {
     blob.get.mockResolvedValueOnce(response(body, { "content-length": String(Buffer.byteLength(body) + 1) }));
     await expect(indexStore().read()).rejects.toThrow("size mismatch");

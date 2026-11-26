@@ -29,7 +29,11 @@ export async function GET(request: Request) {
   const startedAt = Date.now();
   try {
     return await withIndexJobDeadline(async signal => {
-      const store = indexStore(signal);
+      let reusedSnapshotReads = 0;
+      const store = indexStore(signal, {
+        reuseCommittedSnapshot: true,
+        onCommittedRead: () => { reusedSnapshotReads++; },
+      });
       let result: Awaited<ReturnType<typeof syncRobinhoodIndex>> | null = null;
       try {
         const source = await robinhoodSource(undefined, signal);
@@ -152,7 +156,7 @@ export async function GET(request: Request) {
       const failed = result === null || result.status === "partial" || launchProjections.status === "unavailable" || moduleMode.status === "partial" || moduleMode.status === "unavailable"
         || foundation === "unavailable" || foundation === "partial" || moduleUnavailableSources.length > 0 || Object.values(moduleSources).some(source => source.status === "partial" || source.status === "unavailable");
       if (failed) console.warn("robinhood-index-incomplete", JSON.stringify({
-        elapsedMs: Date.now() - startedAt, custom: result?.status ?? "unavailable", launchProjections: launchProjections.status,
+        elapsedMs: Date.now() - startedAt, reusedSnapshotReads, custom: result?.status ?? "unavailable", launchProjections: launchProjections.status,
         moduleMode: moduleMode.status, foundation, moduleUnavailableSources, foundationUnavailableSources,
         moduleSources: Object.fromEntries(Object.entries(moduleSources).map(([digest, source]) => [digest, source.status])),
         foundationSources: Object.fromEntries(Object.entries(foundationSources).map(([digest, source]) => [digest, source.status])),
