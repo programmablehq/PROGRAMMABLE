@@ -34,6 +34,7 @@ export function indexStore(signal?: AbortSignal, options: {
         result = await getRevalidatedPrivateBlob(PATH, { token, abortSignal: deadline }, MAX_BYTES);
       } catch (error) {
         if (error instanceof BoundedBodyErrorV1 && error.code === "too-large") throw new Error("Robinhood index size exceeded");
+        if (deadline.aborted) throw new BoundedBodyErrorV1("aborted");
         throw error;
       }
       if (!result) return null;

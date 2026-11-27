@@ -37,16 +37,27 @@ test("one work history opens projects and saves a legacy draft before switching"
  const projectId="11111111-1111-4111-8111-111111111111",revisionId="sha256:"+"f".repeat(64);
  const project={projectId,ownerId:"alice",revisionId,parentRevisionId:null,ordinal:1,createdAt:now,document:{title:"Game counter",files:{},requirements:[],dependencies:{},architecture:null}};
  let writes=0;
+ let historyReads=0;
+ page.on("request",request=>{
+   const url=new URL(request.url());
+   if(request.method()==="GET"&&url.pathname==="/api/custom-ai/conversations"&&!url.searchParams.has("id"))historyReads++;
+ });
  await page.route("**/api/custom-ai/platform/**",route=>{
   const req=route.request(),url=new URL(req.url());if(req.method()!=="GET")writes++;
   if(url.pathname.endsWith("/projects"))return route.fulfill({json:url.searchParams.has("projectId")?{project}:{projects:req.headers().authorization?.endsWith(":bob")?[]:[{projectId,revisionId,title:"Game counter",updatedAt:now}]}});
   if(url.pathname.endsWith("/runs"))return route.fulfill({json:{runs:[]}});
   return route.fulfill({json:{}});
  });
+ await page.clock.install();
  await page.goto(origin+"?platform=1");
+ await expect(page.getByRole("textbox",{name:"Message your project",exact:true})).toBeVisible();
+ await page.clock.runFor(350);
+ expect(historyReads).toBe(0);
  await page.getByRole("button",{name:"Your work",exact:true}).click();
  const work=page.getByRole("navigation",{name:"Work history",exact:true});
  await expect(work.getByRole("button",{name:/Game counter.*Project/})).toBeVisible();
+ await expect(work.getByRole("button",{name:/Earlier coin.*Coin chat/})).toBeVisible();
+ expect(historyReads).toBe(1);
  await work.getByRole("button",{name:/Earlier coin.*Coin chat/}).click();
  const box=page.getByRole("textbox",{name:"Describe your coin or ask a question",exact:true});await expect(box).toHaveValue("An unsent coin edit");
  await box.fill("Keep this newer unsent edit");await page.getByRole("button",{name:"Your work",exact:true}).click();await work.getByRole("button",{name:/Game counter.*Project/}).click();

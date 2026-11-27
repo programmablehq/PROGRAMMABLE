@@ -210,6 +210,7 @@ describe("authenticated private Blob revalidation", () => {
     const read = createPrivateBlobReadCache({ getBlob });
     const first = read(path, options, 1024);
     const second = read(path, options, 1024);
+    await Promise.resolve();
     release(response());
     const [left, right] = await Promise.all([first, second]);
     expect(getBlob).toHaveBeenCalledTimes(1);
@@ -242,6 +243,24 @@ describe("authenticated private Blob revalidation", () => {
     expect(getBlob).toHaveBeenCalledTimes(1);
   });
 
+  it("shares a download across caller deadlines and keeps the remaining reader active", async () => {
+    const firstController = new AbortController();
+    const secondController = new AbortController();
+    let finish!: (value: GetBlobResult) => void;
+    const getBlob = vi.fn<typeof get>().mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const read = createPrivateBlobReadCache({ getBlob });
+    const first = read(path, { ...options, abortSignal: firstController.signal }, 1024);
+    const second = read(path, { ...options, abortSignal: secondController.signal }, 1024);
+
+    firstController.abort(new Error("First deadline expired"));
+    await expect(first).rejects.toThrow("First deadline expired");
+    expect(getBlob.mock.lastCall?.[1]?.abortSignal?.aborted).toBe(false);
+    finish(response());
+
+    expect(await text(await second)).toBe(body);
+    expect(getBlob).toHaveBeenCalledTimes(1);
+  });
+
   it("revalidates a newer authenticated body after an older read is cancelled", async () => {
     const controller = new AbortController();
     const updated = '{"entries":["newer"]}';
@@ -256,10 +275,12 @@ describe("authenticated private Blob revalidation", () => {
 
     expect(await text(await read(path, options, 1024))).toBe(body);
     const older = read(path, { ...options, abortSignal: controller.signal }, 1024);
-    expect(await text(await read(path, options, 1024))).toBe(updated);
+    await Promise.resolve();
     controller.abort(new Error("Read deadline expired"));
-    finishOlder(unchanged());
     await expect(older).rejects.toThrow("Read deadline expired");
+    expect(getBlob.mock.lastCall?.[1]?.abortSignal?.aborted).toBe(true);
+    expect(await text(await read(path, options, 1024))).toBe(updated);
+    finishOlder(unchanged());
 
     expect(await text(await read(path, options, 1024))).toBe(updated);
     expect(getBlob.mock.lastCall?.[1]?.ifNoneMatch).toBe(versionB);

@@ -19,8 +19,33 @@ type ReadEvent = Readonly<{
   bytes: number;
   compressed?: true;
 }>;
+type PendingBody = {
+  controller: AbortController;
+  promise: Promise<SavedBody | null>;
+  readers: number;
+};
 
 const STRONG_ETAG = /^"[\da-f]{32}"$/iu;
+
+async function waitForBody(promise: PendingBody["promise"], signal: AbortSignal, release: () => void) {
+  let onAbort!: () => void;
+  const cancelled = new Promise<never>((_, reject) => {
+    onAbort = () => {
+      release();
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    if (signal.aborted) onAbort();
+  });
+  try {
+    const body = await Promise.race([promise, cancelled]);
+    signal.throwIfAborted();
+    return body;
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+    release();
+  }
+}
 
 /** Reuse requires an authenticated origin 304 confirming the saved version. */
 export function createPrivateBlobReadCache(input: Readonly<{
@@ -34,7 +59,7 @@ export function createPrivateBlobReadCache(input: Readonly<{
   const maximumCacheBytes = input.maximumCacheBytes ?? 32 * 1024 * 1024;
   const maximumEntries = input.maximumEntries ?? 64;
   const bodies = new Map<string, SavedBody>();
-  const pending = new Map<string, Promise<SavedBody | null>>();
+  const pending = new Map<string, PendingBody>();
   let retainedBytes = 0;
 
   const forget = (key: string) => {
@@ -58,31 +83,16 @@ export function createPrivateBlobReadCache(input: Readonly<{
     blob: { ...body.blob },
   });
 
-  return async (path: string, options: ReadOptions, maximumBytes: number): Promise<GetBlobResult | null> => {
-    options.abortSignal?.throwIfAborted();
-    if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
-      throw new TypeError("Invalid Blob read size limit");
-    }
-    // Credentials never appear in cache keys, metrics or logs. Different
-    // credentials, paths and body limits cannot share a stored response.
-    const key = `${createHash("sha256").update(options.token).digest("hex")}:${maximumBytes}:${path}`;
-    const shared = options.abortSignal ? undefined : pending.get(key);
-    if (shared) {
-      const body = await shared;
-      if (body) input.onRead?.({ kind: "shared", bytes: body.bytes });
-      return replay(body);
-    }
-
+  const fetchBody = async (key: string, path: string, token: string, maximumBytes: number, signal: AbortSignal) => {
     const previous = bodies.get(key);
-    const signal = options.abortSignal ?? AbortSignal.timeout(5_000);
     const forgetObservedBody = () => {
       if (bodies.get(key) === previous) forget(key);
     };
     const readMetadata = () => (input.headBlob ?? head)(path, {
-      token: options.token, abortSignal: signal,
+      token, abortSignal: signal,
     }).catch(() => null);
     const readOrigin = (encoding: "gzip" | "identity", etag?: string) => getBlob(path, {
-      access: "private", token: options.token, useCache: false,
+      access: "private", token, useCache: false,
       headers: { "accept-encoding": encoding }, abortSignal: signal,
       ...(etag ? { ifNoneMatch: etag } : {}),
     });
@@ -178,15 +188,51 @@ export function createPrivateBlobReadCache(input: Readonly<{
       input.onRead?.({ kind: "download", bytes: body.bytes, ...(body.compressed && { compressed: true as const }) });
       return body;
     };
-    const task = read().catch(error => {
+    return read().catch(error => {
       if (!signal.aborted) forgetObservedBody();
       throw error;
     });
-    // A caller with its own cancellation signal owns that read. Joining it
-    // would let that caller's cancellation terminate another reader's work.
-    if (!options.abortSignal) pending.set(key, task);
-    try { return replay(await task); }
-    finally { if (pending.get(key) === task) pending.delete(key); }
+  };
+
+  return async (path: string, options: ReadOptions, maximumBytes: number): Promise<GetBlobResult | null> => {
+    const signal = options.abortSignal ?? AbortSignal.timeout(5_000);
+    signal.throwIfAborted();
+    if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 1) {
+      throw new TypeError("Invalid Blob read size limit");
+    }
+    // Credentials, paths and body limits define distinct read scopes.
+    const key = `${createHash("sha256").update(options.token).digest("hex")}:${maximumBytes}:${path}`;
+    let task = pending.get(key);
+    const shared = task !== undefined;
+    if (!task) {
+      const controller = new AbortController();
+      const created: PendingBody = {
+        controller,
+        readers: 0,
+        promise: Promise.resolve().then(() => {
+          controller.signal.throwIfAborted();
+          return fetchBody(key, path, options.token, maximumBytes, controller.signal);
+        }).finally(() => {
+          if (pending.get(key) === created) pending.delete(key);
+        }),
+      };
+      pending.set(key, created);
+      task = created;
+    }
+    task.readers++;
+    let reading = true;
+    const release = () => {
+      if (!reading) return;
+      reading = false;
+      task.readers--;
+      if (task.readers === 0 && pending.get(key) === task) {
+        pending.delete(key);
+        task.controller.abort(signal.reason);
+      }
+    };
+    const body = await waitForBody(task.promise, signal, release);
+    if (shared && body) input.onRead?.({ kind: "shared", bytes: body.bytes });
+    return replay(body);
   };
 }
 
