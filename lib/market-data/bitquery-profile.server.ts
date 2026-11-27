@@ -16,6 +16,10 @@ import {
   BITQUERY_HTTP_ENDPOINT,
   BITQUERY_OAUTH_TOKEN_ENVIRONMENT_VARIABLE,
 } from "./bitquery.server";
+import {
+  BitqueryResponseBodyError,
+  readBoundedBitqueryResponseText,
+} from "./bitquery-response.server";
 
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAXIMUM_RESPONSE_BYTES = 4_000_000;
@@ -295,11 +299,19 @@ async function executeBitquery(
     if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
       throw new BitqueryProfileError("response");
     }
-    const bytes = new Uint8Array(await response.arrayBuffer());
-    if (bytes.byteLength > MAXIMUM_RESPONSE_BYTES) {
-      throw new BitqueryProfileError("response");
+    let source: string;
+    try {
+      source = await readBoundedBitqueryResponseText(
+        response,
+        MAXIMUM_RESPONSE_BYTES,
+      );
+    } catch (error) {
+      if (!(error instanceof BitqueryResponseBodyError)) throw error;
+      throw new BitqueryProfileError(
+        error.kind === "unavailable" ? "transport" : "response",
+      );
     }
-    const envelope = record(JSON.parse(new TextDecoder().decode(bytes)));
+    const envelope = record(JSON.parse(source));
     if (!envelope || array(envelope.errors).length > 0) {
       throw new BitqueryProfileError("response");
     }
