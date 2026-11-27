@@ -126,13 +126,18 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
     setHistoryLoading(true);setHistoryError("");
     try{
       const page=await aiRequest<ConversationPage>(`/conversations?account=${encodeURIComponent(account)}&q=${encodeURIComponent(historyQuery)}&archived=false${cursor?`&cursor=${encodeURIComponent(cursor)}`:""}`,scopedHeaders,undefined,controller.signal);
-      if(seq!==historyGeneration.current)return;
+      if(seq!==historyGeneration.current||controller.signal.aborted)return;
       setConversations(current=>cursor?[...current,...(page.conversations??[])].filter((chat,index,all)=>all.findIndex(item=>item.id===chat.id)===index):page.conversations??[]);
       setHistoryCursor(page.cursor);
     }catch(cause){if(!controller.signal.aborted)setHistoryError(cause instanceof Error?cause.message:"Your coin chats could not load.");}
     finally{if(seq===historyGeneration.current)setHistoryLoading(false);}
   },[account,historyQuery,scope,scopedHeaders]);
-  useEffect(()=>{const timer=setTimeout(()=>{void loadHistory();},250);return()=>{clearTimeout(timer);historyAbort.current?.abort();};},[loadHistory,legacyId,legacyOpen]);
+  const shouldLoadHistory=historyOpen||legacyOpen;
+  useEffect(()=>{
+    if(!shouldLoadHistory)return;
+    const timer=setTimeout(()=>{void loadHistory();},250);
+    return()=>{clearTimeout(timer);historyAbort.current?.abort();};
+  },[loadHistory,legacyId,legacyOpen,shouldLoadHistory]);
   const refresh=useCallback(async(signal?:AbortSignal)=>{
     if(!selected)return;const seq=generation.current;
     const [saved,history]=await Promise.all([api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal}),api<{runs:ProjectRun[]}>(`/runs?projectId=${selected}`,{signal})]);
