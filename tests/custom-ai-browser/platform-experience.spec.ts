@@ -47,14 +47,30 @@ test("keeps the most recent project edit on an immediate tab reload", async ({ p
   await expect(composer).toHaveValue("");
 });
 
-test("starts from the first message, names the project and opens its saved result",async({page})=>{
+test("opens the saved result after one temporary revision read error",async({page})=>{
  const creations:string[]=[],titles:string[]=[];
+ let finished=false,finalReads=0,runStarts=0;
+ await page.route(url=>url.pathname.endsWith("/platform/runs")&&url.searchParams.has("runId"),async route=>{
+   const response=await route.fetch(),progress=await response.json();
+   if(progress.run&&!['queued','running'].includes(progress.run.status))finished=true;
+   await route.fulfill({response,json:progress});
+ });
+ await page.route(url=>url.pathname.endsWith("/platform/projects")&&url.searchParams.has("projectId"),route=>{
+   if(finished&&route.request().method()==="GET"&&++finalReads===1){
+     return route.fulfill({status:503,json:{error:"Saved files are temporarily unavailable."}});
+   }
+   return route.continue();
+ });
+ page.on("request",request=>{
+   if(request.method()==="POST"&&request.url().endsWith("/platform/runs"))runStarts++;
+ });
  page.on("request",request=>{if(request.method()==="POST"&&request.url().endsWith("/platform/projects"))creations.push(request.postDataJSON().projectId);if(request.method()==="PATCH"&&request.url().endsWith("/platform/projects"))titles.push(request.postDataJSON().patch.title);});
  await page.goto(origin);const input=page.getByRole("textbox",{name:"Describe your idea",exact:true});await expect(input).toBeEnabled();
  await input.fill("Build a shared counter for our game");await input.press("Enter");
  await expect(page.getByText("The counter source is saved. Behavior checks have not run yet.",{exact:true})).toBeVisible({timeout:12000});
  await expect(page.getByRole("tab",{name:"Files",exact:true})).toHaveAttribute("aria-selected","true");
  expect(creations).toHaveLength(1);expect(titles).toEqual(["Shared counter for our game"]);
+ expect(finalReads).toBe(2);expect(runStarts).toBe(1);
  await expect(page.getByRole("button",{name:"index.js",exact:true})).toBeVisible();
  await page.getByRole("button",{name:"Your work",exact:true}).click();
  await expect(page.getByRole("button",{name:/Shared counter.*Project/})).toBeVisible();

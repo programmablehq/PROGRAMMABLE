@@ -156,18 +156,25 @@ export default function ProjectWorkspace({account,headers,onLegacy,onProject,bef
       try{
         const update=await api<Progress>(`/runs?projectId=${selected}&runId=${activeId}&afterCursor=${cursor}`,{signal:controller.signal});
         if(seq!==generation.current||controller.signal.aborted)return;
-        if(!isActiveRun(update.run.status))setSyncingRun(activeId);
+        const finished=!isActiveRun(update.run.status);
+        if(finished)setSyncingRun(activeId);
         setProgress(current=>{const old=current[activeId]?.events??[];return {...current,[activeId]:{activeStep:update.activeStep,events:[...old,...update.events].filter((step,index,all)=>all.findIndex(item=>item.cursor===step.cursor)===index)}};});
         cursor=update.events.at(-1)?.cursor??cursor;setRuns(current=>current.map(run=>run.runId===activeId?{...run,...update.run}:run));
-        if(update.events.some(event=>revisionTools.has(event.capabilityId))||!isActiveRun(update.run.status)){
-          try{const saved=await api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal:controller.signal});
+        if(finished||update.events.some(event=>revisionTools.has(event.capabilityId))){
+          const readRevision=()=>api<{project:ProjectRevision}>(`/projects?projectId=${selected}`,{signal:controller.signal});
+          try{
+            const saved=await readRevision().catch(cause=>{
+              const transient=cause instanceof AIRequestError&&[502,503,504].includes(cause.status);
+              if(!finished||!transient||seq!==generation.current||controller.signal.aborted)throw cause;
+              return readRevision();
+            });
             if(seq!==generation.current||controller.signal.aborted)return;
             setProject(current=>current?.projectId===saved.project.projectId&&current.ordinal>saved.project.ordinal?current:saved.project);
-            if(!isActiveRun(update.run.status))setResultsReady(current=>new Set(current).add(activeId));
+            if(finished)setResultsReady(current=>new Set(current).add(activeId));
             setProjects(current=>[{projectId:selected,revisionId:saved.project.revisionId,title:saved.project.document.title,updatedAt:saved.project.createdAt},...current.filter(p=>p.projectId!==selected)]);
           }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Saved files could not reload. Refresh saved state to try again.");}
         }
-        if(!isActiveRun(update.run.status)){setSyncingRun(undefined);return;}
+        if(finished){setSyncingRun(undefined);return;}
         if(seq!==generation.current||controller.signal.aborted)return;
       }catch(cause){if(!controller.signal.aborted)setError(cause instanceof Error?cause.message:"Progress could not load.");}
       if(!controller.signal.aborted)timer=setTimeout(poll,document.visibilityState==="hidden"?5000:1500);
